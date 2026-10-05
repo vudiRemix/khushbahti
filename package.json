@@ -1,0 +1,11 @@
+{
+  "name": "khaos-doska",
+  "version": "1.0.0",
+  "description": "Хаос-Доска — браузерная игра для ПК: шахматы, сапёр, CS, Minecraft, GTA, PvZ, FNAF, Clash Royale, Pac-Man, PUBG и змейка на одной доске.",
+  "private": true,
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "start": "npx --yes http-server -p 8080 -c-1 ."
+  },
+  "license": "MIT"
+}

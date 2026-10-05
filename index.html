@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Хаос-Доска</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Press+Start+2P&family=Russo+One&display=swap">
+<style>
+  /* Единый «игровой» вид: тёмная рамка вокруг доски, без светлой темы. */
+  :root { color-scheme: dark; --bg: #0d1208; --fg: #eef3e6; }
+  html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--fg); }
+  #wrap { position: fixed; inset: 0; display: grid; place-items: center; }
+  #game { display: block; cursor: none; touch-action: none; user-select: none; -webkit-user-select: none; outline: none; }
+  noscript { font: 16px system-ui, sans-serif; padding: 16px; display: block; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game" width="1280" height="720" aria-label="Игра Хаос-Доска"></canvas></div>
+<noscript>Для игры нужен включённый JavaScript.</noscript>
+<script src="js/core.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/art.js"></script>
+<script src="js/board.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/game.js"></script>
+<script src="js/render.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
