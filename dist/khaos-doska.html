@@ -576,6 +576,76 @@ const Sound = (() => {
       if (!ok('splat', 0.04)) return;
       noise({ dur: 0.05, vol: 0.12, filter: 'lowpass', f0: 1200 });
     },
+
+    // --- кампания ---
+    roar() {
+      if (!ok('roar', 0.5)) return;
+      noise({ dur: 1.1, vol: 0.45, filter: 'lowpass', f0: 700, f1: 120, attack: 0.08 });
+      tone({ type: 'sawtooth', f0: 110, f1: 55, dur: 1.0, vol: 0.12, attack: 0.08 });
+    },
+    warn() {
+      if (!ok('warn', 0.2)) return;
+      tone({ type: 'square', f0: 880, dur: 0.08, vol: 0.06 });
+      tone({ type: 'square', f0: 880, dur: 0.08, vol: 0.06, delay: 0.16 });
+    },
+    fireBreath() {
+      if (!ok('firebreath', 0.2)) return;
+      noise({ dur: 0.9, vol: 0.45, filter: 'bandpass', f0: 500, f1: 1500, q: 0.7, attack: 0.05 });
+    },
+    dragonBreath() {
+      if (!ok('dbreath', 0.2)) return;
+      noise({ dur: 0.9, vol: 0.35, filter: 'bandpass', f0: 1800, f1: 400, q: 1.5, attack: 0.05 });
+      tone({ type: 'sine', f0: 300, f1: 150, dur: 0.8, vol: 0.08 });
+    },
+    strafe() {
+      if (!ok('strafe', 0.2)) return;
+      for (let i = 0; i < 10; i++) noise({ dur: 0.04, vol: 0.3, filter: 'bandpass', f0: 1400, q: 0.8, delay: i * 0.06 });
+    },
+    laserCharge() {
+      if (!ok('lcharge', 0.5)) return;
+      tone({ type: 'sawtooth', f0: 120, f1: 1400, dur: 2.0, vol: 0.06, attack: 0.1 });
+    },
+    laser() {
+      if (!ok('laser', 0.2)) return;
+      tone({ type: 'sawtooth', f0: 1600, f1: 200, dur: 0.7, vol: 0.18 });
+      noise({ dur: 0.7, vol: 0.3, filter: 'highpass', f0: 1500 });
+    },
+    siren() {
+      if (!ok('siren', 1.5)) return;
+      for (let i = 0; i < 3; i++) {
+        tone({ type: 'square', f0: 700, f1: 1100, dur: 0.3, vol: 0.04, delay: i * 0.6 });
+        tone({ type: 'square', f0: 1100, f1: 700, dur: 0.3, vol: 0.04, delay: i * 0.6 + 0.3 });
+      }
+    },
+    pistol() {
+      if (!ok('pistol', 0.06)) return;
+      noise({ dur: 0.08, vol: 0.3, filter: 'bandpass', f0: 2000, q: 0.8 });
+      tone({ type: 'triangle', f0: 200, f1: 70, dur: 0.07, vol: 0.2 });
+    },
+    kick() {
+      if (!ok('kick', 0.06)) return;
+      tone({ type: 'square', f0: 220, f1: 110, dur: 0.08, vol: 0.12 });
+    },
+    enderTp() {
+      if (!ok('ender', 0.2)) return;
+      tone({ type: 'sine', f0: 900, f1: 200, dur: 0.35, vol: 0.15 });
+      tone({ type: 'sine', f0: 600, f1: 1200, dur: 0.25, vol: 0.08, delay: 0.1 });
+    },
+    ring() {
+      if (!ok('ring', 0.04)) return;
+      tone({ type: 'sine', f0: 1568, dur: 0.06, vol: 0.08 });
+      tone({ type: 'sine', f0: 2093, dur: 0.12, vol: 0.08, delay: 0.05 });
+    },
+    ringLoss() {
+      if (!ok('ringloss', 0.2)) return;
+      for (let i = 0; i < 5; i++) tone({ type: 'triangle', f0: 1800 - i * 150, dur: 0.06, vol: 0.06, delay: i * 0.04 });
+    },
+    achievement() {
+      if (!ok('ach', 0.3)) return;
+      tone({ type: 'sine', f0: 784, dur: 0.15, vol: 0.12 });
+      tone({ type: 'sine', f0: 1175, dur: 0.35, vol: 0.12, delay: 0.1 });
+      tone({ type: 'sine', f0: 1568, dur: 0.4, vol: 0.06, delay: 0.1 });
+    },
   };
   return S;
 })();
@@ -1708,41 +1778,39 @@ function drawStar(ctx, x, y, r, fill, stroke) {
 const Board = {
   canvas: null,
   key: '',
-  LIGHT: '#eeeed2',
-  DARK: '#769656',
 
-  // Фон рисуется один раз в отдельный холст под текущее разрешение экрана.
-  get(view) {
-    const key = view.pw + 'x' + view.ph;
+  // Фон рисуется один раз в отдельный холст под текущее разрешение и тему уровня.
+  get(view, theme = 'classic') {
+    const key = view.pw + 'x' + view.ph + ':' + theme;
     if (this.canvas && this.key === key) return this.canvas;
     const c = this.canvas || document.createElement('canvas');
     c.width = view.pw;
     c.height = view.ph;
     const ctx = c.getContext('2d');
     ctx.setTransform(view.k, 0, 0, view.k, 0, 0);
-    this.paint(ctx);
+    ctx.clearRect(0, 0, W, H);
+    this.paint(ctx, theme);
     this.canvas = c;
     this.key = key;
     return c;
   },
 
-  paint(ctx) {
+  paint(ctx, theme) {
+    const th = THEMES[theme] || THEMES.classic;
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
-        ctx.fillStyle = (r + c) % 2 === 0 ? this.LIGHT : this.DARK;
+        ctx.fillStyle = (r + c) % 2 === 0 ? th.light : th.dark;
         ctx.fillRect(c * T, r * T, T, T);
       }
     }
+    paintThemeBoard(ctx, theme);
+    paintThemeTop(ctx, theme);
     // лёгкая виньетка, чтобы края не спорили с интерфейсом
     const g = ctx.createRadialGradient(W / 2, H / 2, 200, W / 2, H / 2, 820);
     g.addColorStop(0, 'rgba(0,0,0,0)');
     g.addColorStop(1, 'rgba(0,0,0,0.28)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
-    // чёрные фигуры — тыл короля
-    const back = [[4, 'r'], [5, 'n'], [10, 'b'], [11, 'r']];
-    for (const [c, k] of back) drawPiece(ctx, k, false, colX(c), rowY(0) + 2, 68);
-    for (const c of [4, 5, 10, 11]) drawPiece(ctx, 'p', false, colX(c), rowY(1), 60);
     // белые фигуры у игрока
     const wb = [[0, 'n'], [1, 'b'], [2, 'r'], [3, 'q'], [12, 'k'], [13, 'r'], [14, 'b'], [15, 'n']];
     for (const [c, k] of wb) drawPiece(ctx, k, true, colX(c), rowY(8) - 4, 64);
@@ -2256,7 +2324,7 @@ class Zombie extends Enemy {
       if (d.hp <= 0) g.killDefender(c, this);
     } else {
       this.eating = false;
-      this.y += this.speed * dt;
+      this.y += this.speed * dt * (g.bloodMoon ? 1.4 : 1);
     }
     this.gy = this.y;
     this.groanT -= dt;
@@ -2525,6 +2593,7 @@ class PacMan {
           e.damage(999, g, 'pac');
           g.addMoney(pts, e.x, e.y - 50, '#7ff');
           Sound.pacEat();
+          if (this.combo >= 5) Ach.unlock('waka');
         }
       }
       if (this.x > W + 60) {
@@ -2647,9 +2716,10 @@ class Airdrop {
 
 // Ядро из королевской пушки летит прямо в камеру — его надо сбить.
 class Cannonball {
-  constructor(tx, ty) {
-    this.sx = 640;
-    this.sy = 98;
+  constructor(tx, ty, sx = 640, sy = 98, kind = 'ball') {
+    this.kind = kind;
+    this.sx = sx;
+    this.sy = sy;
     this.tx = tx;
     this.ty = ty;
     this.t = 0;
@@ -2683,15 +2753,7 @@ class Cannonball {
     line(ctx, this.tx - rr2 - 8, this.ty, this.tx - rr2 + 10, this.ty, '#ff2b2b', 3);
     line(ctx, this.tx + rr2 - 10, this.ty, this.tx + rr2 + 8, this.ty, '#ff2b2b', 3);
     ctx.restore();
-    const r = 15 * p.s;
-    const g = ctx.createRadialGradient(p.x - r * 0.35, p.y - r * 0.35, r * 0.1, p.x, p.y, r);
-    g.addColorStop(0, '#8a8a96');
-    g.addColorStop(0.6, '#2c2c34');
-    g.addColorStop(1, '#0d0d10');
-    circ(ctx, p.x, p.y, r, g);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255,120,40,0.6)';
-    ctx.stroke();
+    drawProjectile(ctx, this.kind, p.x, p.y, 15 * p.s, this.t);
   }
 }
 
@@ -3478,6 +3540,1208 @@ function drawCrewmate(ctx, x, y, s, color, t = 0) {
   ctx.restore();
 }
 
+// ---- js/enemies2.js ----
+'use strict';
+/* Враги кампании: Гумба и Купа (Mario), Эндермен (Minecraft), коп (GTA), Соник. */
+
+Object.assign(ENEMY_DEF, {
+  goomba: { hp: 2, dmg: 2, bounty: 60, xp: 2, hw: 26, top: 30, bot: 30, name: 'Гумба' },
+  koopa: { hp: 4, dmg: 3, bounty: 120, xp: 4, hw: 24, top: 46, bot: 34, name: 'Купа' },
+  enderman: { hp: 10, dmg: 4, bounty: 300, xp: 10, hw: 20, top: 88, bot: 36, name: 'Эндермен' },
+  cop: { hp: 5, dmg: 3, bounty: 150, xp: 5, hw: 22, top: 52, bot: 36, name: 'Коп' },
+  sonic: { hp: 4, dmg: 3, bounty: 400, xp: 10, hw: 28, top: 34, bot: 30, name: 'Соник' },
+});
+
+// ---------- Гумба ----------
+function drawGoomba(ctx, x, y, t, o = {}) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (o.squash) ctx.scale(1 + o.squash * 0.4, 1 - o.squash * 0.7);
+  ell(ctx, 0, 32, 24, 6, 'rgba(0,0,0,0.25)');
+  const step = o.walking ? Math.sin(t * 10) * 4 : 0;
+  ell(ctx, -12 + step, 26, 12, 7, '#3e2008');
+  ell(ctx, 12 - step, 26, 12, 7, '#3e2008');
+  rr(ctx, -14, 2, 28, 22, 8);
+  ctx.fillStyle = '#f2c79a';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-30, 8);
+  ctx.quadraticCurveTo(-30, -30, 0, -30);
+  ctx.quadraticCurveTo(30, -30, 30, 8);
+  ctx.quadraticCurveTo(0, 14, -30, 8);
+  ctx.fillStyle = '#8d4b1a';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#4e2a0c';
+  ctx.stroke();
+  ell(ctx, -9, -6, 6, 8, '#fff');
+  ell(ctx, 9, -6, 6, 8, '#fff');
+  circ(ctx, -7, -4, 3, '#111');
+  circ(ctx, 7, -4, 3, '#111');
+  line(ctx, -16, -16, -3, -11, '#111', 4);
+  line(ctx, 16, -16, 3, -11, '#111', 4);
+  poly(ctx, [-8, 6, -4, 6, -6, 11], '#fff');
+  poly(ctx, [4, 6, 8, 6, 6, 11], '#fff');
+  ctx.restore();
+}
+
+class Goomba extends Zombie {
+  constructor(c) {
+    super('goomba', c);
+    this.speed = 30;
+    this.groanT = 999;
+  }
+  draw(ctx, t) {
+    this.beginDraw(ctx);
+    drawGoomba(ctx, this.x, this.y, t + this.phase, { walking: !this.eating && this.frozen <= 0 && !this.dead, squash: this.dead ? Math.min(1, this.deathT / 0.15) : 0 });
+    this.endDraw(ctx);
+  }
+}
+
+// ---------- Купа ----------
+function drawKoopa(ctx, x, y, t, o = {}) {
+  ctx.save();
+  ctx.translate(x, y);
+  ell(ctx, 0, 34, 22, 6, 'rgba(0,0,0,0.25)');
+  const step = o.walking ? Math.sin(t * 7) * 3 : 0;
+  ell(ctx, -10, 28 + step, 9, 6, '#ff9800');
+  ell(ctx, 10, 28 - step, 9, 6, '#ff9800');
+  ell(ctx, 0, 8, 22, 24, '#2e7d32');
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#f5f5f5';
+  ctx.stroke();
+  ell(ctx, 0, 10, 14, 18, '#fff3c4');
+  for (let i = 0; i < 3; i++) line(ctx, -10, 2 + i * 8, 10, 2 + i * 8, 'rgba(150,120,40,0.5)', 2);
+  ell(ctx, -20, 6, 6, 9, '#ffd54f');
+  ell(ctx, 20, 6, 6, 9, '#ffd54f');
+  circ(ctx, 0, -26, 14, '#ffd54f');
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#c79100';
+  ctx.stroke();
+  ell(ctx, -5, -30, 4, 6, '#fff');
+  ell(ctx, 5, -30, 4, 6, '#fff');
+  circ(ctx, -4, -29, 2, '#111');
+  circ(ctx, 6, -29, 2, '#111');
+  ell(ctx, 0, -20, 7, 3, '#e6a800');
+  ctx.restore();
+}
+
+class Koopa extends Zombie {
+  constructor(c) {
+    super('koopa', c);
+    this.speed = 20;
+    this.groanT = 999;
+  }
+  draw(ctx, t) {
+    this.beginDraw(ctx);
+    if (this.dead) ctx.globalAlpha *= 0.5;
+    drawKoopa(ctx, this.x, this.y, t + this.phase, { walking: !this.eating && this.frozen <= 0 && !this.dead });
+    this.endDraw(ctx);
+  }
+}
+
+// Панцирь убитого Купы катится по ряду и сбивает врагов.
+class Shell {
+  constructor(x, y, dir) {
+    this.x = x;
+    this.y = y;
+    this.vx = dir * 560;
+    this.bounces = 1;
+    this.hitSet = new Set();
+    this.t = 0;
+    this.gone = false;
+  }
+  update(dt, g) {
+    this.t += dt;
+    this.x += this.vx * dt;
+    if ((this.x < 30 && this.vx < 0) || (this.x > W - 30 && this.vx > 0)) {
+      if (this.bounces-- > 0) {
+        this.vx *= -1;
+        this.hitSet.clear();
+        Sound.bump();
+      } else this.gone = true;
+    }
+    for (const e of g.enemies) {
+      if (!e.alive || this.hitSet.has(e)) continue;
+      if (Math.abs(e.y - this.y) < 42 && Math.abs(e.x - this.x) < 34) {
+        this.hitSet.add(e);
+        e.damage(6, g, 'shell');
+        FX.text(g, e.x, e.y - 40, 'БАМ!', { color: '#7ee03c', font: `bold 18px ${FONT.gta}` });
+        Sound.kick();
+      }
+    }
+  }
+  draw(ctx) {
+    ctx.save();
+    ctx.translate(this.x, this.y + 14);
+    ctx.rotate(this.t * 20);
+    ell(ctx, 0, 0, 22, 18, '#2e7d32');
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#f5f5f5';
+    ctx.stroke();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU;
+      line(ctx, 0, 0, Math.cos(a) * 18, Math.sin(a) * 14, 'rgba(27,94,32,0.8)', 2);
+    }
+    ctx.restore();
+  }
+}
+
+// ---------- Эндермен: телепортируется, если долго держать на нём прицел ----------
+function drawEnderman(ctx, x, y, t, o = {}) {
+  ctx.save();
+  ctx.translate(x + (o.shake ? rand(-2, 2) : 0), y);
+  ell(ctx, 0, 36, 18, 5, 'rgba(0,0,0,0.3)');
+  const step = o.walking ? Math.sin(t * 4) * 3 : 0;
+  ctx.fillStyle = '#0d0d0d';
+  ctx.fillRect(-9, -10, 5, 46 + step);
+  ctx.fillRect(4, -10, 5, 46 - step);
+  ctx.fillRect(-11, -46, 22, 38);
+  ctx.fillRect(-18, -44, 5, 50);
+  ctx.fillRect(13, -44, 5, 50);
+  ctx.fillRect(-15, -78, 30, 30);
+  ctx.shadowColor = '#e040fb';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = '#e040fb';
+  ctx.fillRect(-12, -62, 9, 4);
+  ctx.fillRect(3, -62, 9, 4);
+  ctx.fillStyle = '#f3e5f5';
+  ctx.fillRect(-9, -62, 3, 4);
+  ctx.fillRect(6, -62, 3, 4);
+  ctx.shadowBlur = 0;
+  if (o.carry) {
+    ctx.fillStyle = '#c3c3c3';
+    ctx.fillRect(-14, -10, 28, 22);
+    drawFlag(ctx, 0, -2, 0.7);
+  }
+  ctx.restore();
+}
+
+class Enderman extends Zombie {
+  constructor(c) {
+    super('enderman', c);
+    this.speed = 12;
+    this.groanT = 999;
+    this.lookT = 0;
+    this.tpCd = 0;
+    this.carry = false;
+  }
+  update(dt, g) {
+    if (this.dead || this.frozen > 0) return super.update(dt, g);
+    if (this.tpCd > 0) this.tpCd -= dt;
+    if (g.state === 'play' && this.hit(Input.x, Input.y)) this.lookT += dt;
+    else this.lookT = Math.max(0, this.lookT - dt);
+    if (this.lookT >= 0.45 && this.tpCd <= 0) {
+      FX.burst(g, this.x, this.y - 30, 16, { colors: ['#e040fb', '#7b1fa2', '#111'], size: 5, speed: 180, grav: 0, life: 0.6 });
+      const row = Math.min(6, toRow(this.y) + randi(1, 2));
+      this.x = colX(clamp(this.col + randi(-3, 3), 0, COLS - 1));
+      this.y = this.gy = rowY(row);
+      FX.burst(g, this.x, this.y - 30, 16, { colors: ['#e040fb', '#7b1fa2', '#111'], size: 5, speed: 180, grav: 0, life: 0.6 });
+      FX.text(g, this.x, this.y - 100, 'ВЖУХ', { color: '#e040fb', font: `bold 16px ${FONT.ui}` });
+      Sound.enderTp();
+      this.lookT = 0;
+      this.tpCd = 1.6;
+    }
+    super.update(dt, g);
+    if (this.carry || !this.alive) return;
+    const m = g.mf.at(this.x, this.y);
+    if (m && m.cell.s === FLAG && !m.cell.mine && m.cell.pop >= 1) {
+      m.cell.s = HIDDEN;
+      this.carry = true;
+      FX.text(g, this.x, this.y - 100, 'украл флажок!', { color: '#ce93d8', font: `bold 15px ${FONT.ui}` });
+    }
+  }
+  draw(ctx, t) {
+    this.beginDraw(ctx);
+    drawEnderman(ctx, this.x, this.y, t + this.phase, { walking: !this.eating && this.frozen <= 0 && !this.dead, shake: this.lookT > 0, carry: this.carry });
+    this.endDraw(ctx);
+  }
+}
+
+// ---------- Коп: встаёт на 6-й ряд и стреляет по фигурам ----------
+function drawCop(ctx, x, y, t, o = {}) {
+  ctx.save();
+  ctx.translate(x, y);
+  ell(ctx, 0, 38, 22, 6, 'rgba(0,0,0,0.25)');
+  const step = o.walking ? Math.sin(t * 7) * 3 : 0;
+  ctx.fillStyle = '#1a1a2e';
+  rr(ctx, -12, 12 + step, 10, 26, 3);
+  ctx.fill();
+  rr(ctx, 2, 12 - step, 10, 26, 3);
+  ctx.fill();
+  rr(ctx, -17, -16, 34, 32, 6);
+  ctx.fillStyle = '#1e3a8a';
+  ctx.fill();
+  ctx.fillStyle = '#ffd54f';
+  ctx.fillRect(4, -10, 7, 7);
+  ctx.fillStyle = '#111';
+  ctx.fillRect(-17, 10, 34, 5);
+  rr(ctx, 16, -8, 9, 20, 4);
+  ctx.fillStyle = '#1e3a8a';
+  ctx.fill();
+  ctx.fillStyle = '#222';
+  ctx.fillRect(18, 10, 6, 12);
+  ctx.fillRect(16, 18, 4, 8);
+  if (o.flash) circ(ctx, 21, 28, 6, '#ffeb3b');
+  circ(ctx, 0, -30, 14, '#e0ac69');
+  ctx.fillStyle = '#111';
+  ctx.fillRect(-11, -34, 22, 6);
+  rr(ctx, -15, -48, 30, 10, 4);
+  ctx.fillStyle = '#16213e';
+  ctx.fill();
+  ctx.fillRect(-18, -40, 36, 4);
+  ctx.fillStyle = '#ffd54f';
+  ctx.fillRect(-3, -46, 6, 5);
+  line(ctx, -5, -21, 5, -21, '#6d4c41', 2);
+  ctx.restore();
+}
+
+class Cop extends Zombie {
+  constructor(c) {
+    super('cop', c);
+    this.speed = 22;
+    this.groanT = 999;
+    this.shootT = rand(0.5, 1.2);
+    this.flashT = 0;
+    this.shooting = false;
+  }
+  update(dt, g) {
+    if (this.dead || this.frozen > 0) return super.update(dt, g);
+    if (this.flashT > 0) this.flashT -= dt;
+    const targets = [];
+    for (let c = 1; c < COLS; c++) if (g.def[c]) targets.push(c);
+    if (this.y >= rowY(5) - 10 && targets.length) {
+      this.baseUpdate(dt);
+      this.shooting = true;
+      this.shootT -= dt;
+      if (this.shootT <= 0) {
+        this.shootT = 1.8;
+        const c = targets.reduce((a, b) => (Math.abs(b - this.col) < Math.abs(a - this.col) ? b : a));
+        const d = g.def[c];
+        d.hp -= 1;
+        d.hurt = 0.15;
+        this.flashT = 0.08;
+        g.tracers.push({ x1: this.x + 20, y1: this.y + 26, x2: colX(c), y2: rowY(PAWN_ROW), t: 0, w: 2 });
+        Sound.pistol();
+        if (d.hp <= 0) g.killDefender(c, this);
+      }
+      return;
+    }
+    this.shooting = false;
+    super.update(dt, g);
+  }
+  draw(ctx, t) {
+    this.beginDraw(ctx);
+    drawCop(ctx, this.x, this.y, t + this.phase, { walking: !this.shooting && !this.eating && this.frozen <= 0 && !this.dead, flash: this.flashT > 0 });
+    this.endDraw(ctx);
+  }
+}
+
+// ---------- Соник: носится зигзагом, при попадании теряет кольца ----------
+function drawSonic(ctx, x, y, t, o = {}) {
+  const dir = o.dir || 1;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(dir, 1);
+  ell(ctx, 0, 30, 22, 6, 'rgba(0,0,0,0.25)');
+  for (let i = 0; i < 3; i++) poly(ctx, [-10, -20 + i * 14, -40 - i * 2, -24 + i * 16, -12, -8 + i * 14], '#1e4fd8');
+  circ(ctx, 0, -6, 22, '#2a5ff0');
+  ell(ctx, 6, 2, 12, 12, '#f5cfa0');
+  ell(ctx, 4, -12, 12, 10, '#fff');
+  ell(ctx, 8, -12, 4, 6, '#2e7d32');
+  circ(ctx, 18, -2, 3, '#111');
+  const run = Math.sin(t * 30) * 6;
+  ell(ctx, -6 + run, 22, 10, 6, '#e53935');
+  ell(ctx, 6 - run, 24, 10, 6, '#e53935');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-10 + run, 20, 8, 3);
+  ctx.restore();
+}
+
+class Sonic extends Enemy {
+  constructor(c) {
+    super('sonic', colX(c), rowY(MF.r0));
+    this.vx = choice([-1, 1]) * 240;
+    this.vy = 42;
+    this.sp = 1;
+    this.stun = 0;
+    this.phase = rand(0, 10);
+  }
+  damage(n, g, src) {
+    const r = super.damage(n, g, src);
+    if (!this.dead && r) {
+      g.dropRings(this.x, this.y, 4);
+      this.stun = 0.25;
+      this.sp *= 1.15;
+    }
+    return r;
+  }
+  update(dt, g) {
+    if (this.baseUpdate(dt)) return;
+    if (this.stun > 0) {
+      this.stun -= dt;
+      return;
+    }
+    this.x += this.vx * this.sp * dt;
+    this.y += this.vy * dt;
+    this.gy = this.y;
+    if ((this.x < 40 && this.vx < 0) || (this.x > W - 40 && this.vx > 0)) this.vx *= -1;
+    g.checkTrapAt(this.x, this.y, this);
+    if (this.y >= ROWS * T - 60) g.enemyReached(this);
+  }
+  draw(ctx, t) {
+    this.beginDraw(ctx);
+    if (this.stun > 0) ctx.globalAlpha *= 0.6;
+    drawSonic(ctx, this.x, this.y, t + this.phase, { dir: Math.sign(this.vx) });
+    this.endDraw(ctx);
+  }
+}
+
+function drawRing(ctx, x, y, t) {
+  const w = Math.abs(Math.cos(t * 6)) * 11 + 2;
+  ctx.beginPath();
+  ctx.ellipse(x, y, w, 12, 0, 0, TAU);
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#f8b800';
+  ctx.stroke();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#fff3b0';
+  ctx.stroke();
+}
+
+// ---- js/bosses.js ----
+'use strict';
+/* Боссы уровней: башня короля (Clash Royale), Боузер (Mario), Эндер-дракон (Minecraft),
+   полицейский вертолёт (GTA) и Скибиди-Титан. У всех общий интерфейс:
+   box — зона попадания, attack() — снаряд в экран, special() — особая атака,
+   onRage() — подкрепление на 66% и 33% здоровья. */
+
+class Boss {
+  constructor(kind, hp) {
+    this.kind = kind;
+    this.hp = this.max = hp;
+    this.dead = false;
+    this.deadT = 0;
+    this.boomT = 0;
+    this.phase = 0;
+    this.hit = 0;
+    this.fire = 0;
+    this.laugh = 0;
+    this.emote = '';
+    this.emoteT = 0;
+    this.stunT = 0;
+    this.t = 0;
+    this.attackT = 6;
+    this.specialT = 12;
+    this.projectile = 'ball';
+  }
+  get box() {
+    return { x: 510, y: 10, w: 260, h: 156 };
+  }
+  get center() {
+    const b = this.box;
+    return { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+  }
+  get muzzle() {
+    return { x: 640, y: 98 };
+  }
+  hitSpecial() {
+    return false;
+  }
+  attackInterval(g) {
+    return Math.max(4.0, 8.5 - g.stars * 0.5 - (1 - this.hp / this.max) * 2) * rand(0.85, 1.15);
+  }
+  specialInterval() {
+    return 999;
+  }
+  move() {}
+  update(dt, g) {
+    this.t += dt;
+    if (this.fire > 0) this.fire -= dt;
+    if (this.laugh > 0) this.laugh -= dt;
+    if (this.emoteT > 0) this.emoteT -= dt;
+    this.move(dt, g);
+    if (this.stunT > 0) {
+      this.stunT -= dt;
+      return;
+    }
+    this.attackT -= dt;
+    if (this.attackT <= 0) {
+      this.attackT = this.attackInterval(g);
+      this.attack(g);
+    }
+    this.specialT -= dt;
+    if (this.specialT <= 0) {
+      this.specialT = this.specialInterval(g);
+      this.special(g);
+    }
+  }
+  attack(g) {
+    const m = this.muzzle;
+    g.cannonballs.push(new Cannonball(rand(220, 1060), rand(230, 560), m.x, m.y, this.projectile));
+    this.fire = 0.3;
+    Sound.cannon();
+    FX.burst(g, m.x, m.y, 8, { colors: ['rgba(80,80,80,0.6)'], size: 20, speed: 80, grav: -30, life: 0.8, shape: 'circle' });
+  }
+  special() {}
+  onRage() {}
+}
+
+// ---------- 1. Королевская башня ----------
+class TowerBoss extends Boss {
+  constructor(hp) {
+    super('tower', hp);
+    this.name = 'Королевская башня';
+    this.speaker = 'Король';
+    this.rageText = 'Из башни вышел Мегарыцарь!';
+    this.deathText = 'Король повержен';
+    this.emotes = ['Хе-хе-хе!', 'Ха-ха!', 'Получай!'];
+  }
+  onRage(g) {
+    g.spawnEnemy('mega');
+    for (let i = 0; i < 4; i++) g.spawnEnemy(choice(['pawn', 'zombie', 'cone', 'knight']));
+    if (!g.enemies.some((e) => e.alive && e.type === 'snake')) g.spawnEnemy('snake');
+  }
+  draw(ctx, t) {
+    drawTower(ctx, 640, t, { hpRatio: this.hp / this.max, hp: this.hp, hit: Math.max(0, this.hit), rage: this.phase > 0 ? 1 : 0, fire: Math.max(0, this.fire), laugh: this.laugh });
+  }
+}
+
+// ---------- 2. Боузер ----------
+function drawBowser(ctx, x, y, t, o = {}) {
+  ctx.save();
+  ctx.translate(x, y);
+  const breath = o.breath || 0;
+  // панцирь со спайками
+  for (let i = 0; i < 7; i++) {
+    const a = Math.PI + (i / 6) * Math.PI;
+    poly(ctx, [Math.cos(a - 0.12) * 50, 4 + Math.sin(a - 0.12) * 44, Math.cos(a) * 70, 4 + Math.sin(a) * 62, Math.cos(a + 0.12) * 50, 4 + Math.sin(a + 0.12) * 44], '#f5f5f5', '#555', 2);
+  }
+  ell(ctx, 0, 6, 56, 50, '#f5e6b8');
+  ell(ctx, 0, 6, 50, 45, '#2e7d32');
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#1b5e20';
+  ctx.stroke();
+  // ноги
+  ell(ctx, -26, 66, 18, 12, '#e9a43a');
+  ell(ctx, 26, 66, 18, 12, '#e9a43a');
+  // живот
+  ell(ctx, 0, 30, 32, 36, '#f6d36b');
+  for (let i = 0; i < 4; i++) line(ctx, -26 + i * 2, 12 + i * 14, 26 - i * 2, 12 + i * 14, 'rgba(120,80,20,0.45)', 2);
+  // руки с браслетами
+  for (const sx of [-1, 1]) {
+    ell(ctx, sx * 40, 26, 13, 20, '#e9a43a');
+    rr(ctx, sx * 40 - 12, 36, 24, 8, 3);
+    ctx.fillStyle = '#111';
+    ctx.fill();
+    for (let i = 0; i < 3; i++) poly(ctx, [sx * 40 - 8 + i * 8, 36, sx * 40 - 4 + i * 8, 28, sx * 40 + i * 8, 36], '#fff');
+  }
+  // голова
+  const hy = -28;
+  poly(ctx, [-34, hy - 8, -48, hy - 30, -26, hy - 18], '#f5e6b8', '#8d6e63', 2);
+  poly(ctx, [34, hy - 8, 48, hy - 30, 26, hy - 18], '#f5e6b8', '#8d6e63', 2);
+  for (let i = -2; i <= 2; i++) poly(ctx, [i * 9 - 6, hy - 20, i * 9, hy - 40 - Math.abs(i) * -2, i * 9 + 6, hy - 20], '#e53935');
+  ell(ctx, 0, hy, 32, 26, '#f0b34a');
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#a5651d';
+  ctx.stroke();
+  ell(ctx, 0, hy + 12, 22, 13, '#f8d58a');
+  circ(ctx, -6, hy + 6, 2.5, '#5a3a10');
+  circ(ctx, 6, hy + 6, 2.5, '#5a3a10');
+  ell(ctx, -12, hy - 8, 6, 7, '#fff');
+  ell(ctx, 12, hy - 8, 6, 7, '#fff');
+  circ(ctx, -11, hy - 7, 3, '#c62828');
+  circ(ctx, 11, hy - 7, 3, '#c62828');
+  line(ctx, -22, hy - 18, -5, hy - 12, '#c62828', 4);
+  line(ctx, 22, hy - 18, 5, hy - 12, '#c62828', 4);
+  ell(ctx, 0, hy + 20, 16, 4 + breath * 8, '#5a0d0d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-12, hy + 16, 4, 4);
+  ctx.fillRect(8, hy + 16, 4, 4);
+  ctx.restore();
+}
+
+class BowserBoss extends Boss {
+  constructor(hp) {
+    super('bowser', hp);
+    this.name = 'Боузер';
+    this.speaker = 'Боузер';
+    this.rageText = 'Боузер зовёт Купа и Гумб!';
+    this.deathText = 'Боузер упал в лаву';
+    this.emotes = ['ГРА-А-А!', 'Бва-ха-ха!', 'Принцесса в другом замке!'];
+    this.projectile = 'fire';
+    this.x = 640;
+    this.axeOn = false;
+    this.axeHp = 5;
+    this.specialT = 9;
+    this.breathT = 0;
+  }
+  get box() {
+    return { x: this.x - 70, y: 0, w: 140, h: 140 };
+  }
+  get muzzle() {
+    return { x: this.x, y: 22 };
+  }
+  move(dt, g) {
+    this.x = 640 + Math.sin(this.t * 0.5) * 80;
+    if (this.breathT > 0) this.breathT -= dt;
+    if (!this.axeOn && this.hp / this.max <= 0.3) {
+      this.axeOn = true;
+      g.banner('ТОПОР!', 'Стреляй по топору справа от моста — Боузер рухнет в лаву', '#ffd54a');
+    }
+  }
+  specialInterval() {
+    return rand(9, 12);
+  }
+  special(g) {
+    const cols = [];
+    for (let c = 1; c < COLS; c++) if (g.def[c]) cols.push(c);
+    const c = cols.length ? choice(cols) : randi(1, COLS - 1);
+    g.addHazard('fire', c, 1.4);
+    this.breathT = 1.6;
+    g.bossEmote('ГРА-А-А!');
+  }
+  hitSpecial(x, y, g) {
+    if (!this.axeOn || Math.abs(x - 838) > 26 || y < 62 || y > 150) return false;
+    this.axeHp--;
+    FX.burst(g, x, y, 6, { colors: ['#bdbdbd', '#fff'], size: 4, speed: 160, life: 0.4 });
+    Sound.stone();
+    if (this.axeHp <= 0) {
+      this.axeOn = false;
+      g.banner('МОСТ РУХНУЛ!', 'Боузер летит в лаву', '#ff7043');
+      g.damageTower(this.hp, true);
+    }
+    return true;
+  }
+  onRage(g) {
+    for (let i = 0; i < 3; i++) g.spawnEnemy('koopa');
+    for (let i = 0; i < 2; i++) g.spawnEnemy('goomba');
+  }
+  draw(ctx, t) {
+    // мост с цепью
+    ctx.fillStyle = '#8d4b1a';
+    ctx.fillRect(440, 126, 380, 24);
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 20; i++) line(ctx, 440 + i * 19, 126, 440 + i * 19, 150, 'rgba(0,0,0,0.35)', 2);
+    line(ctx, 440, 126, 820, 126, '#c97a3a', 3);
+    for (let i = 0; i < 5; i++) circ(ctx, 820 - i * 8, 120 - i * 14, 5, '#9e9e9e');
+    if (this.axeOn) {
+      line(ctx, 838, 150, 838, 78, '#6d4c2f', 6);
+      poly(ctx, [838, 80, 868, 70, 872, 108, 838, 100], '#cfd8dc', '#455a64', 2);
+      poly(ctx, [838, 80, 868, 70, 872, 108, 838, 100], '#cfd8dc');
+      if (Math.floor(t * 4) % 2 === 0) text(ctx, '◄ БЕЙ', 878, 96, { font: `bold 14px ${FONT.ui}`, color: '#ffd54a', stroke: '#000', lw: 3 });
+    }
+    ctx.save();
+    if (this.hit > 0) ctx.translate(rand(-3, 3), rand(-2, 2));
+    drawBowser(ctx, this.x, 62, t, { breath: this.breathT > 0 || this.fire > 0 ? 1 : 0 });
+    ctx.restore();
+  }
+}
+
+// ---------- 3. Эндер-дракон ----------
+function drawDragon(ctx, x, y, t, o = {}) {
+  const f = Math.sin(t * 4);
+  ctx.save();
+  ctx.translate(x, y);
+  // хвост
+  for (let i = 0; i < 6; i++) circ(ctx, Math.sin(t * 2 + i * 0.6) * 6 * i, -26 - i * 11, 13 - i * 1.6, '#16161b');
+  // крылья
+  for (const sx of [-1, 1]) {
+    const pts = [sx * 22, -12, sx * 170, -46 - f * 46, sx * 210, -6 - f * 30, sx * 150, 16, sx * 90, 24, sx * 40, 18];
+    poly(ctx, pts, '#2b2b33', '#111', 2);
+    poly(ctx, pts, '#2b2b33');
+    for (const [px, py] of [[170, -46 - f * 46], [210, -6 - f * 30], [150, 16]]) line(ctx, sx * 22, -10, sx * px, py, '#5a5a66', 2);
+  }
+  // тело
+  ell(ctx, 0, 0, 36, 30, '#1c1c22');
+  ell(ctx, 0, 8, 22, 16, '#3a3a44');
+  for (let i = -2; i <= 2; i++) poly(ctx, [i * 12 - 5, -24, i * 12, -36, i * 12 + 5, -24], '#6e6e7a');
+  // шея и голова
+  ell(ctx, 0, 34, 13, 16, '#1c1c22');
+  rr(ctx, -28, 44, 56, 30, 8);
+  ctx.fillStyle = '#1c1c22';
+  ctx.fill();
+  rr(ctx, -20, 66, 40, 14, 5);
+  ctx.fillStyle = o.open ? '#3a0d3a' : '#26262e';
+  ctx.fill();
+  poly(ctx, [-24, 46, -32, 30, -16, 44], '#6e6e7a');
+  poly(ctx, [24, 46, 32, 30, 16, 44], '#6e6e7a');
+  ctx.shadowColor = '#e040fb';
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = '#e040fb';
+  ctx.fillRect(-20, 52, 14, 5);
+  ctx.fillRect(6, 52, 14, 5);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+class DragonBoss extends Boss {
+  constructor(hp) {
+    super('dragon', hp);
+    this.name = 'Эндер-дракон';
+    this.speaker = 'Дракон';
+    this.rageText = 'Из пустоты лезут эндермены!';
+    this.deathText = 'Дракон рассыпался в опыт';
+    this.emotes = ['РРРАААР!', '*бьёт крыльями*', 'ГРРР!'];
+    this.projectile = 'ender';
+    this.x = 640;
+    this.y = 80;
+    this.specialT = 10;
+    this.crystals = [380, 640, 900].map((cx) => ({ x: cx, y: 46, hp: 6, alive: true }));
+  }
+  get box() {
+    return { x: this.x - 120, y: this.y - 50, w: 240, h: 130 };
+  }
+  get muzzle() {
+    return { x: this.x, y: this.y + 70 };
+  }
+  move(dt) {
+    this.x = 640 + Math.sin(this.t * 0.45) * 360;
+    this.y = 84 + Math.sin(this.t * 1.3) * 22;
+    const alive = this.crystals.filter((c) => c.alive).length;
+    if (alive && !this.dead) this.hp = Math.min(this.max, this.hp + 2 * alive * dt);
+  }
+  specialInterval() {
+    return rand(9, 12);
+  }
+  special(g) {
+    const c = clamp(toCol(this.x) + randi(-2, 2), 1, COLS - 1);
+    g.addHazard('breath', c, 1.4);
+    g.bossEmote('РРРАААР!');
+  }
+  hitSpecial(x, y, g) {
+    for (const c of this.crystals) {
+      if (!c.alive || Math.abs(x - c.x) > 20 || Math.abs(y - c.y) > 24) continue;
+      c.hp--;
+      FX.burst(g, c.x, c.y, 6, { colors: ['#ff80ff', '#fff'], size: 4, speed: 160, life: 0.4 });
+      if (c.hp <= 0) {
+        c.alive = false;
+        g.explosions.push({ x: c.x, y: c.y, r: 70, t: 0 });
+        Sound.explosion(false);
+        const left = this.crystals.filter((k) => k.alive).length;
+        g.banner('КРИСТАЛЛ РАЗБИТ!', left ? `Осталось кристаллов: ${left}` : 'Дракон больше не лечится', '#ff80ff');
+      }
+      return true;
+    }
+    return false;
+  }
+  onRage(g) {
+    for (let i = 0; i < 3; i++) g.spawnEnemy('enderman');
+    g.spawnEnemy('creeper');
+  }
+  draw(ctx, t) {
+    for (const c of this.crystals) {
+      ctx.fillStyle = '#1b1026';
+      ctx.fillRect(c.x - 16, c.y + 18, 32, 150 - c.y);
+      ctx.fillStyle = 'rgba(160,90,220,0.35)';
+      for (let i = 0; i < 6; i++) ctx.fillRect(c.x - 12 + ((i * 7) % 24), c.y + 30 + i * 16, 4, 4);
+      if (!c.alive) continue;
+      line(ctx, c.x, c.y, this.x, this.y, 'rgba(255,128,255,0.35)', 5);
+      line(ctx, c.x, c.y, this.x, this.y, 'rgba(255,220,255,0.7)', 1.5);
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.rotate(t * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-16, -16, 32, 32);
+      ctx.rotate(-t * 4);
+      poly(ctx, [0, -12, 12, 0, 0, 12, -12, 0], '#ff80ff', '#7b1fa2', 2);
+      poly(ctx, [0, -12, 12, 0, 0, 12, -12, 0], '#ff80ff');
+      ctx.restore();
+    }
+    ctx.save();
+    if (this.hit > 0) ctx.translate(rand(-3, 3), rand(-2, 2));
+    drawDragon(ctx, this.x, this.y, t, { open: this.fire > 0 });
+    ctx.restore();
+  }
+}
+
+// ---------- 4. Полицейский вертолёт ----------
+function drawHeli(ctx, x, y, t, o = {}) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (o.light) {
+    const g = ctx.createLinearGradient(0, 30, 0, 420);
+    g.addColorStop(0, 'rgba(255,250,200,0.35)');
+    g.addColorStop(1, 'rgba(255,250,200,0)');
+    const sw = Math.sin(t * 0.9) * 120;
+    poly(ctx, [-12, 34, 12, 34, sw + 90, 420, sw - 90, 420], g);
+  }
+  line(ctx, -50, 44, 50, 44, '#222', 4);
+  line(ctx, -30, 30, -36, 44, '#222', 3);
+  line(ctx, 30, 30, 36, 44, '#222', 3);
+  ell(ctx, 0, 0, 72, 34, '#111');
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 72, 34, 0, 0, TAU);
+  ctx.clip();
+  ctx.fillStyle = '#f5f5f5';
+  ctx.fillRect(-72, -34, 144, 30);
+  ctx.restore();
+  ell(ctx, 0, 6, 34, 22, '#7fb3d5');
+  ell(ctx, -10, 0, 10, 8, 'rgba(255,255,255,0.6)');
+  text(ctx, 'ПОЛИЦИЯ', 0, -12, { font: `bold 13px ${FONT.ui}`, color: '#111', align: 'center' });
+  const blink = Math.floor(t * 6) % 2;
+  circ(ctx, -22, -34, 5, blink ? '#ff1744' : '#5a0010');
+  circ(ctx, 22, -34, 5, blink ? '#2962ff' : '#0a1a50');
+  rr(ctx, -4, -46, 8, 12, 2);
+  ctx.fillStyle = '#333';
+  ctx.fill();
+  ell(ctx, 0, -48, 170, 7, 'rgba(40,40,40,0.35)');
+  const a = t * 30;
+  line(ctx, Math.cos(a) * -170, -48 + Math.sin(a) * 4, Math.cos(a) * 170, -48 - Math.sin(a) * 4, '#222', 4);
+  ctx.restore();
+}
+
+class HeliBoss extends Boss {
+  constructor(hp) {
+    super('heli', hp);
+    this.name = 'Полицейский вертолёт';
+    this.speaker = 'Пилот';
+    this.rageText = 'Вызвано подкрепление: копы!';
+    this.deathText = 'Вертолёт сбит';
+    this.emotes = ['Остановитесь, это полиция!', 'Вы окружены!', 'Брось удочку!'];
+    this.projectile = 'rocket';
+    this.x = 640;
+    this.y = 78;
+    this.specialT = 7;
+  }
+  get box() {
+    return { x: this.x - 90, y: this.y - 40, w: 180, h: 88 };
+  }
+  get muzzle() {
+    return { x: this.x, y: this.y + 30 };
+  }
+  move() {
+    this.x = 640 + Math.sin(this.t * 0.6) * 260;
+    this.y = 82 + Math.sin(this.t * 1.7) * 8;
+  }
+  specialInterval() {
+    return rand(7, 9);
+  }
+  special(g) {
+    const c = clamp(toCol(this.x), 1, COLS - 1);
+    g.addHazard('strafe', c, 1.1);
+    g.addHazard('strafe', clamp(c + choice([-2, 2]), 1, COLS - 1), 1.6);
+    Sound.siren();
+  }
+  onRage(g) {
+    for (let i = 0; i < 4; i++) g.spawnEnemy('cop');
+    g.bonusStars++;
+  }
+  draw(ctx, t, g) {
+    ctx.save();
+    if (this.hit > 0) ctx.translate(rand(-3, 3), rand(-2, 2));
+    drawHeli(ctx, this.x, this.y, t, { light: g && g.darkness > 0.1 });
+    ctx.restore();
+  }
+}
+
+// ---------- 5. Скибиди-Титан ----------
+function drawTitan(ctx, x, y, t, o = {}) {
+  ctx.save();
+  ctx.translate(x, y);
+  // бачок
+  rr(ctx, -100, -80, 200, 70, 10);
+  ctx.fillStyle = '#eceff1';
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#90a4ae';
+  ctx.stroke();
+  rr(ctx, -20, -92, 40, 14, 4);
+  ctx.fillStyle = '#b0bec5';
+  ctx.fill();
+  // голова
+  const sway = Math.sin(t * 3) * 8, bob = Math.abs(Math.sin(t * 6)) * 6;
+  const hx = sway, hy = -6 - bob;
+  circ(ctx, hx, hy, 52, '#f0c49a');
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#a5754e';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(hx, hy - 8, 52, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.lineWidth = 18;
+  ctx.strokeStyle = '#3e2723';
+  ctx.stroke();
+  const charge = o.charge || 0;
+  for (const sx of [-1, 1]) {
+    const ex = hx + sx * 20, ey = hy - 4;
+    circ(ctx, ex, ey, 13, '#fff');
+    if (charge > 0) {
+      ctx.shadowColor = '#ff1744';
+      ctx.shadowBlur = 20 * charge;
+      circ(ctx, ex, ey, 6 + charge * 6, '#ff1744');
+      ctx.shadowBlur = 0;
+    } else circ(ctx, ex + Math.sin(t * 4) * 3, ey, 6, '#111');
+  }
+  ell(ctx, hx, hy + 26, 16, 6 + Math.abs(Math.sin(t * 12)) * 10, '#5a1010');
+  // чаша
+  ell(ctx, 0, 54, 140, 34, '#fafafa');
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#90a4ae';
+  ctx.stroke();
+  ell(ctx, 0, 42, 120, 16, '#e0e0e0');
+  ell(ctx, 0, 42, 92, 10, '#9fd4ff');
+  ctx.restore();
+}
+
+class TitanBoss extends Boss {
+  constructor(hp) {
+    super('titan', hp);
+    this.name = 'Скибиди-Титан';
+    this.speaker = 'Титан';
+    this.rageText = 'Скибиди-армия идёт на помощь!';
+    this.deathText = 'Титан смыт';
+    this.emotes = ['СКИБИДИ ДОП ДОП!', 'ЕС ЕС!', 'Ду-ду-ду!'];
+    this.projectile = 'plunger';
+    this.specialT = 12;
+    this.charge = null;
+  }
+  get box() {
+    return { x: 500, y: 0, w: 280, h: 160 };
+  }
+  get muzzle() {
+    return { x: 640, y: 110 };
+  }
+  get eyes() {
+    const sway = Math.sin(this.t * 3) * 8, bob = Math.abs(Math.sin(this.t * 6)) * 6;
+    return [-1, 1].map((sx) => ({ x: 640 + sway + sx * 20, y: 92 - 6 - bob - 4 }));
+  }
+  move(dt, g) {
+    if (this.charge) {
+      this.charge.t += dt;
+      if (this.charge.t >= this.charge.dur) this.charge = null;
+    }
+  }
+  specialInterval() {
+    return rand(11, 14);
+  }
+  special(g) {
+    const h = g.addHazard('laser', PAWN_ROW, 2.0);
+    this.charge = { t: 0, dur: 2.0, eyeHp: 6, hazard: h };
+    Sound.laserCharge();
+    g.say('Титан заряжает лазер! Стреляй ему в глаза!', '#ff5252');
+  }
+  hitSpecial(x, y, g) {
+    if (!this.charge) return false;
+    for (const e of this.eyes) {
+      if (dist2(x, y, e.x, e.y) > 16 * 16) continue;
+      this.charge.eyeHp--;
+      FX.burst(g, x, y, 6, { colors: ['#ff1744', '#fff'], size: 4, speed: 160, life: 0.4 });
+      Sound.hit();
+      if (this.charge.eyeHp <= 0) {
+        this.charge.hazard.cancel = true;
+        this.charge = null;
+        this.stunT = 2.5;
+        g.banner('ЛАЗЕР СОРВАН!', 'Титан оглушён', '#7ee03c');
+        g.damageTower(40, true);
+      }
+      return true;
+    }
+    return false;
+  }
+  onRage(g) {
+    for (let i = 0; i < 3; i++) g.spawnEnemy('skibidi');
+    g.spawnEnemy('mega');
+  }
+  draw(ctx, t) {
+    ctx.save();
+    if (this.hit > 0 || this.stunT > 0) ctx.translate(rand(-3, 3), rand(-2, 2));
+    drawTitan(ctx, 640, 92, t, { charge: this.charge ? Math.min(1, this.charge.t / this.charge.dur) : 0 });
+    if (this.stunT > 0) text(ctx, '★ ★ ★', 640, 40, { font: `bold 20px ${FONT.ui}`, color: '#ffd23f', align: 'center', stroke: '#000', lw: 3 });
+    ctx.restore();
+  }
+}
+
+const BOSS_CLASSES = { tower: TowerBoss, bowser: BowserBoss, dragon: DragonBoss, heli: HeliBoss, titan: TitanBoss };
+
+function makeBoss(kind, hp) {
+  return new BOSS_CLASSES[kind](hp);
+}
+
+// Портрет для выбора уровня и заставки «VS».
+function drawBossPortrait(ctx, kind, x, y, s, t) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  if (kind === 'tower') {
+    ctx.translate(-640, -85);
+    drawTower(ctx, 640, t, { hpRatio: 1, hp: 1000, hit: 0, rage: 0, fire: 0, laugh: 0 });
+  } else if (kind === 'bowser') drawBowser(ctx, 0, 10, t, {});
+  else if (kind === 'dragon') drawDragon(ctx, 0, -10, t, {});
+  else if (kind === 'heli') drawHeli(ctx, 0, 0, t, {});
+  else if (kind === 'titan') drawTitan(ctx, 0, 0, t, {});
+  ctx.restore();
+}
+
+// Снаряды боссов летят в камеру — отрисовка по виду.
+function drawProjectile(ctx, kind, x, y, r, t) {
+  if (kind === 'fire') {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r * 1.6);
+    g.addColorStop(0, '#fff59d');
+    g.addColorStop(0.4, '#ff9800');
+    g.addColorStop(1, 'rgba(255,60,0,0)');
+    circ(ctx, x, y, r * 1.6, g);
+    circ(ctx, x, y, r * 0.8, '#ffeb3b');
+  } else if (kind === 'ender') {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r * 1.6);
+    g.addColorStop(0, '#f3e5f5');
+    g.addColorStop(0.4, '#ab47bc');
+    g.addColorStop(1, 'rgba(80,0,120,0)');
+    circ(ctx, x, y, r * 1.6, g);
+    for (let i = 0; i < 5; i++) {
+      const a = t * 6 + i * 1.3;
+      circ(ctx, x + Math.cos(a) * r * 1.2, y + Math.sin(a) * r * 1.2, r * 0.18, '#e040fb');
+    }
+  } else if (kind === 'rocket') {
+    ctx.save();
+    ctx.translate(x, y);
+    const g = ctx.createRadialGradient(0, -r, 0, 0, -r, r * 1.6);
+    g.addColorStop(0, 'rgba(255,200,80,0.9)');
+    g.addColorStop(1, 'rgba(255,80,0,0)');
+    circ(ctx, 0, -r * 1.2, r * 1.4, g);
+    circ(ctx, 0, 0, r * 0.75, '#9e9e9e');
+    ctx.lineWidth = Math.max(1, r * 0.12);
+    ctx.strokeStyle = '#424242';
+    ctx.stroke();
+    circ(ctx, 0, 0, r * 0.3, '#e53935');
+    for (let i = 0; i < 4; i++) {
+      const a = i * (Math.PI / 2) + 0.4;
+      line(ctx, Math.cos(a) * r * 0.75, Math.sin(a) * r * 0.75, Math.cos(a) * r * 1.15, Math.sin(a) * r * 1.15, '#616161', Math.max(1, r * 0.15));
+    }
+    ctx.restore();
+  } else if (kind === 'plunger') {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(t * 8);
+    rr(ctx, -r * 0.12, -r * 1.3, r * 0.24, r * 1.3, r * 0.1);
+    ctx.fillStyle = '#a1887f';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.75, 0, Math.PI);
+    ctx.closePath();
+    ctx.fillStyle = '#c62828';
+    ctx.fill();
+    ctx.restore();
+  } else {
+    const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+    g.addColorStop(0, '#8a8a96');
+    g.addColorStop(0.6, '#2c2c34');
+    g.addColorStop(1, '#0d0d10');
+    circ(ctx, x, y, r, g);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,120,40,0.6)';
+    ctx.stroke();
+  }
+}
+
+// ---- js/levels.js ----
+'use strict';
+/* Кампания: 5 уровней, у каждого свой босс, доска и набор врагов.
+   pool — [тип врага, вес, с какого числа звёзд розыска появляется]. */
+
+const LEVELS = [
+  {
+    name: 'Королевская башня', ref: 'Clash Royale', boss: 'tower', hp: 1000, theme: 'classic', clock: 8 * 60, bonusStars: 0, mines: 10,
+    tip: 'Сбивай ядра короля и проходи сапёра — мины летят в башню.',
+    pool: [['pawn', 5, 1], ['zombie', 4, 1], ['cone', 3, 2], ['knight', 2, 2], ['creeper', 1.5, 2], ['snake', 0.8, 3], ['skibidi', 1.2, 3], ['rook', 1.6, 4], ['bishop', 1.6, 5]],
+  },
+  {
+    name: 'Замок Боузера', ref: 'Super Mario', boss: 'bowser', hp: 1100, theme: 'castle', clock: 10 * 60, bonusStars: 0, mines: 11,
+    tip: 'Огонь Боузера выжигает целый столбец. На 30% HP появится топор — стреляй по нему!',
+    pool: [['goomba', 5, 1], ['koopa', 3, 1], ['zombie', 3, 1], ['pawn', 3, 1], ['cone', 2, 2], ['knight', 1.5, 2], ['sonic', 0.6, 2], ['creeper', 1, 3], ['snake', 0.8, 3], ['rook', 1, 4]],
+  },
+  {
+    name: 'Край', ref: 'Minecraft', boss: 'dragon', hp: 1250, theme: 'end', clock: 17 * 60, bonusStars: 1, mines: 11,
+    tip: 'Кристаллы Края лечат дракона — разбей их первыми. Не держи прицел на эндермене!',
+    pool: [['enderman', 2.5, 1], ['zombie', 4, 1], ['creeper', 2.5, 1], ['pawn', 3, 1], ['cone', 2, 2], ['sonic', 0.5, 2], ['bishop', 1.5, 3], ['snake', 0.8, 3], ['rook', 1.5, 4]],
+  },
+  {
+    name: 'Лос-Сантос', ref: 'GTA', boss: 'heli', hp: 1200, theme: 'city', clock: 19 * 60, bonusStars: 2, mines: 12,
+    tip: 'Вертолёт поливает столбцы очередями — красная полоса показывает куда.',
+    pool: [['cop', 4, 1], ['zombie', 3, 1], ['pawn', 3, 1], ['cone', 2, 2], ['knight', 2, 2], ['sonic', 0.8, 2], ['skibidi', 1.5, 3], ['snake', 0.8, 3], ['rook', 1.5, 4]],
+  },
+  {
+    name: 'Скибиди-Титан', ref: 'финал', boss: 'titan', hp: 1300, theme: 'bath', clock: 22 * 60, bonusStars: 2, mines: 12,
+    tip: 'Когда Титан заряжает лазер, стреляй ему в глаза — иначе сгорит весь ряд фигур.',
+    pool: [['skibidi', 4, 1], ['cop', 2, 1], ['goomba', 2, 1], ['koopa', 2, 1], ['enderman', 1.5, 2], ['creeper', 1.5, 2], ['cone', 2, 2], ['sonic', 0.6, 2], ['snake', 0.6, 3], ['rook', 1, 4], ['bishop', 1, 4]],
+  },
+];
+
+// Оформление доски. top — фон верхних двух рядов, где стоит босс.
+const THEMES = {
+  classic: { light: '#eeeed2', dark: '#769656', top: 'chess' },
+  castle: { light: '#c9a27e', dark: '#8a5a3c', top: 'lava' },
+  end: { light: '#efeab8', dark: '#c9c084', top: 'void' },
+  city: { light: '#a9a9a9', dark: '#7b7b7b', top: 'skyline' },
+  bath: { light: '#f4f8fb', dark: '#a8d4f0', top: 'tiles' },
+};
+
+function paintThemeTop(ctx, theme) {
+  const top = THEMES[theme].top;
+  if (top === 'chess') {
+    const back = [[4, 'r'], [5, 'n'], [10, 'b'], [11, 'r']];
+    for (const [c, k] of back) drawPiece(ctx, k, false, colX(c), rowY(0) + 2, 68);
+    for (const c of [4, 5, 10, 11]) drawPiece(ctx, 'p', false, colX(c), rowY(1), 60);
+    return;
+  }
+  if (top === 'lava') {
+    const g = ctx.createLinearGradient(0, 0, 0, 2 * T);
+    g.addColorStop(0, '#3e0b00');
+    g.addColorStop(0.55, '#b71c1c');
+    g.addColorStop(1, '#ff6d00');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, 2 * T);
+    for (let i = 0; i < 40; i++) circ(ctx, (i * 97) % W, 120 + ((i * 37) % 40), 3 + (i % 4), 'rgba(255,214,0,0.55)');
+    // кирпичная стена замка по краям
+    ctx.fillStyle = '#4e342e';
+    ctx.fillRect(0, 0, W, 18);
+    for (let x = 0; x < W; x += 64) {
+      ctx.fillStyle = '#5d4037';
+      ctx.fillRect(x + 4, 0, 26, 30);
+    }
+    return;
+  }
+  if (top === 'void') {
+    ctx.fillStyle = '#0b0614';
+    ctx.fillRect(0, 0, W, 2 * T);
+    for (let i = 0; i < 90; i++) {
+      ctx.fillStyle = i % 5 ? 'rgba(255,255,255,0.6)' : 'rgba(224,64,251,0.8)';
+      ctx.fillRect((i * 137.5) % W, (i * 53.3) % (2 * T), 2, 2);
+    }
+    const g = ctx.createLinearGradient(0, 2 * T - 30, 0, 2 * T);
+    g.addColorStop(0, 'rgba(11,6,20,0)');
+    g.addColorStop(1, 'rgba(201,192,132,0.9)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 2 * T - 30, W, 30);
+    return;
+  }
+  if (top === 'skyline') {
+    const g = ctx.createLinearGradient(0, 0, 0, 2 * T);
+    g.addColorStop(0, '#1a1340');
+    g.addColorStop(1, '#ff7043');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, 2 * T);
+    let x = 0, i = 0;
+    while (x < W) {
+      const w = 40 + ((i * 53) % 50), h = 50 + ((i * 71) % 90);
+      ctx.fillStyle = i % 2 ? '#1c1c2b' : '#252538';
+      ctx.fillRect(x, 2 * T - h, w, h);
+      ctx.fillStyle = 'rgba(255,224,130,0.8)';
+      for (let wy = 2 * T - h + 8; wy < 2 * T - 8; wy += 14) for (let wx = x + 6; wx < x + w - 8; wx += 12) if ((wx + wy + i) % 3) ctx.fillRect(wx, wy, 5, 6);
+      x += w + 4;
+      i++;
+    }
+    return;
+  }
+  if (top === 'tiles') {
+    ctx.fillStyle = '#d6ecf7';
+    ctx.fillRect(0, 0, W, 2 * T);
+    ctx.strokeStyle = 'rgba(120,160,190,0.6)';
+    ctx.lineWidth = 2;
+    for (let x = 0; x <= W; x += 40) line(ctx, x, 0, x, 2 * T, 'rgba(120,160,190,0.6)', 2);
+    for (let y = 0; y <= 2 * T; y += 40) line(ctx, 0, y, W, y, 'rgba(120,160,190,0.6)', 2);
+  }
+}
+
+// Дополнительные детали на основной доске (разметка дороги, швы плитки).
+function paintThemeBoard(ctx, theme) {
+  if (theme === 'city') {
+    for (const x of [2 * T, 14 * T]) {
+      for (let y = 2 * T; y < 8 * T; y += 40) {
+        ctx.fillStyle = '#ffd600';
+        ctx.fillRect(x - 3, y, 6, 22);
+      }
+    }
+  } else if (theme === 'bath') {
+    for (let x = 0; x <= W; x += T) line(ctx, x, 2 * T, x, H, 'rgba(90,130,160,0.5)', 2);
+    for (let y = 2 * T; y <= H; y += T) line(ctx, 0, y, W, y, 'rgba(90,130,160,0.5)', 2);
+  } else if (theme === 'castle') {
+    for (let i = 0; i < 30; i++) {
+      const x = (i * 211) % W, y = 2 * T + ((i * 97) % (6 * T));
+      line(ctx, x, y, x + 18, y + 10, 'rgba(255,87,34,0.35)', 2);
+    }
+  }
+}
+
+// ---- js/achievements.js ----
+'use strict';
+/* Достижения: всплывают как в Xbox и сохраняются в браузере. */
+
+const ACHIEVEMENTS = [
+  { id: 'first', name: 'Первая кровь', desc: 'Убей первого врага' },
+  { id: 'sapper', name: 'Сапёр', desc: 'Пройди поле сапёра' },
+  { id: 'sapperPro', name: 'Сапёр ошибается один раз', desc: 'Пройди поле, ни разу не подорвавшись' },
+  { id: 'traps', name: 'Ловушка захлопнулась', desc: '5 врагов подорвались на флажках за игру' },
+  { id: 'ducks', name: 'Утиная охота', desc: 'Подстрели 5 уток за игру' },
+  { id: 'night', name: 'Пять ночей с Фредди', desc: 'Доживи до 6 AM' },
+  { id: 'scare', name: "It's me", desc: 'Получи скример Золотого Фредди' },
+  { id: 'cheat', name: 'HESOYAM', desc: 'Введи любой чит-код' },
+  { id: 'sniper', name: 'Коллатерал', desc: 'Убей 2 врагов одним выстрелом AWP' },
+  { id: 'waka', name: 'Вака-вака', desc: 'Пак-Ман съел 5 врагов за один забег' },
+  { id: 'star', name: 'Неуязвимый', desc: 'Поймай звезду из «?»-блока' },
+  { id: 'shopper', name: 'Шопоголик', desc: 'Потрать $10 000 в меню закупки' },
+  { id: 'garden', name: 'Садовник', desc: 'Посади 10 растений' },
+  { id: 'meeting', name: 'Был предателем', desc: 'Переживи экстренное собрание' },
+  { id: 'rings', name: 'Gotta go fast', desc: 'Собери 20 колец Соника' },
+  { id: 'shell', name: 'Зелёный панцирь', desc: 'Панцирь Купы сбил 3 врагов' },
+  { id: 'blood', name: 'Кровавая луна', desc: 'Переживи кровавую луну' },
+  { id: 'wasted', name: 'WASTED', desc: 'Погибни в первый раз' },
+  { id: 'boss_tower', name: 'Король повержен', desc: 'Разрушь королевскую башню' },
+  { id: 'boss_bowser', name: 'Принцесса спасена', desc: 'Сбрось Боузера в лаву' },
+  { id: 'boss_dragon', name: 'Конец', desc: 'Победи Эндер-дракона' },
+  { id: 'boss_heli', name: 'Пять звёзд', desc: 'Сбей полицейский вертолёт' },
+  { id: 'boss_titan', name: 'Смыто', desc: 'Победи Скибиди-Титана' },
+  { id: 'campaign', name: 'Мастер хаоса', desc: 'Пройди всю кампанию' },
+];
+
+const Ach = {
+  got: new Set(),
+  queue: [],
+  load() {
+    try {
+      const list = JSON.parse(Store.get('kd_ach') || '[]');
+      if (Array.isArray(list)) this.got = new Set(list);
+    } catch (e) {
+      this.got = new Set();
+    }
+  },
+  unlock(id) {
+    if (this.got.has(id)) return;
+    const a = ACHIEVEMENTS.find((x) => x.id === id);
+    if (!a) return;
+    this.got.add(id);
+    Store.set('kd_ach', JSON.stringify([...this.got]));
+    this.queue.push({ a, t: 0 });
+    Sound.achievement();
+  },
+  update(dt) {
+    if (!this.queue.length) return;
+    this.queue[0].t += dt;
+    if (this.queue[0].t > 3.6) this.queue.shift();
+  },
+  draw(ctx) {
+    const q = this.queue[0];
+    if (!q) return;
+    const k = Math.min(1, q.t * 4, (3.6 - q.t) * 4);
+    const w = 420 * easeOutCubic(Math.max(0, k)), x = 640 - w / 2, y = 178;
+    if (w < 60) return;
+    rr(ctx, x, y, w, 58, 29);
+    ctx.fillStyle = 'rgba(28,28,30,0.94)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#7ee03c';
+    ctx.stroke();
+    circ(ctx, x + 29, y + 29, 22, '#107c10');
+    drawStar(ctx, x + 29, y + 29, 12, '#fff', '#0b5e0b');
+    if (k < 1) return;
+    text(ctx, 'Достижение получено', x + 62, y + 23, { font: `13px ${FONT.ui}`, color: '#a5d6a7' });
+    text(ctx, q.a.name, x + 62, y + 45, { font: `bold 18px ${FONT.ui}`, color: '#fff' });
+  },
+};
+Ach.load();
+
 // ---- js/game.js ----
 'use strict';
 /* Логика игры: состояние, правила, ввод. Отрисовка — в render.js. */
@@ -3516,33 +4780,63 @@ const LAYOUT = {
 };
 const hotbarSlotRect = (i) => ({ x: LAYOUT.hotbar.x + i * LAYOUT.hotbar.slot, y: LAYOUT.hotbar.y, w: LAYOUT.hotbar.slot, h: LAYOUT.hotbar.slot });
 const packetRect = (i) => ({ x: 1018 + i * 51, y: 12, w: 46, h: 70 });
-const TOWER_BOX = { x: 640 - 130, y: 10, w: 260, h: 156 };
 
 class Game {
   constructor() {
     this.state = 'title';
     this.best = Number(Store.get('kd_best')) || 0;
+    this.unlocked = clamp(Number(Store.get('kd_unlocked')) || 0, 0, LEVELS.length - 1);
+    this.levelIdx = 0;
     this.titleT = 0;
+    this.introT = 0;
     this.buttons = [];
     this.reset();
   }
 
   reset() {
-    this.t = 0;
-    this.clock = 8 * 60;
-    this.nights = 0;
+    this.resetRun();
+    this.resetLevel();
+  }
+
+  // То, что переносится между уровнями кампании.
+  resetRun() {
     this.player = { hp: CFG.playerHp, maxHp: CFG.playerHp, armor: CFG.startArmor, hunger: 20, boost: 100, xp: 0, level: 0, money: 0, earned: 0, regenT: 0, hungerT: 0, starveT: 0 };
-    this.gun = { cd: 0, reload: 0, heat: 0, kick: 0, flash: 0, punch: 0, switchT: 0 };
     this.arsenal = {
       ak: { owned: true, mag: CFG.magSize, reserve: CFG.startReserve },
       nova: { owned: false, mag: 0, reserve: 0 },
       awp: { owned: false, mag: 0, reserve: 0 },
     };
     this.weapon = 'ak';
-    this.weaponNameT = 0;
     this.grenades = 1;
     this.infAmmo = false;
     this.cheated = false;
+    this.inv = { steak: 3, gapple: 1, potion: 1, tnt: 2, dice: 2, ammo: 1, ice: 1, pellet: 1, totem: 0 };
+    this.sel = 0;
+    this.kills = 0;
+    this.tilesOpened = 0;
+    this.ducksShot = 0;
+    this.totalFields = 0;
+    this.runT = 0;
+    this.trapKills = 0;
+    this.spent = 0;
+    this.plantsPlanted = 0;
+    this.ringsGot = 0;
+    this.shellKills = 0;
+    this.newRecord = false;
+  }
+
+  // То, что начинается заново на каждом уровне.
+  resetLevel() {
+    const L = this.level;
+    const p = this.player;
+    p.hp = p.maxHp;
+    p.hunger = 20;
+    p.boost = 100;
+    this.t = 0;
+    this.clock = L.clock;
+    this.nights = 0;
+    this.gun = { cd: 0, reload: 0, heat: 0, kick: 0, flash: 0, punch: 0, switchT: 0 };
+    this.weaponNameT = 0;
     this.typed = '';
     this.cheatMsg = null;
     this.buyMsg = null;
@@ -3550,6 +4844,9 @@ class Game {
     this.qblocks = [];
     this.ducks = [];
     this.popups = [];
+    this.hazards = [];
+    this.shells = [];
+    this.rings = [];
     this.qT = 18;
     this.duckT = rand(25, 35);
     this.meetingT = rand(120, 170);
@@ -3557,10 +4854,9 @@ class Game {
     this.dogT = 0;
     this.starT = 0;
     this.starOffset = 0;
-    this.ducksShot = 0;
+    this.bloodMoon = false;
+    this.fieldBlasts = 0;
     this.rod = { state: 'idle', t: 0, tx: 0, ty: 0, cd: 0, carry: null };
-    this.inv = { steak: 3, gapple: 1, potion: 1, tnt: 2, dice: 2, ammo: 1, ice: 1, pellet: 1, totem: 0 };
-    this.sel = 0;
     this.slotFlash = new Array(9).fill(0);
     this.sun = CFG.startSun;
     this.packet = 'pawn';
@@ -3583,13 +4879,13 @@ class Game {
     this.tracers = [];
     this.cracks = [];
     this.flyers = [];
-    this.mf = new Minefield(CFG.baseMines);
+    this.mf = new Minefield(L.mines);
     this.fieldsCleared = 0;
     this.rebuildT = 0;
-    this.tower = { hp: CFG.towerHp, max: CFG.towerHp, cannonT: 6, hit: 0, fire: 0, laugh: 0, emote: '', emoteT: 0, phase: 0, dead: false, deadT: 0, boomT: 0 };
+    this.tower = makeBoss(L.boss, L.hp);
     this.pac = new PacMan();
-    this.stars = 1;
-    this.bonusStars = 0;
+    this.bonusStars = L.bonusStars;
+    this.stars = 1 + L.bonusStars;
     this.starFlash = 0;
     this.spawnT = 3;
     this.freddyT = 4;
@@ -3605,30 +4901,52 @@ class Game {
     this.boostLock = false;
     this.boostIdle = 0;
     this.timeScale = 1;
-    this.kills = 0;
-    this.tilesOpened = 0;
     this.chat = [];
     this.bannerObj = null;
     this.jumpscare = null;
     this.dice = null;
     this.smiley = 'normal';
     this.smileyT = 0;
-    this.hintIdx = 0;
+    this.hintIdx = this.levelIdx === 0 ? 0 : HINTS.length;
     this.deadT = 0;
     this.winT = 0;
     this.deathCause = '';
-    this.newRecord = false;
     this.suppressFire = false;
     this.gunAlpha = 1;
   }
 
   // ---------- состояния экрана ----------
+  get level() {
+    return LEVELS[this.levelIdx];
+  }
   start() {
+    this.startCampaign(0);
+  }
+  // Новый забег с уровня i. На поздних уровнях даём стартовые деньги на закупку.
+  startCampaign(i) {
     Sound.init();
-    this.reset();
+    this.levelIdx = clamp(i, 0, LEVELS.length - 1);
+    this.resetRun();
+    this.player.money = this.levelIdx * 2500;
+    this.resetLevel();
+    this.state = 'intro';
+    this.introT = 0;
+  }
+  retry() {
+    this.startCampaign(this.levelIdx);
+  }
+  nextLevel() {
+    if (this.levelIdx >= LEVELS.length - 1) return this.toTitle();
+    this.levelIdx++;
+    this.resetLevel();
+    this.state = 'intro';
+    this.introT = 0;
+  }
+  beginLevel() {
     this.state = 'play';
     this.suppressFire = true;
-    this.say('Цель: разрушь башню короля. Удачи, сапёр!', '#ffd54a');
+    const L = this.level;
+    this.say(`Уровень ${this.levelIdx + 1}: ${L.name}. ${L.tip}`, '#ffd54a');
   }
   pause() {
     if (this.state === 'play') this.state = 'pause';
@@ -3664,9 +4982,15 @@ class Game {
   update(realDt) {
     realDt = Math.min(realDt, 0.05);
     this.processInput();
-    if (this.state === 'title') {
+    Ach.update(realDt);
+    if (this.state === 'title' || this.state === 'levels' || this.state === 'achievements') {
       this.titleT += realDt;
       this.pac.mouth += realDt * 10;
+      return;
+    }
+    if (this.state === 'intro') {
+      this.introT += realDt;
+      if (this.introT > 7) this.beginLevel();
       return;
     }
     if (this.state === 'pause' || this.state === 'buy') return;
@@ -3713,6 +5037,7 @@ class Game {
 
     const dt = realDt * this.timeScale;
     this.t += dt;
+    this.runT += dt;
     if (this.starT > 0) this.starT -= dt;
     while (this.hintIdx < HINTS.length && this.t >= HINTS[this.hintIdx][0]) {
       this.say('[Подсказка] ' + HINTS[this.hintIdx][1], '#9be7ff');
@@ -3726,8 +5051,9 @@ class Game {
     if (this.rebuildT > 0) {
       this.rebuildT -= dt;
       if (this.rebuildT <= 0) {
-        const mines = Math.min(CFG.maxMines, CFG.baseMines + this.fieldsCleared);
+        const mines = Math.min(CFG.maxMines, this.level.mines + this.fieldsCleared);
         this.mf.rebuild(mines);
+        this.fieldBlasts = 0;
         this.say(`Новое поле сапёра: ${mines} мин. Король нервничает.`, '#e0e0e0');
       }
     }
@@ -3745,6 +5071,10 @@ class Game {
     this.updateMissiles(dt);
     this.updateTNT(dt);
     this.updatePeas(dt);
+    this.updateHazards(dt);
+    this.updateRings(dt);
+    for (const sh of this.shells) sh.update(dt, this);
+    this.shells = this.shells.filter((sh) => !sh.gone);
     for (const q of this.qblocks) q.update(dt);
     for (const d of this.ducks) d.update(dt, this);
     this.updateFx(dt, realDt);
@@ -3833,13 +5163,24 @@ class Game {
       if (code === 'Enter' || code === 'Space') this.start();
       return;
     }
+    if (this.state === 'levels' || this.state === 'achievements') {
+      if (code === 'Escape' || code === 'Backspace') this.toTitle();
+      return;
+    }
+    if (this.state === 'intro') {
+      if (code === 'Enter' || code === 'Space' || code === 'Escape') this.beginLevel();
+      return;
+    }
     if (this.state === 'pause') {
       if (code === 'Escape' || code === 'KeyP' || code === 'Enter') this.resume();
-      else if (code === 'KeyN') this.start();
+      else if (code === 'KeyN') this.retry();
       return;
     }
     if (this.state === 'dead' || this.state === 'win') {
-      if ((code === 'Enter' || code === 'Space') && this.endT() > 1.5) this.start();
+      if ((code === 'Enter' || code === 'Space') && this.endT() > 1.5) {
+        if (this.state === 'dead') this.retry();
+        else this.nextLevel();
+      }
       else if (code === 'Escape') this.toTitle();
       return;
     }
@@ -3915,6 +5256,7 @@ class Game {
       }
     }
     if (this.state === 'title') this.start();
+    else if (this.state === 'intro') this.beginLevel();
   }
 
   cyclePacket() {
@@ -4108,14 +5450,18 @@ class Game {
         any = true;
       }
     }
+    if (!this.tower.dead && this.tower.hitSpecial(x, y, this)) return;
     if (pierce) {
+      let killed = 0;
       for (const e of this.enemies) {
         if (e.alive && e.hit(x, y)) {
           e.damage(dmg, this, 'gun');
           this.hitFx(e, x, y);
+          if (!e.alive) killed++;
           any = true;
         }
       }
+      if (killed >= 2) Ach.unlock('sniper');
     } else {
       let best = null;
       for (const e of this.enemies) if (e.alive && e.hit(x, y) && (!best || e.y > best.y)) best = e;
@@ -4125,7 +5471,7 @@ class Game {
         return;
       }
     }
-    if (!this.tower.dead && inRect(x, y, TOWER_BOX)) {
+    if (!this.tower.dead && inRect(x, y, this.tower.box)) {
       // башня бронированная: одна пуля снимает не больше 3 HP
       this.damageTower(Math.min(dmg, 3), false);
       FX.burst(this, x, y, 4, { colors: ['#9a9dab', '#6f7282', '#ddd'], size: 5, speed: 180, grav: 600, life: 0.4 });
@@ -4201,6 +5547,8 @@ class Game {
         break;
     }
     p.money -= it.price;
+    this.spent += it.price;
+    if (this.spent >= 10000) Ach.unlock('shopper');
     Sound.buy();
     this.buyMsg = { text: `Куплено: ${it.name}`, bad: false };
   }
@@ -4378,6 +5726,9 @@ class Game {
     this.mf.done = true;
     const live = this.mf.liveMines();
     this.fieldsCleared++;
+    this.totalFields++;
+    Ach.unlock('sapper');
+    if (this.fieldBlasts === 0) Ach.unlock('sapperPro');
     this.addMoney(1000, 640, 330);
     this.smiley = 'cool';
     this.smileyT = 3.5;
@@ -4386,7 +5737,8 @@ class Game {
       const cell = this.mf.cell(m.c, m.r);
       cell.s = FLAG;
       const p = this.mf.center(m.c, m.r);
-      this.missiles.push({ c: m.c, r: m.r, x0: p.x, y0: p.y, x1: 640 + rand(-70, 70), y1: rand(70, 130), t: -0.6 - i * 0.18, dur: 0.85, dmg: CFG.mineMissileDamage, launched: false, x: p.x, y: p.y });
+      const bc = this.tower.center;
+      this.missiles.push({ c: m.c, r: m.r, x0: p.x, y0: p.y, x1: bc.x, y1: bc.y, toBoss: true, ox: rand(-60, 60), oy: rand(-25, 25), t: -0.6 - i * 0.18, dur: 0.85, dmg: CFG.mineMissileDamage, launched: false, x: p.x, y: p.y });
     });
     this.rebuildT = 2.4 + live.length * 0.18;
   }
@@ -4398,6 +5750,7 @@ class Game {
     if (byPlayer) {
       this.smiley = 'dead';
       this.smileyT = 1.5;
+      this.fieldBlasts++;
       this.say('Ты подцепил мину удочкой. Бабах!', '#ff8a80');
       this.takeDamage(CFG.mineDamageToPlayer, 'мина');
     }
@@ -4412,6 +5765,8 @@ class Game {
     const p = this.mf.center(m.c, m.r);
     this.explode(p.x, p.y, T * 1.45, CFG.trapDamage, 'trap');
     FX.text(this, p.x, p.y - 50, 'ЛОВУШКА!', { color: '#ffd54a', font: `24px ${FONT.title}` });
+    this.trapKills++;
+    if (this.trapKills >= 5) Ach.unlock('traps');
     this.addMoney(50);
   }
 
@@ -4602,7 +5957,7 @@ class Game {
       case 5:
         for (let i = 0; i < 3; i++) {
           const sx = rand(300, 980);
-          this.missiles.push({ x0: sx, y0: -40, x1: 640 + rand(-80, 80), y1: rand(70, 130), t: -i * 0.25, dur: 0.8, dmg: 40, launched: false, bomb: true, x: sx, y: -40 });
+          this.missiles.push({ x0: sx, y0: -40, x1: 640, y1: 100, toBoss: true, ox: rand(-60, 60), oy: rand(-20, 20), t: -i * 0.25, dur: 0.8, dmg: 40, launched: false, bomb: true, x: sx, y: -40 });
         }
         this.banner('5 — АВИАУДАР!', 'Три бомбы летят в башню', '#40c4ff');
         break;
@@ -4670,6 +6025,11 @@ class Game {
         m.launched = true;
         Sound.missile();
         if (m.c !== undefined) this.mf.detonate(m.c, m.r);
+      }
+      if (m.toBoss) {
+        const bc = this.tower.center;
+        m.x1 = bc.x + m.ox;
+        m.y1 = bc.y + m.oy;
       }
       const k = Math.min(1, m.t / m.dur);
       const px = m.x, py = m.y;
@@ -4762,7 +6122,7 @@ class Game {
     this.heartShake = 0.5;
     this.shake = Math.max(this.shake, 10);
     Sound.hurt();
-    if (Math.random() < 0.4) this.kingEmote(choice(['Хе-хе-хе!', 'Ха-ха!', 'Получай!']));
+    if (Math.random() < 0.4) this.bossEmote(choice(this.tower.emotes));
     if (p.hp <= 0) {
       if (this.inv.totem > 0) {
         this.inv.totem--;
@@ -4785,6 +6145,7 @@ class Game {
     this.smiley = 'dead';
     Input.lmb = false;
     Sound.wasted();
+    Ach.unlock('wasted');
     this.saveBest();
   }
 
@@ -4795,6 +6156,12 @@ class Game {
     this.player.earned += 10000;
     Input.lmb = false;
     Sound.win();
+    Ach.unlock('boss_' + this.tower.kind);
+    if (this.levelIdx >= LEVELS.length - 1) Ach.unlock('campaign');
+    if (this.levelIdx + 1 > this.unlocked && this.levelIdx + 1 < LEVELS.length) {
+      this.unlocked = this.levelIdx + 1;
+      Store.set('kd_unlocked', this.unlocked);
+    }
     this.saveBest();
   }
 
@@ -4823,7 +6190,15 @@ class Game {
 
   onKill(e, src) {
     this.kills++;
-    if (src !== 'pac') this.addMoney(e.def.bounty, e.x, e.y - 50);
+    Ach.unlock('first');
+    if (src === 'shell' && ++this.shellKills >= 3) Ach.unlock('shell');
+    if (src !== 'pac') this.addMoney(e.def.bounty * (this.bloodMoon ? 2 : 1), e.x, e.y - 50);
+    if (e.type === 'koopa') {
+      let left = 0, right = 0;
+      for (const o of this.enemies) if (o.alive && Math.abs(o.y - e.y) < 50) o.x < e.x ? left++ : right++;
+      this.shells.push(new Shell(e.x, e.y, left > right ? -1 : 1));
+      Sound.kick();
+    }
     this.addXp(e.def.xp);
     Sound.xp();
     FX.burst(this, e.x, e.y, 5, { colors: ['#b6ff3c', '#7ee03c'], size: 5, speed: 160, grav: -200, life: 0.8, shape: 'circle' });
@@ -4840,11 +6215,18 @@ class Game {
         creeper: ['#5cb84a', '#86d672', '#0b0b0b'],
         skibidi: ['#f2f2f2', '#9fd4ff', '#f0c49a'],
         mega: ['#3b3f4a', '#7b4fb0', '#c0c4cf'],
+        goomba: ['#8d4b1a', '#f2c79a'],
+        koopa: ['#2e7d32', '#ffd54f', '#fff'],
+        enderman: ['#111', '#e040fb', '#7b1fa2'],
+        cop: ['#1e3a8a', '#e0ac69', '#111'],
+        sonic: ['#2a5ff0', '#f5cfa0', '#e53935'],
       }[e.type] || ['#222', '#444', '#777'];
       FX.burst(this, e.x, e.y, e.type === 'mega' ? 40 : 12, { colors, size: 7, speed: 240, up: 100 });
     }
     if (e.type === 'mega') this.banner('МЕГАРЫЦАРЬ ПОВЕРЖЕН!', `+$${e.def.bounty}`, '#b388ff');
     if (e.type === 'creeper' && Math.random() < 0.35) this.items.push(new Loot('item', 'tnt', e.x, e.y - 30, e.y, 120));
+    if (e.type === 'cop' && Math.random() < 0.3) this.items.push(new Loot('item', 'ammo', e.x, e.y - 30, e.y, 120));
+    if (e.type === 'sonic') this.dropRings(e.x, e.y, 10);
     if ((e.type === 'zombie' || e.type === 'cone') && Math.random() < 0.3) this.items.push(new Loot('sun', null, e.x, e.y - 30, e.y, 120));
     else if (Math.random() < 0.06) this.items.push(new Loot('item', weighted(TILE_LOOT.filter(([k]) => k !== 'sun')), e.x, e.y - 30, e.y, 120));
   }
@@ -4859,6 +6241,7 @@ class Game {
     }
     this.sun -= cost;
     this.def[c] = makeDefender(type);
+    if (DEF_STATS[type].plant && ++this.plantsPlanted >= 10) Ach.unlock('garden');
     Sound.plant();
     FX.burst(this, colX(c), rowY(PAWN_ROW) + 30, 10, { colors: ['#8d6e63', '#5d4037', '#a5d6a7'], size: 5, speed: 160, up: 120, life: 0.5 });
   }
@@ -4941,6 +6324,7 @@ class Game {
     if (this.jumpscare || this.state !== 'play') return;
     this.jumpscare = { t: 0 };
     Sound.jumpscare();
+    Ach.unlock('scare');
   }
 
   // ---------- волны врагов ----------
@@ -4955,7 +6339,7 @@ class Game {
     const alive = this.enemies.filter((e) => e.alive).length;
     this.spawnT -= dt;
     if (this.spawnT <= 0) {
-      const interval = Math.max(1.9, 4.6 - 0.5 * (this.stars - 1)) * (this.tower.hp < this.tower.max * 0.5 ? 0.9 : 1);
+      const interval = Math.max(1.9, 4.6 - 0.5 * (this.stars - 1)) * (this.tower.hp < this.tower.max * 0.5 ? 0.9 : 1) * (this.bloodMoon ? 0.65 : 1);
       this.spawnT = interval * rand(0.75, 1.25);
       if (alive < 4 + this.stars * 2 && !this.tower.dead) this.spawnEnemy(this.pickEnemy());
     }
@@ -5001,12 +6385,8 @@ class Game {
 
   pickEnemy() {
     const s = this.stars;
-    const list = [['pawn', 5], ['zombie', 4]];
-    if (s >= 2) list.push(['cone', 3], ['knight', 2], ['creeper', 1.5]);
-    if (s >= 3) list.push(['skibidi', 1.2]);
-    if (s >= 3 && !this.enemies.some((e) => e.alive && e.type === 'snake')) list.push(['snake', 0.8]);
-    if (s >= 4) list.push(['rook', 1.6]);
-    if (s >= 5) list.push(['bishop', 1.6]);
+    const snakeAlive = this.enemies.some((e) => e.alive && e.type === 'snake');
+    const list = this.level.pool.filter(([t, , m]) => s >= m && !(t === 'snake' && snakeAlive)).map(([t, w]) => [t, w]);
     return weighted(list);
   }
 
@@ -5033,6 +6413,22 @@ class Game {
       case 'skibidi':
         e = new Skibidi(c);
         break;
+      case 'goomba':
+        e = new Goomba(c);
+        break;
+      case 'koopa':
+        e = new Koopa(c);
+        break;
+      case 'enderman':
+        e = new Enderman(c);
+        break;
+      case 'cop':
+        e = new Cop(c);
+        break;
+      case 'sonic':
+        e = new Sonic(c);
+        this.say('Соник! Стреляй — из него сыплются кольца, собирай их прицелом.', '#64b5f6');
+        break;
       case 'mega':
         e = new MegaKnight();
         Sound.megaLand();
@@ -5049,18 +6445,16 @@ class Game {
     return e;
   }
 
-  // ---------- башня ----------
+  // ---------- босс уровня ----------
   updateTower(dt) {
     const tw = this.tower;
-    if (tw.fire > 0) tw.fire -= dt;
-    if (tw.laugh > 0) tw.laugh -= dt;
-    if (tw.emoteT > 0) tw.emoteT -= dt;
     if (tw.dead) {
       tw.deadT += dt;
       tw.boomT -= dt;
+      const b = tw.box;
       if (tw.boomT <= 0 && tw.deadT < 2) {
         tw.boomT = 0.16;
-        const x = 640 + rand(-120, 120), y = rand(20, 150);
+        const x = b.x + rand(0, b.w), y = b.y + rand(0, b.h);
         this.explosions.push({ x, y, r: 70, t: 0 });
         FX.burst(this, x, y, 12, { colors: ['#ffef8a', '#ff6d00', '#9a9dab', '#555'], size: 9, speed: 320, life: 0.8 });
         Sound.explosion(false);
@@ -5069,15 +6463,8 @@ class Game {
       if (tw.deadT > 2.4) this.win();
       return;
     }
-    tw.cannonT -= dt;
-    if (tw.cannonT <= 0) {
-      const ratio = tw.hp / tw.max;
-      tw.cannonT = Math.max(4.0, 8.5 - this.stars * 0.5 - (1 - ratio) * 2) * rand(0.85, 1.15);
-      this.cannonballs.push(new Cannonball(rand(220, 1060), rand(230, 560)));
-      tw.fire = 0.3;
-      Sound.cannon();
-      FX.burst(this, 640, 100, 8, { colors: ['rgba(80,80,80,0.6)'], size: 20, speed: 80, grav: -30, life: 0.8, shape: 'circle' });
-    }
+    if (tw.hit > 0) tw.hit -= dt;
+    tw.update(dt, this);
   }
 
   damageTower(n, big) {
@@ -5085,7 +6472,8 @@ class Game {
     if (tw.dead) return;
     tw.hp = Math.max(0, tw.hp - n);
     tw.hit = big ? 0.3 : 0.06;
-    if (big) FX.text(this, 640 + rand(-60, 60), 120, `−${n}`, { color: '#ff5252', font: `30px ${FONT.gta}` });
+    const c = tw.center;
+    if (big) FX.text(this, c.x + rand(-60, 60), c.y, `−${Math.round(n)}`, { color: '#ff5252', font: `30px ${FONT.gta}` });
     const ratio = tw.hp / tw.max;
     if (tw.phase === 0 && ratio <= 0.66) {
       tw.phase = 1;
@@ -5097,29 +6485,111 @@ class Game {
     if (tw.hp <= 0) {
       tw.dead = true;
       tw.deadT = 0;
-      this.banner('БАШНЯ ПАЛА!', 'Король повержен', '#ffd54a');
+      this.banner('ПОБЕДА!', tw.deathText, '#ffd54a');
       Sound.explosion(true);
-      for (const c of this.cannonballs) c.gone = true;
+      for (const cb of this.cannonballs) cb.gone = true;
+      for (const h of this.hazards) h.cancel = true;
       for (const e of this.enemies) if (e.alive) e.damage(999, this, 'tower');
     }
   }
 
   towerRage() {
-    this.banner('КОРОЛЬ В ЯРОСТИ!', 'Из башни вышел Мегарыцарь!', '#ff5252');
-    this.kingEmote('Ррраааа!');
+    const tw = this.tower;
+    this.banner(`${tw.speaker.toUpperCase()} В ЯРОСТИ!`, tw.rageText, '#ff5252');
+    this.bossEmote(choice(tw.emotes));
     this.bonusStars++;
-    this.spawnEnemy('mega');
-    for (let i = 0; i < 4; i++) this.spawnEnemy(choice(['pawn', 'zombie', 'cone', 'knight']));
-    if (!this.enemies.some((e) => e.alive && e.type === 'snake')) this.spawnEnemy('snake');
+    Sound.roar();
+    tw.onRage(this);
   }
 
-  kingEmote(str) {
+  bossEmote(str) {
     const tw = this.tower;
     if (tw.dead) return;
     tw.emote = str;
     tw.emoteT = 2.2;
     tw.laugh = 1.2;
-    this.say(`<Король> ${str}`, '#ff8a65');
+    this.say(`<${tw.speaker}> ${str}`, '#ff8a65');
+  }
+
+  // ---------- опасные зоны боссов ----------
+  // Столбец (огонь Боузера, дыхание дракона, очередь вертолёта) или ряд фигур (лазер Титана).
+  addHazard(kind, idx, warn = 1.4) {
+    const h = { kind, idx, t: 0, warn, dur: 0.7, done: false, cancel: false, gone: false };
+    this.hazards.push(h);
+    Sound.warn();
+    return h;
+  }
+
+  updateHazards(dt) {
+    for (const h of this.hazards) {
+      h.t += dt;
+      if (!h.done && !h.cancel && h.t >= h.warn) {
+        h.done = true;
+        this.applyHazard(h);
+      }
+      if (h.cancel || h.t >= h.warn + h.dur) h.gone = true;
+    }
+    this.hazards = this.hazards.filter((h) => !h.gone);
+  }
+
+  applyHazard(h) {
+    if (h.kind === 'laser') {
+      Sound.laser();
+      this.shake = Math.max(this.shake, 14);
+      for (let c = 1; c < COLS; c++) {
+        const d = this.def[c];
+        if (!d) continue;
+        d.hp -= 3;
+        d.hurt = 0.3;
+        if (d.hp <= 0) this.killDefender(c, null);
+      }
+      for (const e of this.enemies) if (e.alive && Math.abs(e.y - rowY(PAWN_ROW)) < 60) e.damage(10, this, 'laser');
+      this.takeDamage(2, 'лазер Скибиди-Титана');
+      return;
+    }
+    const x = colX(h.idx);
+    if (h.kind === 'fire') Sound.fireBreath();
+    else if (h.kind === 'strafe') Sound.strafe();
+    else Sound.dragonBreath();
+    if (this.def[h.idx]) this.killDefender(h.idx, null);
+    for (const e of this.enemies) if (e.alive && Math.abs(e.x - x) < 42) e.damage(6, this, 'hazard');
+    const colors = { fire: ['#ffeb3b', '#ff9800', '#f4511e'], breath: ['#e040fb', '#7b1fa2', '#ce93d8'], strafe: ['#ffd54f', '#9e9e9e', '#fff'] }[h.kind];
+    for (let y = 2 * T; y < 8 * T; y += 60) FX.burst(this, x, y, 4, { colors, size: 8, speed: 160, grav: -40, life: 0.6 });
+  }
+
+  // ---------- кольца Соника ----------
+  dropRings(x, y, n) {
+    for (let i = 0; i < n; i++) {
+      const a = rand(0, TAU), sp = rand(120, 260);
+      this.rings.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 7, t: rand(0, 3) });
+    }
+    Sound.ringLoss();
+  }
+
+  updateRings(dt) {
+    for (const r of this.rings) {
+      r.t += dt;
+      r.life -= dt;
+      r.x += r.vx * dt;
+      r.y += r.vy * dt;
+      const damp = Math.pow(0.15, dt);
+      r.vx *= damp;
+      r.vy *= damp;
+      if (r.x < 20 || r.x > W - 20) r.vx *= -1;
+      if (r.y < 2 * T || r.y > 8 * T) r.vy *= -1;
+      r.x = clamp(r.x, 20, W - 20);
+      r.y = clamp(r.y, 2 * T, 8 * T);
+      if (dist2(r.x, r.y, Input.x, Input.y) < 36 * 36) {
+        r.life = 0;
+        this.ringsGot++;
+        this.player.money += 25;
+        this.player.earned += 25;
+        Sound.ring();
+        FX.text(this, r.x, r.y - 20, '+$25', { color: '#ffd54a', font: `bold 15px ${FONT.ui}`, life: 0.7 });
+        if (this.ringsGot >= 20) Ach.unlock('rings');
+      }
+    }
+    this.rings = this.rings.filter((r) => r.life > 0);
   }
 
   updateCannonballs(dt) {
@@ -5132,7 +6602,7 @@ class Game {
         this.shake = 16;
         Sound.explosion(false);
         FX.burst(this, cb.tx, cb.ty, 18, { colors: ['#e0f7fa', '#b2ebf2', '#fff'], size: 6, speed: 360, grav: 600, life: 0.6 });
-        this.takeDamage(CFG.cannonDamage, 'ядро короля');
+        this.takeDamage(CFG.cannonDamage, `снаряд: ${this.tower.name}`);
       }
     }
   }
@@ -5166,11 +6636,18 @@ class Game {
       Sound.midnight();
       this.staticFx = 0.6;
       this.freddyT = 3;
+      if (Math.random() < (this.levelIdx >= 2 ? 0.5 : 0.3)) {
+        this.bloodMoon = true;
+        this.banner('КРОВАВАЯ ЛУНА', 'Враги быстрее и злее, награды ×2', '#ff1744');
+      }
     }
     if (prev < 6 && h >= 6) {
       this.banner('6 AM', 'Ты пережил ночь! +$2000', '#7ee03c');
       Sound.chime6am();
       this.addMoney(2000);
+      Ach.unlock('night');
+      if (this.bloodMoon) Ach.unlock('blood');
+      this.bloodMoon = false;
       for (const e of this.enemies) if (e.alive && e.type === 'freddy') e.remove = true;
     }
     if (prev < 21 && h >= 21) this.say('Темнеет. В полночь просыпается кое-кто золотой...', '#b39ddb');
@@ -5236,6 +6713,7 @@ class Game {
         break;
     }
     Sound.cheat();
+    Ach.unlock('cheat');
     this.cheatMsg = { name, text: CHEATS[name], t: 0 };
     this.say(`Чит ${name}: ${CHEATS[name]}. Рекорд в этой игре не засчитается.`, '#ffffff');
   }
@@ -5279,6 +6757,7 @@ class Game {
     } else if (kind === 'star') {
       this.popups.push({ kind: 'star', x, y, t: 0 });
       this.starT = 9;
+      Ach.unlock('star');
       Sound.starMusic(9);
       this.banner('ЗВЕЗДА!', 'Неуязвимость и двойной урон на 9 секунд', '#ffd23f');
     } else {
@@ -5294,6 +6773,7 @@ class Game {
     d.state = 'hit';
     d.hitT = 0;
     this.ducksShot++;
+    if (this.ducksShot >= 5) Ach.unlock('ducks');
     this.addMoney(500, d.x, d.y - 36, '#a5d6a7');
     Sound.quack();
     FX.burst(this, d.x, d.y, 10, { colors: ['#8d5a2b', '#1b6b2a', '#fff'], size: 5, speed: 160, life: 0.6 });
@@ -5351,6 +6831,7 @@ class Game {
       this.meeting = null;
       this.suppressFire = true;
       this.say(`${m.name} был предателем. Голосование окончено.`, '#ff8a80');
+      Ach.unlock('meeting');
     }
   }
 
@@ -5393,7 +6874,8 @@ let nightCtx = null;
 
 function render(ctx, g) {
   const now = performance.now() / 1000;
-  const wt = g.state === 'title' ? g.titleT : g.t;
+  const menu = g.state === 'title' || g.state === 'levels' || g.state === 'achievements' || g.state === 'intro';
+  const wt = menu ? g.titleT + g.introT : g.t;
   ctx.setTransform(View.k, 0, 0, View.k, 0, 0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
@@ -5402,31 +6884,35 @@ function render(ctx, g) {
   ctx.fillRect(0, 0, W, H);
 
   ctx.save();
-  if (g.shake > 0 && g.state !== 'title') ctx.translate(rand(-1, 1) * g.shake, rand(-1, 1) * g.shake);
+  if (g.shake > 0 && !menu) ctx.translate(rand(-1, 1) * g.shake, rand(-1, 1) * g.shake);
   drawWorld(ctx, g, wt, now);
   drawNight(ctx, g);
-  if (g.state !== 'title') drawHands(ctx, g, now);
+  if (!menu) drawHands(ctx, g, now);
   ctx.restore();
 
-  if (g.state !== 'title') {
+  if (!menu) {
     drawScreenFx(ctx, g, now);
     drawHUD(ctx, g, now);
   }
   g.buttons = [];
   if (g.state === 'title') drawTitle(ctx, g, now);
+  else if (g.state === 'levels') drawLevels(ctx, g, now);
+  else if (g.state === 'achievements') drawAchievements(ctx, g, now);
+  else if (g.state === 'intro') drawIntro(ctx, g, now);
   else if (g.state === 'pause') drawPause(ctx, g, now);
   else if (g.state === 'buy') drawBuy(ctx, g, now);
   else if (g.state === 'dead') drawDead(ctx, g, now);
   else if (g.state === 'win') drawWin(ctx, g, now);
   if (g.meeting) drawMeeting(ctx, g, now);
   if (g.jumpscare) drawJumpscare(ctx, g, now);
+  Ach.draw(ctx);
   if (g.state === 'play' && !g.jumpscare && !g.meeting) drawCrosshair(ctx, g, now);
   else if (!g.jumpscare && !g.meeting && !Input.touch) drawPointer(ctx);
 }
 
 // ---------- мир ----------
 function drawWorld(ctx, g, t, now) {
-  ctx.drawImage(Board.get(View), 0, 0, W, H);
+  ctx.drawImage(Board.get(View, g.state === 'title' ? 'classic' : g.level.theme), 0, 0, W, H);
   const hover = g.state === 'play' ? g.mf.at(Input.x, Input.y) : null;
   g.mf.draw(ctx, hover, t);
 
@@ -5440,7 +6926,12 @@ function drawWorld(ctx, g, t, now) {
   if (g.state === 'title') drawTitleCast(ctx, t);
 
   for (const it of g.items) if (!it.falling) it.draw(ctx);
+  for (const r of g.rings) {
+    if (r.life < 2 && Math.floor(r.t * 10) % 2 === 0) continue;
+    drawRing(ctx, r.x, r.y, r.t);
+  }
   for (let c = 1; c < COLS; c++) if (g.def[c]) drawDefender(ctx, g.def[c], c, t);
+  for (const sh of g.shells) sh.draw(ctx);
   for (const p of g.peas) {
     circ(ctx, p.x, p.y, 7, '#7ee03c');
     ctx.lineWidth = 2;
@@ -5461,6 +6952,7 @@ function drawWorld(ctx, g, t, now) {
   }
   ctx.globalAlpha = 1;
 
+  drawHazards(ctx, g, t);
   drawTowerState(ctx, g, t);
 
   for (const b of g.beams) {
@@ -5547,17 +7039,10 @@ function drawTowerState(ctx, g, t) {
       ctx.globalAlpha = Math.max(0, 1 - tw.deadT / 1.6);
       ctx.translate(0, tw.deadT * 30);
     }
-    drawTower(ctx, 640, t, {
-      hpRatio: tw.hp / tw.max,
-      hp: tw.hp,
-      hit: Math.max(0, tw.hit),
-      rage: tw.phase > 0 ? 1 : 0,
-      fire: Math.max(0, tw.fire),
-      laugh: tw.laugh,
-    });
+    tw.draw(ctx, t, g);
     ctx.restore();
   }
-  if (tw.dead) {
+  if (tw.dead && tw.kind === 'tower') {
     // руины
     const k = Math.min(1, tw.deadT / 1.2);
     ctx.globalAlpha = k;
@@ -5568,20 +7053,83 @@ function drawTowerState(ctx, g, t) {
     drawCrown(ctx, 700, 140, 1.6);
     ctx.globalAlpha = 1;
   }
-  if (tw.emoteT > 0 && !tw.dead) {
+  if (!tw.dead && tw.kind !== 'tower' && g.state !== 'title') drawBossBar(ctx, tw);
+  if (tw.emoteT > 0 && !tw.dead && g.state !== 'title') {
+    const b = tw.box;
+    const bx = clamp(b.x + b.w - 10, 320, 940 - 200), by = Math.max(26, b.y + 10);
     const a = Math.min(1, tw.emoteT * 3);
     ctx.globalAlpha = a;
     ctx.font = `bold 17px ${FONT.ui}`;
     const w = ctx.measureText(tw.emote).width + 24;
-    rr(ctx, 752, 14, w, 36, 12);
+    const x = Math.min(bx, 944 - w);
+    rr(ctx, x, by, w, 36, 12);
     ctx.fillStyle = '#fff';
     ctx.fill();
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#1b2b5a';
     ctx.stroke();
-    poly(ctx, [756, 38, 736, 54, 770, 44], '#fff');
-    text(ctx, tw.emote, 752 + w / 2, 38, { font: `bold 17px ${FONT.ui}`, color: '#1b2b5a', align: 'center' });
+    poly(ctx, [x + 4, by + 24, x - 16, by + 40, x + 18, by + 30], '#fff');
+    text(ctx, tw.emote, x + w / 2, by + 24, { font: `bold 17px ${FONT.ui}`, color: '#1b2b5a', align: 'center' });
     ctx.globalAlpha = 1;
+  }
+}
+
+function drawBossBar(ctx, tw) {
+  const w = 400, x = 640 - w / 2, y = 3;
+  rr(ctx, x, y, w, 20, 6);
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fill();
+  const ratio = clamp(tw.hp / tw.max, 0, 1);
+  if (ratio > 0) {
+    rr(ctx, x + 2, y + 2, (w - 4) * ratio, 16, 5);
+    const g = ctx.createLinearGradient(0, y, 0, y + 20);
+    g.addColorStop(0, '#ff6f60');
+    g.addColorStop(1, '#b71c1c');
+    ctx.fillStyle = g;
+    ctx.fill();
+  }
+  text(ctx, `${tw.name} · ${Math.ceil(tw.hp)}`, 640, y + 15, { font: `bold 13px ${FONT.ui}`, color: '#fff', align: 'center', stroke: '#000', lw: 3 });
+}
+
+// Предупреждение и удар: столбец (огонь, дыхание, очередь) или ряд фигур (лазер).
+function drawHazards(ctx, g, t) {
+  for (const h of g.hazards) {
+    const warn = h.t < h.warn;
+    if (h.kind === 'laser') {
+      const y = rowY(h.idx);
+      if (warn) {
+        const k = h.t / h.warn;
+        ctx.globalAlpha = 0.4 + 0.5 * Math.abs(Math.sin(t * (6 + k * 20)));
+        line(ctx, 0, y, W, y, '#ff1744', 2 + k * 4);
+        ctx.globalAlpha = 1;
+      } else {
+        const a = 1 - (h.t - h.warn) / h.dur;
+        line(ctx, 0, y, W, y, `rgba(255,23,68,${a * 0.6})`, 50);
+        line(ctx, 0, y, W, y, `rgba(255,255,255,${a})`, 14);
+      }
+      continue;
+    }
+    const x = colX(h.idx) - T / 2;
+    if (warn) {
+      ctx.fillStyle = `rgba(255,30,30,${0.12 + 0.18 * Math.abs(Math.sin(t * 10))})`;
+      ctx.fillRect(x, 2 * T, T, 6 * T);
+      ctx.strokeStyle = 'rgba(255,60,60,0.8)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, 2 * T, T - 2, 6 * T);
+      text(ctx, '!', x + T / 2, 2 * T + 40, { font: `bold 34px ${FONT.title}`, color: '#ff1744', align: 'center', stroke: '#fff', lw: 4 });
+      continue;
+    }
+    const a = 1 - (h.t - h.warn) / h.dur;
+    const cols = { fire: ['255,152,0', '255,235,59'], breath: ['171,71,188', '234,128,252'], strafe: ['255,213,79', '255,255,255'] }[h.kind];
+    const gr = ctx.createLinearGradient(x, 0, x + T, 0);
+    gr.addColorStop(0, `rgba(${cols[0]},0)`);
+    gr.addColorStop(0.5, `rgba(${cols[1]},${a})`);
+    gr.addColorStop(1, `rgba(${cols[0]},0)`);
+    ctx.fillStyle = gr;
+    ctx.fillRect(x - 10, 160, T + 20, 6 * T);
+    if (h.kind === 'strafe') {
+      for (let i = 0; i < 8; i++) circ(ctx, x + rand(10, T - 10), rand(2 * T, 8 * T), 4, `rgba(60,60,60,${a})`);
+    }
   }
 }
 
@@ -5620,11 +7168,12 @@ function drawNight(ctx, g) {
   n.globalCompositeOperation = 'source-over';
   n.clearRect(0, 0, W, H);
   const a = Math.max(0, dark - (g.gun.flash > 0 ? 0.2 : 0));
-  n.fillStyle = `rgba(6,8,26,${a})`;
+  n.fillStyle = g.bloodMoon ? `rgba(40,0,6,${a})` : `rgba(6,8,26,${a})`;
   n.fillRect(0, 0, W, H);
   n.globalCompositeOperation = 'destination-out';
   lightAt(n, Input.x, Input.y, 190, 1);
-  lightAt(n, 640, 70, 150, 0.6);
+  const bc = g.tower.center;
+  lightAt(n, bc.x, bc.y, 150, 0.6);
   for (const ex of g.explosions) lightAt(n, ex.x, ex.y, ex.r * 2.2, 1 - ex.t / 0.55);
   for (const it of g.items) if (it.kind === 'sun') lightAt(n, it.x, it.y, 70, 0.9);
   for (const cb of g.cannonballs) {
@@ -5632,6 +7181,14 @@ function drawNight(ctx, g) {
     lightAt(n, p.x, p.y, 40 + p.s * 30, 0.8);
   }
   n.globalCompositeOperation = 'source-over';
+  if (g.bloodMoon) {
+    const mg = n.createRadialGradient(150, 250, 10, 150, 250, 90);
+    mg.addColorStop(0, 'rgba(255,40,40,0.95)');
+    mg.addColorStop(0.45, 'rgba(200,0,0,0.85)');
+    mg.addColorStop(1, 'rgba(120,0,0,0)');
+    n.fillStyle = mg;
+    n.fillRect(60, 160, 180, 180);
+  }
   ctx.drawImage(nightCanvas, 0, 0, W, H);
 }
 
@@ -6170,7 +7727,9 @@ function drawTitle(ctx, g, now) {
   text(ctx, 'ХАОС-ДОСКА', 0, 0, { font: `104px ${FONT.title}`, color: tg, stroke: '#1a0b00', lw: 14, align: 'center' });
   ctx.restore();
   text(ctx, 'шахматы × сапёр × CS × Minecraft × GTA × PvZ × FNAF × Clash Royale × Pac-Man × PUBG × змейка × Mario × Duck Hunt × Among Us × скибиди', 640, 198, { font: `bold 15px ${FONT.ui}`, color: '#d7e8c4', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 4 });
-  mcButton(ctx, g, 'ИГРАТЬ', 640 - 150, 226, 300, 56, () => g.start(), { size: 22 });
+  mcButton(ctx, g, 'УРОВНИ', 296, 226, 180, 56, () => (g.state = 'levels'), { size: 13 });
+  mcButton(ctx, g, 'ИГРАТЬ', 496, 226, 288, 56, () => g.start(), { size: 22 });
+  mcButton(ctx, g, `ДОСТИЖЕНИЯ ${Ach.got.size}/${ACHIEVEMENTS.length}`, 804, 226, 200, 56, () => (g.state = 'achievements'), { size: 10 });
 
   rr(ctx, 210, 306, 860, 296, 14);
   ctx.fillStyle = 'rgba(10,16,8,0.78)';
@@ -6182,13 +7741,13 @@ function drawTitle(ctx, g, now) {
   drawControls(ctx, 240, 370);
   text(ctx, 'КАК ПОБЕДИТЬ', 690, 338, { font: `13px ${FONT.pixel}`, color: '#ffd54a' });
   const goals = [
-    'Разрушь башню короля (босс сверху).',
+    '5 уровней — 5 боссов, босс сверху доски.',
     'Открывай клетки сапёра удочкой — за них',
     'дают деньги, патроны и предметы.',
     'Флажок на мине = ловушка для врагов.',
-    'Очистишь поле — мины полетят в башню.',
+    'Очистишь поле — мины полетят в босса.',
     'Не пускай врагов к белым фигурам.',
-    'Сбивай ядра короля, пока не прилетели.',
+    'Сбивай снаряды босса, пока не прилетели.',
     'В полночь приходит Золотой Фредди...',
     'Деньги тратятся в меню закупки (B).',
     'Говорят, тут работают читы из GTA SA...',
@@ -6208,7 +7767,7 @@ function drawPause(ctx, g) {
   text(ctx, 'ПАУЗА', 640, 118, { font: `64px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 10, align: 'center' });
   const bx = 640 - 160;
   mcButton(ctx, g, 'ПРОДОЛЖИТЬ', bx, 150, 320, 42, () => g.resume());
-  mcButton(ctx, g, 'НАЧАТЬ ЗАНОВО', bx, 200, 320, 42, () => g.start());
+  mcButton(ctx, g, 'ЗАНОВО ЭТОТ УРОВЕНЬ', bx, 200, 320, 42, () => g.retry());
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', bx, 250, 320, 42, () => Sound.toggleMute());
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', bx, 300, 320, 42, toggleFullscreen);
   mcButton(ctx, g, 'В ГЛАВНОЕ МЕНЮ', bx, 350, 320, 42, () => g.toTitle());
@@ -6221,13 +7780,13 @@ function drawPause(ctx, g) {
 
 function statsLines(g) {
   const p = g.player;
-  const mins = Math.floor(g.t / 60), secs = Math.floor(g.t % 60);
+  const mins = Math.floor(g.runT / 60), secs = Math.floor(g.runT % 60);
   return [
     ['Заработано', `$${p.earned}`],
     ['Врагов повержено', String(g.kills)],
     ['Клеток открыто', String(g.tilesOpened)],
-    ['Полей сапёра пройдено', String(g.fieldsCleared)],
-    ['Уровень', String(p.level)],
+    ['Полей сапёра пройдено', String(g.totalFields)],
+    ['Уровень игрока', String(p.level)],
     ['Утки / Время', `${g.ducksShot} / ${mins}:${pad(secs, 2)}`],
   ];
 }
@@ -6269,7 +7828,7 @@ function drawDead(ctx, g) {
   if (g.deadT > 1.5) {
     text(ctx, `Причина: ${g.deathCause}`, 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#ffcdd2', stroke: '#000', lw: 4, align: 'center' });
     drawStats(ctx, g, 318);
-    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.start());
+    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.retry());
     mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
   }
 }
@@ -6279,7 +7838,8 @@ function drawWin(ctx, g, now) {
   ctx.fillRect(0, 0, W, H);
   const a = Math.min(1, g.winT * 2);
   ctx.globalAlpha = a;
-  text(ctx, 'MISSION PASSED!', 640, 130, { font: `88px ${FONT.gta}`, color: '#f2c230', stroke: '#000', lw: 9, align: 'center' });
+  const final = g.levelIdx >= LEVELS.length - 1;
+  text(ctx, final ? 'ХАОС ПОБЕЖДЁН!' : 'MISSION PASSED!', 640, 130, { font: `${final ? 76 : 88}px ${final ? FONT.title : FONT.gta}`, color: '#f2c230', stroke: '#000', lw: 9, align: 'center' });
   text(ctx, 'RESPECT +', 640, 182, { font: `40px ${FONT.gta}`, color: '#fff', stroke: '#000', lw: 6, align: 'center' });
   for (let i = 0; i < 3; i++) {
     const k = clamp((g.winT - 0.5 - i * 0.35) * 3, 0, 1);
@@ -6289,10 +7849,13 @@ function drawWin(ctx, g, now) {
   }
   ctx.globalAlpha = 1;
   if (g.winT > 1.5) {
-    text(ctx, 'Башня короля разрушена. +$10000 · #1 VICTORY ROYALE', 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#c8f7a0', stroke: '#000', lw: 4, align: 'center' });
+    const line1 = final ? 'Все 5 боссов повержены. Ты прошёл Хаос-Доску! · #1 VICTORY ROYALE' : `${g.tower.deathText}. +$10000 · уровень ${g.levelIdx + 2} открыт`;
+    text(ctx, line1, 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#c8f7a0', stroke: '#000', lw: 4, align: 'center' });
     drawStats(ctx, g, 318);
-    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.start());
-    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
+    const by = 560 + (g.newRecord || g.cheated ? 20 : 0);
+    if (final) mcButton(ctx, g, 'С НАЧАЛА', 640 - 250, by, 240, 46, () => g.startCampaign(0));
+    else mcButton(ctx, g, 'ДАЛЬШЕ ▶', 640 - 250, by, 240, 46, () => g.nextLevel());
+    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, by, 240, 46, () => g.toTitle());
   }
 }
 
@@ -6398,6 +7961,131 @@ function drawMeeting(ctx, g, now) {
   const n = Math.floor(clamp((m.t - 2.6) * 22, 0, full.length));
   text(ctx, full.slice(0, n), 640, 470, { font: `bold 34px ${FONT.ui}`, color: '#fff', align: 'center' });
   if (m.t > 4) text(ctx, 'Осталось предателей: 0', 640, 515, { font: `22px ${FONT.ui}`, color: '#bdbdbd', align: 'center' });
+}
+
+// ---------- кампания: заставка уровня, выбор уровня, достижения ----------
+const PORTRAIT_SCALE = { tower: 0.7, bowser: 1.0, dragon: 0.45, heli: 0.55, titan: 0.62 };
+
+function wrapText(ctx, str, x, y, maxW, lineH, o) {
+  ctx.font = o.font;
+  const words = str.split(' ');
+  let lineStr = '', yy = y;
+  for (const w of words) {
+    const test = lineStr ? lineStr + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && lineStr) {
+      text(ctx, lineStr, x, yy, o);
+      lineStr = w;
+      yy += lineH;
+    } else lineStr = test;
+  }
+  if (lineStr) text(ctx, lineStr, x, yy, o);
+  return yy + lineH;
+}
+
+function drawIntro(ctx, g, now) {
+  const L = g.level;
+  const k = easeOutCubic(Math.min(1, g.introT * 2.5));
+  ctx.fillStyle = 'rgba(6,6,10,0.78)';
+  ctx.fillRect(0, 0, W, H);
+  // косые полосы как в файтингах
+  ctx.save();
+  ctx.globalAlpha = 0.5 * k;
+  ctx.fillStyle = '#b71c1c';
+  ctx.beginPath();
+  ctx.moveTo(760, 0);
+  ctx.lineTo(W, 0);
+  ctx.lineTo(W, H);
+  ctx.lineTo(600, H);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  const lx = 80 - (1 - k) * 300;
+  text(ctx, `УРОВЕНЬ ${g.levelIdx + 1} / ${LEVELS.length}`, lx, 170, { font: `16px ${FONT.pixel}`, color: '#ffd54a' });
+  text(ctx, L.name.toUpperCase(), lx, 240, { font: `58px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 8 });
+  text(ctx, `по мотивам: ${L.ref}`, lx, 276, { font: `bold 18px ${FONT.ui}`, color: '#b0bec5' });
+  let y = wrapText(ctx, L.tip, lx, 330, 540, 28, { font: `20px ${FONT.ui}`, color: '#eef3e6' });
+  const names = [...new Set(L.pool.map(([t]) => ENEMY_DEF[t].name))];
+  text(ctx, 'Враги уровня:', lx, y + 14, { font: `bold 16px ${FONT.ui}`, color: '#ff8a65' });
+  wrapText(ctx, names.join(', '), lx, y + 40, 540, 24, { font: `16px ${FONT.ui}`, color: '#cfd8dc' });
+  // портрет босса
+  const px = 960 + (1 - k) * 400;
+  const glow = ctx.createRadialGradient(px, 330, 10, px, 330, 260);
+  glow.addColorStop(0, 'rgba(255,220,120,0.35)');
+  glow.addColorStop(1, 'rgba(255,220,120,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(px - 260, 70, 520, 520);
+  drawBossPortrait(ctx, L.boss, px, 330, PORTRAIT_SCALE[L.boss] * 1.7, now);
+  text(ctx, g.tower.name.toUpperCase(), px, 560, { font: `30px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 6, align: 'center' });
+  text(ctx, 'VS', 700, 360, { font: `110px ${FONT.gta}`, color: '#ff1744', stroke: '#fff', lw: 8, align: 'center' });
+  if (Math.floor(now * 2) % 2 === 0) text(ctx, 'Клик или Enter — в бой!', 640, 670, { font: `bold 22px ${FONT.ui}`, color: '#fff', stroke: '#000', lw: 5, align: 'center' });
+}
+
+function drawLevels(ctx, g, now) {
+  ctx.fillStyle = 'rgba(6,10,6,0.85)';
+  ctx.fillRect(0, 0, W, H);
+  text(ctx, 'ВЫБОР УРОВНЯ', 640, 92, { font: `52px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 8, align: 'center' });
+  LEVELS.forEach((L, i) => {
+    const r = { x: 58 + i * 236, y: 140, w: 220, h: 420 };
+    const locked = i > g.unlocked;
+    const hov = !locked && inRect(Input.x, Input.y, r);
+    const th = THEMES[L.theme];
+    rr(ctx, r.x, r.y, r.w, r.h, 14);
+    const bg = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
+    bg.addColorStop(0, th.dark);
+    bg.addColorStop(1, '#111');
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.lineWidth = hov ? 5 : 2;
+    ctx.strokeStyle = hov ? '#ffd54a' : 'rgba(255,255,255,0.3)';
+    ctx.stroke();
+    ctx.save();
+    rr(ctx, r.x, r.y, r.w, r.h, 14);
+    ctx.clip();
+    drawBossPortrait(ctx, L.boss, r.x + r.w / 2, r.y + 130, PORTRAIT_SCALE[L.boss], now);
+    ctx.restore();
+    text(ctx, `УРОВЕНЬ ${i + 1}`, r.x + r.w / 2, r.y + 270, { font: `13px ${FONT.pixel}`, color: '#ffd54a', align: 'center' });
+    wrapText(ctx, L.name, r.x + r.w / 2, r.y + 306, r.w - 24, 28, { font: `24px ${FONT.title}`, color: '#fff', align: 'center', stroke: '#000', lw: 5 });
+    text(ctx, L.ref, r.x + r.w / 2, r.y + 390, { font: `bold 15px ${FONT.ui}`, color: '#b0bec5', align: 'center' });
+    if (locked) {
+      rr(ctx, r.x, r.y, r.w, r.h, 14);
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fill();
+      rr(ctx, r.x + r.w / 2 - 24, r.y + 160, 48, 40, 6);
+      ctx.fillStyle = '#9e9e9e';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(r.x + r.w / 2, r.y + 160, 16, Math.PI, 0);
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = '#9e9e9e';
+      ctx.stroke();
+      text(ctx, `Пройди уровень ${i}`, r.x + r.w / 2, r.y + 236, { font: `bold 15px ${FONT.ui}`, color: '#eee', align: 'center' });
+    } else {
+      g.buttons.push({ x: r.x, y: r.y, w: r.w, h: r.h, action: () => g.startCampaign(i) });
+    }
+  });
+  text(ctx, 'С уровня 2 и дальше даём стартовые деньги на закупку. Рекорд считается за весь забег.', 640, 600, { font: `15px ${FONT.ui}`, color: '#b0bec5', align: 'center' });
+  mcButton(ctx, g, 'НАЗАД', 540, 630, 200, 44, () => g.toTitle(), { size: 13 });
+}
+
+function drawAchievements(ctx, g) {
+  ctx.fillStyle = 'rgba(6,10,6,0.88)';
+  ctx.fillRect(0, 0, W, H);
+  text(ctx, 'ДОСТИЖЕНИЯ', 640, 70, { font: `46px ${FONT.title}`, color: '#7ee03c', stroke: '#000', lw: 7, align: 'center' });
+  text(ctx, `Открыто: ${Ach.got.size} из ${ACHIEVEMENTS.length}`, 640, 100, { font: `bold 17px ${FONT.ui}`, color: '#cfd8dc', align: 'center' });
+  const half = Math.ceil(ACHIEVEMENTS.length / 2);
+  ACHIEVEMENTS.forEach((a, i) => {
+    const col = i < half ? 0 : 1, row = i % half;
+    const x = 70 + col * 580, y = 118 + row * 41;
+    const got = Ach.got.has(a.id);
+    rr(ctx, x, y, 560, 36, 8);
+    ctx.fillStyle = got ? 'rgba(16,124,16,0.35)' : 'rgba(255,255,255,0.06)';
+    ctx.fill();
+    circ(ctx, x + 20, y + 18, 13, got ? '#107c10' : '#424242');
+    drawStar(ctx, x + 20, y + 18, 7, got ? '#fff' : '#757575', got ? '#0b5e0b' : '#333');
+    text(ctx, a.name, x + 42, y + 17, { font: `bold 15px ${FONT.ui}`, color: got ? '#fff' : '#9e9e9e' });
+    text(ctx, a.desc, x + 42, y + 32, { font: `12px ${FONT.ui}`, color: got ? '#c8e6c9' : '#757575' });
+  });
+  mcButton(ctx, g, 'НАЗАД', 540, 620 + 32, 200, 44, () => g.toTitle(), { size: 13 });
 }
 
 // ---- js/main.js ----

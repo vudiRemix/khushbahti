@@ -269,7 +269,7 @@ class Zombie extends Enemy {
       if (d.hp <= 0) g.killDefender(c, this);
     } else {
       this.eating = false;
-      this.y += this.speed * dt;
+      this.y += this.speed * dt * (g.bloodMoon ? 1.4 : 1);
     }
     this.gy = this.y;
     this.groanT -= dt;
@@ -538,6 +538,7 @@ class PacMan {
           e.damage(999, g, 'pac');
           g.addMoney(pts, e.x, e.y - 50, '#7ff');
           Sound.pacEat();
+          if (this.combo >= 5) Ach.unlock('waka');
         }
       }
       if (this.x > W + 60) {
@@ -660,9 +661,10 @@ class Airdrop {
 
 // Ядро из королевской пушки летит прямо в камеру — его надо сбить.
 class Cannonball {
-  constructor(tx, ty) {
-    this.sx = 640;
-    this.sy = 98;
+  constructor(tx, ty, sx = 640, sy = 98, kind = 'ball') {
+    this.kind = kind;
+    this.sx = sx;
+    this.sy = sy;
     this.tx = tx;
     this.ty = ty;
     this.t = 0;
@@ -696,14 +698,6 @@ class Cannonball {
     line(ctx, this.tx - rr2 - 8, this.ty, this.tx - rr2 + 10, this.ty, '#ff2b2b', 3);
     line(ctx, this.tx + rr2 - 10, this.ty, this.tx + rr2 + 8, this.ty, '#ff2b2b', 3);
     ctx.restore();
-    const r = 15 * p.s;
-    const g = ctx.createRadialGradient(p.x - r * 0.35, p.y - r * 0.35, r * 0.1, p.x, p.y, r);
-    g.addColorStop(0, '#8a8a96');
-    g.addColorStop(0.6, '#2c2c34');
-    g.addColorStop(1, '#0d0d10');
-    circ(ctx, p.x, p.y, r, g);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255,120,40,0.6)';
-    ctx.stroke();
+    drawProjectile(ctx, this.kind, p.x, p.y, 15 * p.s, this.t);
   }
 }

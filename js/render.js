@@ -6,7 +6,8 @@ let nightCtx = null;
 
 function render(ctx, g) {
   const now = performance.now() / 1000;
-  const wt = g.state === 'title' ? g.titleT : g.t;
+  const menu = g.state === 'title' || g.state === 'levels' || g.state === 'achievements' || g.state === 'intro';
+  const wt = menu ? g.titleT + g.introT : g.t;
   ctx.setTransform(View.k, 0, 0, View.k, 0, 0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
@@ -15,31 +16,35 @@ function render(ctx, g) {
   ctx.fillRect(0, 0, W, H);
 
   ctx.save();
-  if (g.shake > 0 && g.state !== 'title') ctx.translate(rand(-1, 1) * g.shake, rand(-1, 1) * g.shake);
+  if (g.shake > 0 && !menu) ctx.translate(rand(-1, 1) * g.shake, rand(-1, 1) * g.shake);
   drawWorld(ctx, g, wt, now);
   drawNight(ctx, g);
-  if (g.state !== 'title') drawHands(ctx, g, now);
+  if (!menu) drawHands(ctx, g, now);
   ctx.restore();
 
-  if (g.state !== 'title') {
+  if (!menu) {
     drawScreenFx(ctx, g, now);
     drawHUD(ctx, g, now);
   }
   g.buttons = [];
   if (g.state === 'title') drawTitle(ctx, g, now);
+  else if (g.state === 'levels') drawLevels(ctx, g, now);
+  else if (g.state === 'achievements') drawAchievements(ctx, g, now);
+  else if (g.state === 'intro') drawIntro(ctx, g, now);
   else if (g.state === 'pause') drawPause(ctx, g, now);
   else if (g.state === 'buy') drawBuy(ctx, g, now);
   else if (g.state === 'dead') drawDead(ctx, g, now);
   else if (g.state === 'win') drawWin(ctx, g, now);
   if (g.meeting) drawMeeting(ctx, g, now);
   if (g.jumpscare) drawJumpscare(ctx, g, now);
+  Ach.draw(ctx);
   if (g.state === 'play' && !g.jumpscare && !g.meeting) drawCrosshair(ctx, g, now);
   else if (!g.jumpscare && !g.meeting && !Input.touch) drawPointer(ctx);
 }
 
 // ---------- мир ----------
 function drawWorld(ctx, g, t, now) {
-  ctx.drawImage(Board.get(View), 0, 0, W, H);
+  ctx.drawImage(Board.get(View, g.state === 'title' ? 'classic' : g.level.theme), 0, 0, W, H);
   const hover = g.state === 'play' ? g.mf.at(Input.x, Input.y) : null;
   g.mf.draw(ctx, hover, t);
 
@@ -53,7 +58,12 @@ function drawWorld(ctx, g, t, now) {
   if (g.state === 'title') drawTitleCast(ctx, t);
 
   for (const it of g.items) if (!it.falling) it.draw(ctx);
+  for (const r of g.rings) {
+    if (r.life < 2 && Math.floor(r.t * 10) % 2 === 0) continue;
+    drawRing(ctx, r.x, r.y, r.t);
+  }
   for (let c = 1; c < COLS; c++) if (g.def[c]) drawDefender(ctx, g.def[c], c, t);
+  for (const sh of g.shells) sh.draw(ctx);
   for (const p of g.peas) {
     circ(ctx, p.x, p.y, 7, '#7ee03c');
     ctx.lineWidth = 2;
@@ -74,6 +84,7 @@ function drawWorld(ctx, g, t, now) {
   }
   ctx.globalAlpha = 1;
 
+  drawHazards(ctx, g, t);
   drawTowerState(ctx, g, t);
 
   for (const b of g.beams) {
@@ -160,17 +171,10 @@ function drawTowerState(ctx, g, t) {
       ctx.globalAlpha = Math.max(0, 1 - tw.deadT / 1.6);
       ctx.translate(0, tw.deadT * 30);
     }
-    drawTower(ctx, 640, t, {
-      hpRatio: tw.hp / tw.max,
-      hp: tw.hp,
-      hit: Math.max(0, tw.hit),
-      rage: tw.phase > 0 ? 1 : 0,
-      fire: Math.max(0, tw.fire),
-      laugh: tw.laugh,
-    });
+    tw.draw(ctx, t, g);
     ctx.restore();
   }
-  if (tw.dead) {
+  if (tw.dead && tw.kind === 'tower') {
     // руины
     const k = Math.min(1, tw.deadT / 1.2);
     ctx.globalAlpha = k;
@@ -181,20 +185,83 @@ function drawTowerState(ctx, g, t) {
     drawCrown(ctx, 700, 140, 1.6);
     ctx.globalAlpha = 1;
   }
-  if (tw.emoteT > 0 && !tw.dead) {
+  if (!tw.dead && tw.kind !== 'tower' && g.state !== 'title') drawBossBar(ctx, tw);
+  if (tw.emoteT > 0 && !tw.dead && g.state !== 'title') {
+    const b = tw.box;
+    const bx = clamp(b.x + b.w - 10, 320, 940 - 200), by = Math.max(26, b.y + 10);
     const a = Math.min(1, tw.emoteT * 3);
     ctx.globalAlpha = a;
     ctx.font = `bold 17px ${FONT.ui}`;
     const w = ctx.measureText(tw.emote).width + 24;
-    rr(ctx, 752, 14, w, 36, 12);
+    const x = Math.min(bx, 944 - w);
+    rr(ctx, x, by, w, 36, 12);
     ctx.fillStyle = '#fff';
     ctx.fill();
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#1b2b5a';
     ctx.stroke();
-    poly(ctx, [756, 38, 736, 54, 770, 44], '#fff');
-    text(ctx, tw.emote, 752 + w / 2, 38, { font: `bold 17px ${FONT.ui}`, color: '#1b2b5a', align: 'center' });
+    poly(ctx, [x + 4, by + 24, x - 16, by + 40, x + 18, by + 30], '#fff');
+    text(ctx, tw.emote, x + w / 2, by + 24, { font: `bold 17px ${FONT.ui}`, color: '#1b2b5a', align: 'center' });
     ctx.globalAlpha = 1;
+  }
+}
+
+function drawBossBar(ctx, tw) {
+  const w = 400, x = 640 - w / 2, y = 3;
+  rr(ctx, x, y, w, 20, 6);
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fill();
+  const ratio = clamp(tw.hp / tw.max, 0, 1);
+  if (ratio > 0) {
+    rr(ctx, x + 2, y + 2, (w - 4) * ratio, 16, 5);
+    const g = ctx.createLinearGradient(0, y, 0, y + 20);
+    g.addColorStop(0, '#ff6f60');
+    g.addColorStop(1, '#b71c1c');
+    ctx.fillStyle = g;
+    ctx.fill();
+  }
+  text(ctx, `${tw.name} · ${Math.ceil(tw.hp)}`, 640, y + 15, { font: `bold 13px ${FONT.ui}`, color: '#fff', align: 'center', stroke: '#000', lw: 3 });
+}
+
+// Предупреждение и удар: столбец (огонь, дыхание, очередь) или ряд фигур (лазер).
+function drawHazards(ctx, g, t) {
+  for (const h of g.hazards) {
+    const warn = h.t < h.warn;
+    if (h.kind === 'laser') {
+      const y = rowY(h.idx);
+      if (warn) {
+        const k = h.t / h.warn;
+        ctx.globalAlpha = 0.4 + 0.5 * Math.abs(Math.sin(t * (6 + k * 20)));
+        line(ctx, 0, y, W, y, '#ff1744', 2 + k * 4);
+        ctx.globalAlpha = 1;
+      } else {
+        const a = 1 - (h.t - h.warn) / h.dur;
+        line(ctx, 0, y, W, y, `rgba(255,23,68,${a * 0.6})`, 50);
+        line(ctx, 0, y, W, y, `rgba(255,255,255,${a})`, 14);
+      }
+      continue;
+    }
+    const x = colX(h.idx) - T / 2;
+    if (warn) {
+      ctx.fillStyle = `rgba(255,30,30,${0.12 + 0.18 * Math.abs(Math.sin(t * 10))})`;
+      ctx.fillRect(x, 2 * T, T, 6 * T);
+      ctx.strokeStyle = 'rgba(255,60,60,0.8)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, 2 * T, T - 2, 6 * T);
+      text(ctx, '!', x + T / 2, 2 * T + 40, { font: `bold 34px ${FONT.title}`, color: '#ff1744', align: 'center', stroke: '#fff', lw: 4 });
+      continue;
+    }
+    const a = 1 - (h.t - h.warn) / h.dur;
+    const cols = { fire: ['255,152,0', '255,235,59'], breath: ['171,71,188', '234,128,252'], strafe: ['255,213,79', '255,255,255'] }[h.kind];
+    const gr = ctx.createLinearGradient(x, 0, x + T, 0);
+    gr.addColorStop(0, `rgba(${cols[0]},0)`);
+    gr.addColorStop(0.5, `rgba(${cols[1]},${a})`);
+    gr.addColorStop(1, `rgba(${cols[0]},0)`);
+    ctx.fillStyle = gr;
+    ctx.fillRect(x - 10, 160, T + 20, 6 * T);
+    if (h.kind === 'strafe') {
+      for (let i = 0; i < 8; i++) circ(ctx, x + rand(10, T - 10), rand(2 * T, 8 * T), 4, `rgba(60,60,60,${a})`);
+    }
   }
 }
 
@@ -233,11 +300,12 @@ function drawNight(ctx, g) {
   n.globalCompositeOperation = 'source-over';
   n.clearRect(0, 0, W, H);
   const a = Math.max(0, dark - (g.gun.flash > 0 ? 0.2 : 0));
-  n.fillStyle = `rgba(6,8,26,${a})`;
+  n.fillStyle = g.bloodMoon ? `rgba(40,0,6,${a})` : `rgba(6,8,26,${a})`;
   n.fillRect(0, 0, W, H);
   n.globalCompositeOperation = 'destination-out';
   lightAt(n, Input.x, Input.y, 190, 1);
-  lightAt(n, 640, 70, 150, 0.6);
+  const bc = g.tower.center;
+  lightAt(n, bc.x, bc.y, 150, 0.6);
   for (const ex of g.explosions) lightAt(n, ex.x, ex.y, ex.r * 2.2, 1 - ex.t / 0.55);
   for (const it of g.items) if (it.kind === 'sun') lightAt(n, it.x, it.y, 70, 0.9);
   for (const cb of g.cannonballs) {
@@ -245,6 +313,14 @@ function drawNight(ctx, g) {
     lightAt(n, p.x, p.y, 40 + p.s * 30, 0.8);
   }
   n.globalCompositeOperation = 'source-over';
+  if (g.bloodMoon) {
+    const mg = n.createRadialGradient(150, 250, 10, 150, 250, 90);
+    mg.addColorStop(0, 'rgba(255,40,40,0.95)');
+    mg.addColorStop(0.45, 'rgba(200,0,0,0.85)');
+    mg.addColorStop(1, 'rgba(120,0,0,0)');
+    n.fillStyle = mg;
+    n.fillRect(60, 160, 180, 180);
+  }
   ctx.drawImage(nightCanvas, 0, 0, W, H);
 }
 
@@ -783,7 +859,9 @@ function drawTitle(ctx, g, now) {
   text(ctx, 'ХАОС-ДОСКА', 0, 0, { font: `104px ${FONT.title}`, color: tg, stroke: '#1a0b00', lw: 14, align: 'center' });
   ctx.restore();
   text(ctx, 'шахматы × сапёр × CS × Minecraft × GTA × PvZ × FNAF × Clash Royale × Pac-Man × PUBG × змейка × Mario × Duck Hunt × Among Us × скибиди', 640, 198, { font: `bold 15px ${FONT.ui}`, color: '#d7e8c4', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 4 });
-  mcButton(ctx, g, 'ИГРАТЬ', 640 - 150, 226, 300, 56, () => g.start(), { size: 22 });
+  mcButton(ctx, g, 'УРОВНИ', 296, 226, 180, 56, () => (g.state = 'levels'), { size: 13 });
+  mcButton(ctx, g, 'ИГРАТЬ', 496, 226, 288, 56, () => g.start(), { size: 22 });
+  mcButton(ctx, g, `ДОСТИЖЕНИЯ ${Ach.got.size}/${ACHIEVEMENTS.length}`, 804, 226, 200, 56, () => (g.state = 'achievements'), { size: 10 });
 
   rr(ctx, 210, 306, 860, 296, 14);
   ctx.fillStyle = 'rgba(10,16,8,0.78)';
@@ -795,13 +873,13 @@ function drawTitle(ctx, g, now) {
   drawControls(ctx, 240, 370);
   text(ctx, 'КАК ПОБЕДИТЬ', 690, 338, { font: `13px ${FONT.pixel}`, color: '#ffd54a' });
   const goals = [
-    'Разрушь башню короля (босс сверху).',
+    '5 уровней — 5 боссов, босс сверху доски.',
     'Открывай клетки сапёра удочкой — за них',
     'дают деньги, патроны и предметы.',
     'Флажок на мине = ловушка для врагов.',
-    'Очистишь поле — мины полетят в башню.',
+    'Очистишь поле — мины полетят в босса.',
     'Не пускай врагов к белым фигурам.',
-    'Сбивай ядра короля, пока не прилетели.',
+    'Сбивай снаряды босса, пока не прилетели.',
     'В полночь приходит Золотой Фредди...',
     'Деньги тратятся в меню закупки (B).',
     'Говорят, тут работают читы из GTA SA...',
@@ -821,7 +899,7 @@ function drawPause(ctx, g) {
   text(ctx, 'ПАУЗА', 640, 118, { font: `64px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 10, align: 'center' });
   const bx = 640 - 160;
   mcButton(ctx, g, 'ПРОДОЛЖИТЬ', bx, 150, 320, 42, () => g.resume());
-  mcButton(ctx, g, 'НАЧАТЬ ЗАНОВО', bx, 200, 320, 42, () => g.start());
+  mcButton(ctx, g, 'ЗАНОВО ЭТОТ УРОВЕНЬ', bx, 200, 320, 42, () => g.retry());
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', bx, 250, 320, 42, () => Sound.toggleMute());
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', bx, 300, 320, 42, toggleFullscreen);
   mcButton(ctx, g, 'В ГЛАВНОЕ МЕНЮ', bx, 350, 320, 42, () => g.toTitle());
@@ -834,13 +912,13 @@ function drawPause(ctx, g) {
 
 function statsLines(g) {
   const p = g.player;
-  const mins = Math.floor(g.t / 60), secs = Math.floor(g.t % 60);
+  const mins = Math.floor(g.runT / 60), secs = Math.floor(g.runT % 60);
   return [
     ['Заработано', `$${p.earned}`],
     ['Врагов повержено', String(g.kills)],
     ['Клеток открыто', String(g.tilesOpened)],
-    ['Полей сапёра пройдено', String(g.fieldsCleared)],
-    ['Уровень', String(p.level)],
+    ['Полей сапёра пройдено', String(g.totalFields)],
+    ['Уровень игрока', String(p.level)],
     ['Утки / Время', `${g.ducksShot} / ${mins}:${pad(secs, 2)}`],
   ];
 }
@@ -882,7 +960,7 @@ function drawDead(ctx, g) {
   if (g.deadT > 1.5) {
     text(ctx, `Причина: ${g.deathCause}`, 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#ffcdd2', stroke: '#000', lw: 4, align: 'center' });
     drawStats(ctx, g, 318);
-    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.start());
+    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.retry());
     mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
   }
 }
@@ -892,7 +970,8 @@ function drawWin(ctx, g, now) {
   ctx.fillRect(0, 0, W, H);
   const a = Math.min(1, g.winT * 2);
   ctx.globalAlpha = a;
-  text(ctx, 'MISSION PASSED!', 640, 130, { font: `88px ${FONT.gta}`, color: '#f2c230', stroke: '#000', lw: 9, align: 'center' });
+  const final = g.levelIdx >= LEVELS.length - 1;
+  text(ctx, final ? 'ХАОС ПОБЕЖДЁН!' : 'MISSION PASSED!', 640, 130, { font: `${final ? 76 : 88}px ${final ? FONT.title : FONT.gta}`, color: '#f2c230', stroke: '#000', lw: 9, align: 'center' });
   text(ctx, 'RESPECT +', 640, 182, { font: `40px ${FONT.gta}`, color: '#fff', stroke: '#000', lw: 6, align: 'center' });
   for (let i = 0; i < 3; i++) {
     const k = clamp((g.winT - 0.5 - i * 0.35) * 3, 0, 1);
@@ -902,10 +981,13 @@ function drawWin(ctx, g, now) {
   }
   ctx.globalAlpha = 1;
   if (g.winT > 1.5) {
-    text(ctx, 'Башня короля разрушена. +$10000 · #1 VICTORY ROYALE', 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#c8f7a0', stroke: '#000', lw: 4, align: 'center' });
+    const line1 = final ? 'Все 5 боссов повержены. Ты прошёл Хаос-Доску! · #1 VICTORY ROYALE' : `${g.tower.deathText}. +$10000 · уровень ${g.levelIdx + 2} открыт`;
+    text(ctx, line1, 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#c8f7a0', stroke: '#000', lw: 4, align: 'center' });
     drawStats(ctx, g, 318);
-    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.start());
-    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
+    const by = 560 + (g.newRecord || g.cheated ? 20 : 0);
+    if (final) mcButton(ctx, g, 'С НАЧАЛА', 640 - 250, by, 240, 46, () => g.startCampaign(0));
+    else mcButton(ctx, g, 'ДАЛЬШЕ ▶', 640 - 250, by, 240, 46, () => g.nextLevel());
+    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, by, 240, 46, () => g.toTitle());
   }
 }
 
@@ -1011,4 +1093,129 @@ function drawMeeting(ctx, g, now) {
   const n = Math.floor(clamp((m.t - 2.6) * 22, 0, full.length));
   text(ctx, full.slice(0, n), 640, 470, { font: `bold 34px ${FONT.ui}`, color: '#fff', align: 'center' });
   if (m.t > 4) text(ctx, 'Осталось предателей: 0', 640, 515, { font: `22px ${FONT.ui}`, color: '#bdbdbd', align: 'center' });
+}
+
+// ---------- кампания: заставка уровня, выбор уровня, достижения ----------
+const PORTRAIT_SCALE = { tower: 0.7, bowser: 1.0, dragon: 0.45, heli: 0.55, titan: 0.62 };
+
+function wrapText(ctx, str, x, y, maxW, lineH, o) {
+  ctx.font = o.font;
+  const words = str.split(' ');
+  let lineStr = '', yy = y;
+  for (const w of words) {
+    const test = lineStr ? lineStr + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && lineStr) {
+      text(ctx, lineStr, x, yy, o);
+      lineStr = w;
+      yy += lineH;
+    } else lineStr = test;
+  }
+  if (lineStr) text(ctx, lineStr, x, yy, o);
+  return yy + lineH;
+}
+
+function drawIntro(ctx, g, now) {
+  const L = g.level;
+  const k = easeOutCubic(Math.min(1, g.introT * 2.5));
+  ctx.fillStyle = 'rgba(6,6,10,0.78)';
+  ctx.fillRect(0, 0, W, H);
+  // косые полосы как в файтингах
+  ctx.save();
+  ctx.globalAlpha = 0.5 * k;
+  ctx.fillStyle = '#b71c1c';
+  ctx.beginPath();
+  ctx.moveTo(760, 0);
+  ctx.lineTo(W, 0);
+  ctx.lineTo(W, H);
+  ctx.lineTo(600, H);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  const lx = 80 - (1 - k) * 300;
+  text(ctx, `УРОВЕНЬ ${g.levelIdx + 1} / ${LEVELS.length}`, lx, 170, { font: `16px ${FONT.pixel}`, color: '#ffd54a' });
+  text(ctx, L.name.toUpperCase(), lx, 240, { font: `58px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 8 });
+  text(ctx, `по мотивам: ${L.ref}`, lx, 276, { font: `bold 18px ${FONT.ui}`, color: '#b0bec5' });
+  let y = wrapText(ctx, L.tip, lx, 330, 540, 28, { font: `20px ${FONT.ui}`, color: '#eef3e6' });
+  const names = [...new Set(L.pool.map(([t]) => ENEMY_DEF[t].name))];
+  text(ctx, 'Враги уровня:', lx, y + 14, { font: `bold 16px ${FONT.ui}`, color: '#ff8a65' });
+  wrapText(ctx, names.join(', '), lx, y + 40, 540, 24, { font: `16px ${FONT.ui}`, color: '#cfd8dc' });
+  // портрет босса
+  const px = 960 + (1 - k) * 400;
+  const glow = ctx.createRadialGradient(px, 330, 10, px, 330, 260);
+  glow.addColorStop(0, 'rgba(255,220,120,0.35)');
+  glow.addColorStop(1, 'rgba(255,220,120,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(px - 260, 70, 520, 520);
+  drawBossPortrait(ctx, L.boss, px, 330, PORTRAIT_SCALE[L.boss] * 1.7, now);
+  text(ctx, g.tower.name.toUpperCase(), px, 560, { font: `30px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 6, align: 'center' });
+  text(ctx, 'VS', 700, 360, { font: `110px ${FONT.gta}`, color: '#ff1744', stroke: '#fff', lw: 8, align: 'center' });
+  if (Math.floor(now * 2) % 2 === 0) text(ctx, 'Клик или Enter — в бой!', 640, 670, { font: `bold 22px ${FONT.ui}`, color: '#fff', stroke: '#000', lw: 5, align: 'center' });
+}
+
+function drawLevels(ctx, g, now) {
+  ctx.fillStyle = 'rgba(6,10,6,0.85)';
+  ctx.fillRect(0, 0, W, H);
+  text(ctx, 'ВЫБОР УРОВНЯ', 640, 92, { font: `52px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 8, align: 'center' });
+  LEVELS.forEach((L, i) => {
+    const r = { x: 58 + i * 236, y: 140, w: 220, h: 420 };
+    const locked = i > g.unlocked;
+    const hov = !locked && inRect(Input.x, Input.y, r);
+    const th = THEMES[L.theme];
+    rr(ctx, r.x, r.y, r.w, r.h, 14);
+    const bg = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
+    bg.addColorStop(0, th.dark);
+    bg.addColorStop(1, '#111');
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.lineWidth = hov ? 5 : 2;
+    ctx.strokeStyle = hov ? '#ffd54a' : 'rgba(255,255,255,0.3)';
+    ctx.stroke();
+    ctx.save();
+    rr(ctx, r.x, r.y, r.w, r.h, 14);
+    ctx.clip();
+    drawBossPortrait(ctx, L.boss, r.x + r.w / 2, r.y + 130, PORTRAIT_SCALE[L.boss], now);
+    ctx.restore();
+    text(ctx, `УРОВЕНЬ ${i + 1}`, r.x + r.w / 2, r.y + 270, { font: `13px ${FONT.pixel}`, color: '#ffd54a', align: 'center' });
+    wrapText(ctx, L.name, r.x + r.w / 2, r.y + 306, r.w - 24, 28, { font: `24px ${FONT.title}`, color: '#fff', align: 'center', stroke: '#000', lw: 5 });
+    text(ctx, L.ref, r.x + r.w / 2, r.y + 390, { font: `bold 15px ${FONT.ui}`, color: '#b0bec5', align: 'center' });
+    if (locked) {
+      rr(ctx, r.x, r.y, r.w, r.h, 14);
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fill();
+      rr(ctx, r.x + r.w / 2 - 24, r.y + 160, 48, 40, 6);
+      ctx.fillStyle = '#9e9e9e';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(r.x + r.w / 2, r.y + 160, 16, Math.PI, 0);
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = '#9e9e9e';
+      ctx.stroke();
+      text(ctx, `Пройди уровень ${i}`, r.x + r.w / 2, r.y + 236, { font: `bold 15px ${FONT.ui}`, color: '#eee', align: 'center' });
+    } else {
+      g.buttons.push({ x: r.x, y: r.y, w: r.w, h: r.h, action: () => g.startCampaign(i) });
+    }
+  });
+  text(ctx, 'С уровня 2 и дальше даём стартовые деньги на закупку. Рекорд считается за весь забег.', 640, 600, { font: `15px ${FONT.ui}`, color: '#b0bec5', align: 'center' });
+  mcButton(ctx, g, 'НАЗАД', 540, 630, 200, 44, () => g.toTitle(), { size: 13 });
+}
+
+function drawAchievements(ctx, g) {
+  ctx.fillStyle = 'rgba(6,10,6,0.88)';
+  ctx.fillRect(0, 0, W, H);
+  text(ctx, 'ДОСТИЖЕНИЯ', 640, 70, { font: `46px ${FONT.title}`, color: '#7ee03c', stroke: '#000', lw: 7, align: 'center' });
+  text(ctx, `Открыто: ${Ach.got.size} из ${ACHIEVEMENTS.length}`, 640, 100, { font: `bold 17px ${FONT.ui}`, color: '#cfd8dc', align: 'center' });
+  const half = Math.ceil(ACHIEVEMENTS.length / 2);
+  ACHIEVEMENTS.forEach((a, i) => {
+    const col = i < half ? 0 : 1, row = i % half;
+    const x = 70 + col * 580, y = 118 + row * 41;
+    const got = Ach.got.has(a.id);
+    rr(ctx, x, y, 560, 36, 8);
+    ctx.fillStyle = got ? 'rgba(16,124,16,0.35)' : 'rgba(255,255,255,0.06)';
+    ctx.fill();
+    circ(ctx, x + 20, y + 18, 13, got ? '#107c10' : '#424242');
+    drawStar(ctx, x + 20, y + 18, 7, got ? '#fff' : '#757575', got ? '#0b5e0b' : '#333');
+    text(ctx, a.name, x + 42, y + 17, { font: `bold 15px ${FONT.ui}`, color: got ? '#fff' : '#9e9e9e' });
+    text(ctx, a.desc, x + 42, y + 32, { font: `12px ${FONT.ui}`, color: got ? '#c8e6c9' : '#757575' });
+  });
+  mcButton(ctx, g, 'НАЗАД', 540, 620 + 32, 200, 44, () => g.toTitle(), { size: 13 });
 }

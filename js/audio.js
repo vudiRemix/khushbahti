@@ -448,6 +448,76 @@ const Sound = (() => {
       if (!ok('splat', 0.04)) return;
       noise({ dur: 0.05, vol: 0.12, filter: 'lowpass', f0: 1200 });
     },
+
+    // --- кампания ---
+    roar() {
+      if (!ok('roar', 0.5)) return;
+      noise({ dur: 1.1, vol: 0.45, filter: 'lowpass', f0: 700, f1: 120, attack: 0.08 });
+      tone({ type: 'sawtooth', f0: 110, f1: 55, dur: 1.0, vol: 0.12, attack: 0.08 });
+    },
+    warn() {
+      if (!ok('warn', 0.2)) return;
+      tone({ type: 'square', f0: 880, dur: 0.08, vol: 0.06 });
+      tone({ type: 'square', f0: 880, dur: 0.08, vol: 0.06, delay: 0.16 });
+    },
+    fireBreath() {
+      if (!ok('firebreath', 0.2)) return;
+      noise({ dur: 0.9, vol: 0.45, filter: 'bandpass', f0: 500, f1: 1500, q: 0.7, attack: 0.05 });
+    },
+    dragonBreath() {
+      if (!ok('dbreath', 0.2)) return;
+      noise({ dur: 0.9, vol: 0.35, filter: 'bandpass', f0: 1800, f1: 400, q: 1.5, attack: 0.05 });
+      tone({ type: 'sine', f0: 300, f1: 150, dur: 0.8, vol: 0.08 });
+    },
+    strafe() {
+      if (!ok('strafe', 0.2)) return;
+      for (let i = 0; i < 10; i++) noise({ dur: 0.04, vol: 0.3, filter: 'bandpass', f0: 1400, q: 0.8, delay: i * 0.06 });
+    },
+    laserCharge() {
+      if (!ok('lcharge', 0.5)) return;
+      tone({ type: 'sawtooth', f0: 120, f1: 1400, dur: 2.0, vol: 0.06, attack: 0.1 });
+    },
+    laser() {
+      if (!ok('laser', 0.2)) return;
+      tone({ type: 'sawtooth', f0: 1600, f1: 200, dur: 0.7, vol: 0.18 });
+      noise({ dur: 0.7, vol: 0.3, filter: 'highpass', f0: 1500 });
+    },
+    siren() {
+      if (!ok('siren', 1.5)) return;
+      for (let i = 0; i < 3; i++) {
+        tone({ type: 'square', f0: 700, f1: 1100, dur: 0.3, vol: 0.04, delay: i * 0.6 });
+        tone({ type: 'square', f0: 1100, f1: 700, dur: 0.3, vol: 0.04, delay: i * 0.6 + 0.3 });
+      }
+    },
+    pistol() {
+      if (!ok('pistol', 0.06)) return;
+      noise({ dur: 0.08, vol: 0.3, filter: 'bandpass', f0: 2000, q: 0.8 });
+      tone({ type: 'triangle', f0: 200, f1: 70, dur: 0.07, vol: 0.2 });
+    },
+    kick() {
+      if (!ok('kick', 0.06)) return;
+      tone({ type: 'square', f0: 220, f1: 110, dur: 0.08, vol: 0.12 });
+    },
+    enderTp() {
+      if (!ok('ender', 0.2)) return;
+      tone({ type: 'sine', f0: 900, f1: 200, dur: 0.35, vol: 0.15 });
+      tone({ type: 'sine', f0: 600, f1: 1200, dur: 0.25, vol: 0.08, delay: 0.1 });
+    },
+    ring() {
+      if (!ok('ring', 0.04)) return;
+      tone({ type: 'sine', f0: 1568, dur: 0.06, vol: 0.08 });
+      tone({ type: 'sine', f0: 2093, dur: 0.12, vol: 0.08, delay: 0.05 });
+    },
+    ringLoss() {
+      if (!ok('ringloss', 0.2)) return;
+      for (let i = 0; i < 5; i++) tone({ type: 'triangle', f0: 1800 - i * 150, dur: 0.06, vol: 0.06, delay: i * 0.04 });
+    },
+    achievement() {
+      if (!ok('ach', 0.3)) return;
+      tone({ type: 'sine', f0: 784, dur: 0.15, vol: 0.12 });
+      tone({ type: 'sine', f0: 1175, dur: 0.35, vol: 0.12, delay: 0.1 });
+      tone({ type: 'sine', f0: 1568, dur: 0.4, vol: 0.06, delay: 0.1 });
+    },
   };
   return S;
 })();

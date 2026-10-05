@@ -4,41 +4,39 @@
 const Board = {
   canvas: null,
   key: '',
-  LIGHT: '#eeeed2',
-  DARK: '#769656',
 
-  // Фон рисуется один раз в отдельный холст под текущее разрешение экрана.
-  get(view) {
-    const key = view.pw + 'x' + view.ph;
+  // Фон рисуется один раз в отдельный холст под текущее разрешение и тему уровня.
+  get(view, theme = 'classic') {
+    const key = view.pw + 'x' + view.ph + ':' + theme;
     if (this.canvas && this.key === key) return this.canvas;
     const c = this.canvas || document.createElement('canvas');
     c.width = view.pw;
     c.height = view.ph;
     const ctx = c.getContext('2d');
     ctx.setTransform(view.k, 0, 0, view.k, 0, 0);
-    this.paint(ctx);
+    ctx.clearRect(0, 0, W, H);
+    this.paint(ctx, theme);
     this.canvas = c;
     this.key = key;
     return c;
   },
 
-  paint(ctx) {
+  paint(ctx, theme) {
+    const th = THEMES[theme] || THEMES.classic;
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
-        ctx.fillStyle = (r + c) % 2 === 0 ? this.LIGHT : this.DARK;
+        ctx.fillStyle = (r + c) % 2 === 0 ? th.light : th.dark;
         ctx.fillRect(c * T, r * T, T, T);
       }
     }
+    paintThemeBoard(ctx, theme);
+    paintThemeTop(ctx, theme);
     // лёгкая виньетка, чтобы края не спорили с интерфейсом
     const g = ctx.createRadialGradient(W / 2, H / 2, 200, W / 2, H / 2, 820);
     g.addColorStop(0, 'rgba(0,0,0,0)');
     g.addColorStop(1, 'rgba(0,0,0,0.28)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
-    // чёрные фигуры — тыл короля
-    const back = [[4, 'r'], [5, 'n'], [10, 'b'], [11, 'r']];
-    for (const [c, k] of back) drawPiece(ctx, k, false, colX(c), rowY(0) + 2, 68);
-    for (const c of [4, 5, 10, 11]) drawPiece(ctx, 'p', false, colX(c), rowY(1), 60);
     // белые фигуры у игрока
     const wb = [[0, 'n'], [1, 'b'], [2, 'r'], [3, 'q'], [12, 'k'], [13, 'r'], [14, 'b'], [15, 'n']];
     for (const [c, k] of wb) drawPiece(ctx, k, true, colX(c), rowY(8) - 4, 64);

@@ -35,33 +35,63 @@ const LAYOUT = {
 };
 const hotbarSlotRect = (i) => ({ x: LAYOUT.hotbar.x + i * LAYOUT.hotbar.slot, y: LAYOUT.hotbar.y, w: LAYOUT.hotbar.slot, h: LAYOUT.hotbar.slot });
 const packetRect = (i) => ({ x: 1018 + i * 51, y: 12, w: 46, h: 70 });
-const TOWER_BOX = { x: 640 - 130, y: 10, w: 260, h: 156 };
 
 class Game {
   constructor() {
     this.state = 'title';
     this.best = Number(Store.get('kd_best')) || 0;
+    this.unlocked = clamp(Number(Store.get('kd_unlocked')) || 0, 0, LEVELS.length - 1);
+    this.levelIdx = 0;
     this.titleT = 0;
+    this.introT = 0;
     this.buttons = [];
     this.reset();
   }
 
   reset() {
-    this.t = 0;
-    this.clock = 8 * 60;
-    this.nights = 0;
+    this.resetRun();
+    this.resetLevel();
+  }
+
+  // То, что переносится между уровнями кампании.
+  resetRun() {
     this.player = { hp: CFG.playerHp, maxHp: CFG.playerHp, armor: CFG.startArmor, hunger: 20, boost: 100, xp: 0, level: 0, money: 0, earned: 0, regenT: 0, hungerT: 0, starveT: 0 };
-    this.gun = { cd: 0, reload: 0, heat: 0, kick: 0, flash: 0, punch: 0, switchT: 0 };
     this.arsenal = {
       ak: { owned: true, mag: CFG.magSize, reserve: CFG.startReserve },
       nova: { owned: false, mag: 0, reserve: 0 },
       awp: { owned: false, mag: 0, reserve: 0 },
     };
     this.weapon = 'ak';
-    this.weaponNameT = 0;
     this.grenades = 1;
     this.infAmmo = false;
     this.cheated = false;
+    this.inv = { steak: 3, gapple: 1, potion: 1, tnt: 2, dice: 2, ammo: 1, ice: 1, pellet: 1, totem: 0 };
+    this.sel = 0;
+    this.kills = 0;
+    this.tilesOpened = 0;
+    this.ducksShot = 0;
+    this.totalFields = 0;
+    this.runT = 0;
+    this.trapKills = 0;
+    this.spent = 0;
+    this.plantsPlanted = 0;
+    this.ringsGot = 0;
+    this.shellKills = 0;
+    this.newRecord = false;
+  }
+
+  // То, что начинается заново на каждом уровне.
+  resetLevel() {
+    const L = this.level;
+    const p = this.player;
+    p.hp = p.maxHp;
+    p.hunger = 20;
+    p.boost = 100;
+    this.t = 0;
+    this.clock = L.clock;
+    this.nights = 0;
+    this.gun = { cd: 0, reload: 0, heat: 0, kick: 0, flash: 0, punch: 0, switchT: 0 };
+    this.weaponNameT = 0;
     this.typed = '';
     this.cheatMsg = null;
     this.buyMsg = null;
@@ -69,6 +99,9 @@ class Game {
     this.qblocks = [];
     this.ducks = [];
     this.popups = [];
+    this.hazards = [];
+    this.shells = [];
+    this.rings = [];
     this.qT = 18;
     this.duckT = rand(25, 35);
     this.meetingT = rand(120, 170);
@@ -76,10 +109,9 @@ class Game {
     this.dogT = 0;
     this.starT = 0;
     this.starOffset = 0;
-    this.ducksShot = 0;
+    this.bloodMoon = false;
+    this.fieldBlasts = 0;
     this.rod = { state: 'idle', t: 0, tx: 0, ty: 0, cd: 0, carry: null };
-    this.inv = { steak: 3, gapple: 1, potion: 1, tnt: 2, dice: 2, ammo: 1, ice: 1, pellet: 1, totem: 0 };
-    this.sel = 0;
     this.slotFlash = new Array(9).fill(0);
     this.sun = CFG.startSun;
     this.packet = 'pawn';
@@ -102,13 +134,13 @@ class Game {
     this.tracers = [];
     this.cracks = [];
     this.flyers = [];
-    this.mf = new Minefield(CFG.baseMines);
+    this.mf = new Minefield(L.mines);
     this.fieldsCleared = 0;
     this.rebuildT = 0;
-    this.tower = { hp: CFG.towerHp, max: CFG.towerHp, cannonT: 6, hit: 0, fire: 0, laugh: 0, emote: '', emoteT: 0, phase: 0, dead: false, deadT: 0, boomT: 0 };
+    this.tower = makeBoss(L.boss, L.hp);
     this.pac = new PacMan();
-    this.stars = 1;
-    this.bonusStars = 0;
+    this.bonusStars = L.bonusStars;
+    this.stars = 1 + L.bonusStars;
     this.starFlash = 0;
     this.spawnT = 3;
     this.freddyT = 4;
@@ -124,30 +156,52 @@ class Game {
     this.boostLock = false;
     this.boostIdle = 0;
     this.timeScale = 1;
-    this.kills = 0;
-    this.tilesOpened = 0;
     this.chat = [];
     this.bannerObj = null;
     this.jumpscare = null;
     this.dice = null;
     this.smiley = 'normal';
     this.smileyT = 0;
-    this.hintIdx = 0;
+    this.hintIdx = this.levelIdx === 0 ? 0 : HINTS.length;
     this.deadT = 0;
     this.winT = 0;
     this.deathCause = '';
-    this.newRecord = false;
     this.suppressFire = false;
     this.gunAlpha = 1;
   }
 
   // ---------- состояния экрана ----------
+  get level() {
+    return LEVELS[this.levelIdx];
+  }
   start() {
+    this.startCampaign(0);
+  }
+  // Новый забег с уровня i. На поздних уровнях даём стартовые деньги на закупку.
+  startCampaign(i) {
     Sound.init();
-    this.reset();
+    this.levelIdx = clamp(i, 0, LEVELS.length - 1);
+    this.resetRun();
+    this.player.money = this.levelIdx * 2500;
+    this.resetLevel();
+    this.state = 'intro';
+    this.introT = 0;
+  }
+  retry() {
+    this.startCampaign(this.levelIdx);
+  }
+  nextLevel() {
+    if (this.levelIdx >= LEVELS.length - 1) return this.toTitle();
+    this.levelIdx++;
+    this.resetLevel();
+    this.state = 'intro';
+    this.introT = 0;
+  }
+  beginLevel() {
     this.state = 'play';
     this.suppressFire = true;
-    this.say('Цель: разрушь башню короля. Удачи, сапёр!', '#ffd54a');
+    const L = this.level;
+    this.say(`Уровень ${this.levelIdx + 1}: ${L.name}. ${L.tip}`, '#ffd54a');
   }
   pause() {
     if (this.state === 'play') this.state = 'pause';
@@ -183,9 +237,15 @@ class Game {
   update(realDt) {
     realDt = Math.min(realDt, 0.05);
     this.processInput();
-    if (this.state === 'title') {
+    Ach.update(realDt);
+    if (this.state === 'title' || this.state === 'levels' || this.state === 'achievements') {
       this.titleT += realDt;
       this.pac.mouth += realDt * 10;
+      return;
+    }
+    if (this.state === 'intro') {
+      this.introT += realDt;
+      if (this.introT > 7) this.beginLevel();
       return;
     }
     if (this.state === 'pause' || this.state === 'buy') return;
@@ -232,6 +292,7 @@ class Game {
 
     const dt = realDt * this.timeScale;
     this.t += dt;
+    this.runT += dt;
     if (this.starT > 0) this.starT -= dt;
     while (this.hintIdx < HINTS.length && this.t >= HINTS[this.hintIdx][0]) {
       this.say('[Подсказка] ' + HINTS[this.hintIdx][1], '#9be7ff');
@@ -245,8 +306,9 @@ class Game {
     if (this.rebuildT > 0) {
       this.rebuildT -= dt;
       if (this.rebuildT <= 0) {
-        const mines = Math.min(CFG.maxMines, CFG.baseMines + this.fieldsCleared);
+        const mines = Math.min(CFG.maxMines, this.level.mines + this.fieldsCleared);
         this.mf.rebuild(mines);
+        this.fieldBlasts = 0;
         this.say(`Новое поле сапёра: ${mines} мин. Король нервничает.`, '#e0e0e0');
       }
     }
@@ -264,6 +326,10 @@ class Game {
     this.updateMissiles(dt);
     this.updateTNT(dt);
     this.updatePeas(dt);
+    this.updateHazards(dt);
+    this.updateRings(dt);
+    for (const sh of this.shells) sh.update(dt, this);
+    this.shells = this.shells.filter((sh) => !sh.gone);
     for (const q of this.qblocks) q.update(dt);
     for (const d of this.ducks) d.update(dt, this);
     this.updateFx(dt, realDt);
@@ -352,13 +418,24 @@ class Game {
       if (code === 'Enter' || code === 'Space') this.start();
       return;
     }
+    if (this.state === 'levels' || this.state === 'achievements') {
+      if (code === 'Escape' || code === 'Backspace') this.toTitle();
+      return;
+    }
+    if (this.state === 'intro') {
+      if (code === 'Enter' || code === 'Space' || code === 'Escape') this.beginLevel();
+      return;
+    }
     if (this.state === 'pause') {
       if (code === 'Escape' || code === 'KeyP' || code === 'Enter') this.resume();
-      else if (code === 'KeyN') this.start();
+      else if (code === 'KeyN') this.retry();
       return;
     }
     if (this.state === 'dead' || this.state === 'win') {
-      if ((code === 'Enter' || code === 'Space') && this.endT() > 1.5) this.start();
+      if ((code === 'Enter' || code === 'Space') && this.endT() > 1.5) {
+        if (this.state === 'dead') this.retry();
+        else this.nextLevel();
+      }
       else if (code === 'Escape') this.toTitle();
       return;
     }
@@ -434,6 +511,7 @@ class Game {
       }
     }
     if (this.state === 'title') this.start();
+    else if (this.state === 'intro') this.beginLevel();
   }
 
   cyclePacket() {
@@ -627,14 +705,18 @@ class Game {
         any = true;
       }
     }
+    if (!this.tower.dead && this.tower.hitSpecial(x, y, this)) return;
     if (pierce) {
+      let killed = 0;
       for (const e of this.enemies) {
         if (e.alive && e.hit(x, y)) {
           e.damage(dmg, this, 'gun');
           this.hitFx(e, x, y);
+          if (!e.alive) killed++;
           any = true;
         }
       }
+      if (killed >= 2) Ach.unlock('sniper');
     } else {
       let best = null;
       for (const e of this.enemies) if (e.alive && e.hit(x, y) && (!best || e.y > best.y)) best = e;
@@ -644,7 +726,7 @@ class Game {
         return;
       }
     }
-    if (!this.tower.dead && inRect(x, y, TOWER_BOX)) {
+    if (!this.tower.dead && inRect(x, y, this.tower.box)) {
       // башня бронированная: одна пуля снимает не больше 3 HP
       this.damageTower(Math.min(dmg, 3), false);
       FX.burst(this, x, y, 4, { colors: ['#9a9dab', '#6f7282', '#ddd'], size: 5, speed: 180, grav: 600, life: 0.4 });
@@ -720,6 +802,8 @@ class Game {
         break;
     }
     p.money -= it.price;
+    this.spent += it.price;
+    if (this.spent >= 10000) Ach.unlock('shopper');
     Sound.buy();
     this.buyMsg = { text: `Куплено: ${it.name}`, bad: false };
   }
@@ -897,6 +981,9 @@ class Game {
     this.mf.done = true;
     const live = this.mf.liveMines();
     this.fieldsCleared++;
+    this.totalFields++;
+    Ach.unlock('sapper');
+    if (this.fieldBlasts === 0) Ach.unlock('sapperPro');
     this.addMoney(1000, 640, 330);
     this.smiley = 'cool';
     this.smileyT = 3.5;
@@ -905,7 +992,8 @@ class Game {
       const cell = this.mf.cell(m.c, m.r);
       cell.s = FLAG;
       const p = this.mf.center(m.c, m.r);
-      this.missiles.push({ c: m.c, r: m.r, x0: p.x, y0: p.y, x1: 640 + rand(-70, 70), y1: rand(70, 130), t: -0.6 - i * 0.18, dur: 0.85, dmg: CFG.mineMissileDamage, launched: false, x: p.x, y: p.y });
+      const bc = this.tower.center;
+      this.missiles.push({ c: m.c, r: m.r, x0: p.x, y0: p.y, x1: bc.x, y1: bc.y, toBoss: true, ox: rand(-60, 60), oy: rand(-25, 25), t: -0.6 - i * 0.18, dur: 0.85, dmg: CFG.mineMissileDamage, launched: false, x: p.x, y: p.y });
     });
     this.rebuildT = 2.4 + live.length * 0.18;
   }
@@ -917,6 +1005,7 @@ class Game {
     if (byPlayer) {
       this.smiley = 'dead';
       this.smileyT = 1.5;
+      this.fieldBlasts++;
       this.say('Ты подцепил мину удочкой. Бабах!', '#ff8a80');
       this.takeDamage(CFG.mineDamageToPlayer, 'мина');
     }
@@ -931,6 +1020,8 @@ class Game {
     const p = this.mf.center(m.c, m.r);
     this.explode(p.x, p.y, T * 1.45, CFG.trapDamage, 'trap');
     FX.text(this, p.x, p.y - 50, 'ЛОВУШКА!', { color: '#ffd54a', font: `24px ${FONT.title}` });
+    this.trapKills++;
+    if (this.trapKills >= 5) Ach.unlock('traps');
     this.addMoney(50);
   }
 
@@ -1121,7 +1212,7 @@ class Game {
       case 5:
         for (let i = 0; i < 3; i++) {
           const sx = rand(300, 980);
-          this.missiles.push({ x0: sx, y0: -40, x1: 640 + rand(-80, 80), y1: rand(70, 130), t: -i * 0.25, dur: 0.8, dmg: 40, launched: false, bomb: true, x: sx, y: -40 });
+          this.missiles.push({ x0: sx, y0: -40, x1: 640, y1: 100, toBoss: true, ox: rand(-60, 60), oy: rand(-20, 20), t: -i * 0.25, dur: 0.8, dmg: 40, launched: false, bomb: true, x: sx, y: -40 });
         }
         this.banner('5 — АВИАУДАР!', 'Три бомбы летят в башню', '#40c4ff');
         break;
@@ -1189,6 +1280,11 @@ class Game {
         m.launched = true;
         Sound.missile();
         if (m.c !== undefined) this.mf.detonate(m.c, m.r);
+      }
+      if (m.toBoss) {
+        const bc = this.tower.center;
+        m.x1 = bc.x + m.ox;
+        m.y1 = bc.y + m.oy;
       }
       const k = Math.min(1, m.t / m.dur);
       const px = m.x, py = m.y;
@@ -1281,7 +1377,7 @@ class Game {
     this.heartShake = 0.5;
     this.shake = Math.max(this.shake, 10);
     Sound.hurt();
-    if (Math.random() < 0.4) this.kingEmote(choice(['Хе-хе-хе!', 'Ха-ха!', 'Получай!']));
+    if (Math.random() < 0.4) this.bossEmote(choice(this.tower.emotes));
     if (p.hp <= 0) {
       if (this.inv.totem > 0) {
         this.inv.totem--;
@@ -1304,6 +1400,7 @@ class Game {
     this.smiley = 'dead';
     Input.lmb = false;
     Sound.wasted();
+    Ach.unlock('wasted');
     this.saveBest();
   }
 
@@ -1314,6 +1411,12 @@ class Game {
     this.player.earned += 10000;
     Input.lmb = false;
     Sound.win();
+    Ach.unlock('boss_' + this.tower.kind);
+    if (this.levelIdx >= LEVELS.length - 1) Ach.unlock('campaign');
+    if (this.levelIdx + 1 > this.unlocked && this.levelIdx + 1 < LEVELS.length) {
+      this.unlocked = this.levelIdx + 1;
+      Store.set('kd_unlocked', this.unlocked);
+    }
     this.saveBest();
   }
 
@@ -1342,7 +1445,15 @@ class Game {
 
   onKill(e, src) {
     this.kills++;
-    if (src !== 'pac') this.addMoney(e.def.bounty, e.x, e.y - 50);
+    Ach.unlock('first');
+    if (src === 'shell' && ++this.shellKills >= 3) Ach.unlock('shell');
+    if (src !== 'pac') this.addMoney(e.def.bounty * (this.bloodMoon ? 2 : 1), e.x, e.y - 50);
+    if (e.type === 'koopa') {
+      let left = 0, right = 0;
+      for (const o of this.enemies) if (o.alive && Math.abs(o.y - e.y) < 50) o.x < e.x ? left++ : right++;
+      this.shells.push(new Shell(e.x, e.y, left > right ? -1 : 1));
+      Sound.kick();
+    }
     this.addXp(e.def.xp);
     Sound.xp();
     FX.burst(this, e.x, e.y, 5, { colors: ['#b6ff3c', '#7ee03c'], size: 5, speed: 160, grav: -200, life: 0.8, shape: 'circle' });
@@ -1359,11 +1470,18 @@ class Game {
         creeper: ['#5cb84a', '#86d672', '#0b0b0b'],
         skibidi: ['#f2f2f2', '#9fd4ff', '#f0c49a'],
         mega: ['#3b3f4a', '#7b4fb0', '#c0c4cf'],
+        goomba: ['#8d4b1a', '#f2c79a'],
+        koopa: ['#2e7d32', '#ffd54f', '#fff'],
+        enderman: ['#111', '#e040fb', '#7b1fa2'],
+        cop: ['#1e3a8a', '#e0ac69', '#111'],
+        sonic: ['#2a5ff0', '#f5cfa0', '#e53935'],
       }[e.type] || ['#222', '#444', '#777'];
       FX.burst(this, e.x, e.y, e.type === 'mega' ? 40 : 12, { colors, size: 7, speed: 240, up: 100 });
     }
     if (e.type === 'mega') this.banner('МЕГАРЫЦАРЬ ПОВЕРЖЕН!', `+$${e.def.bounty}`, '#b388ff');
     if (e.type === 'creeper' && Math.random() < 0.35) this.items.push(new Loot('item', 'tnt', e.x, e.y - 30, e.y, 120));
+    if (e.type === 'cop' && Math.random() < 0.3) this.items.push(new Loot('item', 'ammo', e.x, e.y - 30, e.y, 120));
+    if (e.type === 'sonic') this.dropRings(e.x, e.y, 10);
     if ((e.type === 'zombie' || e.type === 'cone') && Math.random() < 0.3) this.items.push(new Loot('sun', null, e.x, e.y - 30, e.y, 120));
     else if (Math.random() < 0.06) this.items.push(new Loot('item', weighted(TILE_LOOT.filter(([k]) => k !== 'sun')), e.x, e.y - 30, e.y, 120));
   }
@@ -1378,6 +1496,7 @@ class Game {
     }
     this.sun -= cost;
     this.def[c] = makeDefender(type);
+    if (DEF_STATS[type].plant && ++this.plantsPlanted >= 10) Ach.unlock('garden');
     Sound.plant();
     FX.burst(this, colX(c), rowY(PAWN_ROW) + 30, 10, { colors: ['#8d6e63', '#5d4037', '#a5d6a7'], size: 5, speed: 160, up: 120, life: 0.5 });
   }
@@ -1460,6 +1579,7 @@ class Game {
     if (this.jumpscare || this.state !== 'play') return;
     this.jumpscare = { t: 0 };
     Sound.jumpscare();
+    Ach.unlock('scare');
   }
 
   // ---------- волны врагов ----------
@@ -1474,7 +1594,7 @@ class Game {
     const alive = this.enemies.filter((e) => e.alive).length;
     this.spawnT -= dt;
     if (this.spawnT <= 0) {
-      const interval = Math.max(1.9, 4.6 - 0.5 * (this.stars - 1)) * (this.tower.hp < this.tower.max * 0.5 ? 0.9 : 1);
+      const interval = Math.max(1.9, 4.6 - 0.5 * (this.stars - 1)) * (this.tower.hp < this.tower.max * 0.5 ? 0.9 : 1) * (this.bloodMoon ? 0.65 : 1);
       this.spawnT = interval * rand(0.75, 1.25);
       if (alive < 4 + this.stars * 2 && !this.tower.dead) this.spawnEnemy(this.pickEnemy());
     }
@@ -1520,12 +1640,8 @@ class Game {
 
   pickEnemy() {
     const s = this.stars;
-    const list = [['pawn', 5], ['zombie', 4]];
-    if (s >= 2) list.push(['cone', 3], ['knight', 2], ['creeper', 1.5]);
-    if (s >= 3) list.push(['skibidi', 1.2]);
-    if (s >= 3 && !this.enemies.some((e) => e.alive && e.type === 'snake')) list.push(['snake', 0.8]);
-    if (s >= 4) list.push(['rook', 1.6]);
-    if (s >= 5) list.push(['bishop', 1.6]);
+    const snakeAlive = this.enemies.some((e) => e.alive && e.type === 'snake');
+    const list = this.level.pool.filter(([t, , m]) => s >= m && !(t === 'snake' && snakeAlive)).map(([t, w]) => [t, w]);
     return weighted(list);
   }
 
@@ -1552,6 +1668,22 @@ class Game {
       case 'skibidi':
         e = new Skibidi(c);
         break;
+      case 'goomba':
+        e = new Goomba(c);
+        break;
+      case 'koopa':
+        e = new Koopa(c);
+        break;
+      case 'enderman':
+        e = new Enderman(c);
+        break;
+      case 'cop':
+        e = new Cop(c);
+        break;
+      case 'sonic':
+        e = new Sonic(c);
+        this.say('Соник! Стреляй — из него сыплются кольца, собирай их прицелом.', '#64b5f6');
+        break;
       case 'mega':
         e = new MegaKnight();
         Sound.megaLand();
@@ -1568,18 +1700,16 @@ class Game {
     return e;
   }
 
-  // ---------- башня ----------
+  // ---------- босс уровня ----------
   updateTower(dt) {
     const tw = this.tower;
-    if (tw.fire > 0) tw.fire -= dt;
-    if (tw.laugh > 0) tw.laugh -= dt;
-    if (tw.emoteT > 0) tw.emoteT -= dt;
     if (tw.dead) {
       tw.deadT += dt;
       tw.boomT -= dt;
+      const b = tw.box;
       if (tw.boomT <= 0 && tw.deadT < 2) {
         tw.boomT = 0.16;
-        const x = 640 + rand(-120, 120), y = rand(20, 150);
+        const x = b.x + rand(0, b.w), y = b.y + rand(0, b.h);
         this.explosions.push({ x, y, r: 70, t: 0 });
         FX.burst(this, x, y, 12, { colors: ['#ffef8a', '#ff6d00', '#9a9dab', '#555'], size: 9, speed: 320, life: 0.8 });
         Sound.explosion(false);
@@ -1588,15 +1718,8 @@ class Game {
       if (tw.deadT > 2.4) this.win();
       return;
     }
-    tw.cannonT -= dt;
-    if (tw.cannonT <= 0) {
-      const ratio = tw.hp / tw.max;
-      tw.cannonT = Math.max(4.0, 8.5 - this.stars * 0.5 - (1 - ratio) * 2) * rand(0.85, 1.15);
-      this.cannonballs.push(new Cannonball(rand(220, 1060), rand(230, 560)));
-      tw.fire = 0.3;
-      Sound.cannon();
-      FX.burst(this, 640, 100, 8, { colors: ['rgba(80,80,80,0.6)'], size: 20, speed: 80, grav: -30, life: 0.8, shape: 'circle' });
-    }
+    if (tw.hit > 0) tw.hit -= dt;
+    tw.update(dt, this);
   }
 
   damageTower(n, big) {
@@ -1604,7 +1727,8 @@ class Game {
     if (tw.dead) return;
     tw.hp = Math.max(0, tw.hp - n);
     tw.hit = big ? 0.3 : 0.06;
-    if (big) FX.text(this, 640 + rand(-60, 60), 120, `−${n}`, { color: '#ff5252', font: `30px ${FONT.gta}` });
+    const c = tw.center;
+    if (big) FX.text(this, c.x + rand(-60, 60), c.y, `−${Math.round(n)}`, { color: '#ff5252', font: `30px ${FONT.gta}` });
     const ratio = tw.hp / tw.max;
     if (tw.phase === 0 && ratio <= 0.66) {
       tw.phase = 1;
@@ -1616,29 +1740,111 @@ class Game {
     if (tw.hp <= 0) {
       tw.dead = true;
       tw.deadT = 0;
-      this.banner('БАШНЯ ПАЛА!', 'Король повержен', '#ffd54a');
+      this.banner('ПОБЕДА!', tw.deathText, '#ffd54a');
       Sound.explosion(true);
-      for (const c of this.cannonballs) c.gone = true;
+      for (const cb of this.cannonballs) cb.gone = true;
+      for (const h of this.hazards) h.cancel = true;
       for (const e of this.enemies) if (e.alive) e.damage(999, this, 'tower');
     }
   }
 
   towerRage() {
-    this.banner('КОРОЛЬ В ЯРОСТИ!', 'Из башни вышел Мегарыцарь!', '#ff5252');
-    this.kingEmote('Ррраааа!');
+    const tw = this.tower;
+    this.banner(`${tw.speaker.toUpperCase()} В ЯРОСТИ!`, tw.rageText, '#ff5252');
+    this.bossEmote(choice(tw.emotes));
     this.bonusStars++;
-    this.spawnEnemy('mega');
-    for (let i = 0; i < 4; i++) this.spawnEnemy(choice(['pawn', 'zombie', 'cone', 'knight']));
-    if (!this.enemies.some((e) => e.alive && e.type === 'snake')) this.spawnEnemy('snake');
+    Sound.roar();
+    tw.onRage(this);
   }
 
-  kingEmote(str) {
+  bossEmote(str) {
     const tw = this.tower;
     if (tw.dead) return;
     tw.emote = str;
     tw.emoteT = 2.2;
     tw.laugh = 1.2;
-    this.say(`<Король> ${str}`, '#ff8a65');
+    this.say(`<${tw.speaker}> ${str}`, '#ff8a65');
+  }
+
+  // ---------- опасные зоны боссов ----------
+  // Столбец (огонь Боузера, дыхание дракона, очередь вертолёта) или ряд фигур (лазер Титана).
+  addHazard(kind, idx, warn = 1.4) {
+    const h = { kind, idx, t: 0, warn, dur: 0.7, done: false, cancel: false, gone: false };
+    this.hazards.push(h);
+    Sound.warn();
+    return h;
+  }
+
+  updateHazards(dt) {
+    for (const h of this.hazards) {
+      h.t += dt;
+      if (!h.done && !h.cancel && h.t >= h.warn) {
+        h.done = true;
+        this.applyHazard(h);
+      }
+      if (h.cancel || h.t >= h.warn + h.dur) h.gone = true;
+    }
+    this.hazards = this.hazards.filter((h) => !h.gone);
+  }
+
+  applyHazard(h) {
+    if (h.kind === 'laser') {
+      Sound.laser();
+      this.shake = Math.max(this.shake, 14);
+      for (let c = 1; c < COLS; c++) {
+        const d = this.def[c];
+        if (!d) continue;
+        d.hp -= 3;
+        d.hurt = 0.3;
+        if (d.hp <= 0) this.killDefender(c, null);
+      }
+      for (const e of this.enemies) if (e.alive && Math.abs(e.y - rowY(PAWN_ROW)) < 60) e.damage(10, this, 'laser');
+      this.takeDamage(2, 'лазер Скибиди-Титана');
+      return;
+    }
+    const x = colX(h.idx);
+    if (h.kind === 'fire') Sound.fireBreath();
+    else if (h.kind === 'strafe') Sound.strafe();
+    else Sound.dragonBreath();
+    if (this.def[h.idx]) this.killDefender(h.idx, null);
+    for (const e of this.enemies) if (e.alive && Math.abs(e.x - x) < 42) e.damage(6, this, 'hazard');
+    const colors = { fire: ['#ffeb3b', '#ff9800', '#f4511e'], breath: ['#e040fb', '#7b1fa2', '#ce93d8'], strafe: ['#ffd54f', '#9e9e9e', '#fff'] }[h.kind];
+    for (let y = 2 * T; y < 8 * T; y += 60) FX.burst(this, x, y, 4, { colors, size: 8, speed: 160, grav: -40, life: 0.6 });
+  }
+
+  // ---------- кольца Соника ----------
+  dropRings(x, y, n) {
+    for (let i = 0; i < n; i++) {
+      const a = rand(0, TAU), sp = rand(120, 260);
+      this.rings.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 7, t: rand(0, 3) });
+    }
+    Sound.ringLoss();
+  }
+
+  updateRings(dt) {
+    for (const r of this.rings) {
+      r.t += dt;
+      r.life -= dt;
+      r.x += r.vx * dt;
+      r.y += r.vy * dt;
+      const damp = Math.pow(0.15, dt);
+      r.vx *= damp;
+      r.vy *= damp;
+      if (r.x < 20 || r.x > W - 20) r.vx *= -1;
+      if (r.y < 2 * T || r.y > 8 * T) r.vy *= -1;
+      r.x = clamp(r.x, 20, W - 20);
+      r.y = clamp(r.y, 2 * T, 8 * T);
+      if (dist2(r.x, r.y, Input.x, Input.y) < 36 * 36) {
+        r.life = 0;
+        this.ringsGot++;
+        this.player.money += 25;
+        this.player.earned += 25;
+        Sound.ring();
+        FX.text(this, r.x, r.y - 20, '+$25', { color: '#ffd54a', font: `bold 15px ${FONT.ui}`, life: 0.7 });
+        if (this.ringsGot >= 20) Ach.unlock('rings');
+      }
+    }
+    this.rings = this.rings.filter((r) => r.life > 0);
   }
 
   updateCannonballs(dt) {
@@ -1651,7 +1857,7 @@ class Game {
         this.shake = 16;
         Sound.explosion(false);
         FX.burst(this, cb.tx, cb.ty, 18, { colors: ['#e0f7fa', '#b2ebf2', '#fff'], size: 6, speed: 360, grav: 600, life: 0.6 });
-        this.takeDamage(CFG.cannonDamage, 'ядро короля');
+        this.takeDamage(CFG.cannonDamage, `снаряд: ${this.tower.name}`);
       }
     }
   }
@@ -1685,11 +1891,18 @@ class Game {
       Sound.midnight();
       this.staticFx = 0.6;
       this.freddyT = 3;
+      if (Math.random() < (this.levelIdx >= 2 ? 0.5 : 0.3)) {
+        this.bloodMoon = true;
+        this.banner('КРОВАВАЯ ЛУНА', 'Враги быстрее и злее, награды ×2', '#ff1744');
+      }
     }
     if (prev < 6 && h >= 6) {
       this.banner('6 AM', 'Ты пережил ночь! +$2000', '#7ee03c');
       Sound.chime6am();
       this.addMoney(2000);
+      Ach.unlock('night');
+      if (this.bloodMoon) Ach.unlock('blood');
+      this.bloodMoon = false;
       for (const e of this.enemies) if (e.alive && e.type === 'freddy') e.remove = true;
     }
     if (prev < 21 && h >= 21) this.say('Темнеет. В полночь просыпается кое-кто золотой...', '#b39ddb');
@@ -1755,6 +1968,7 @@ class Game {
         break;
     }
     Sound.cheat();
+    Ach.unlock('cheat');
     this.cheatMsg = { name, text: CHEATS[name], t: 0 };
     this.say(`Чит ${name}: ${CHEATS[name]}. Рекорд в этой игре не засчитается.`, '#ffffff');
   }
@@ -1798,6 +2012,7 @@ class Game {
     } else if (kind === 'star') {
       this.popups.push({ kind: 'star', x, y, t: 0 });
       this.starT = 9;
+      Ach.unlock('star');
       Sound.starMusic(9);
       this.banner('ЗВЕЗДА!', 'Неуязвимость и двойной урон на 9 секунд', '#ffd23f');
     } else {
@@ -1813,6 +2028,7 @@ class Game {
     d.state = 'hit';
     d.hitT = 0;
     this.ducksShot++;
+    if (this.ducksShot >= 5) Ach.unlock('ducks');
     this.addMoney(500, d.x, d.y - 36, '#a5d6a7');
     Sound.quack();
     FX.burst(this, d.x, d.y, 10, { colors: ['#8d5a2b', '#1b6b2a', '#fff'], size: 5, speed: 160, life: 0.6 });
@@ -1870,6 +2086,7 @@ class Game {
       this.meeting = null;
       this.suppressFire = true;
       this.say(`${m.name} был предателем. Голосование окончено.`, '#ff8a80');
+      Ach.unlock('meeting');
     }
   }
 
