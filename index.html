@@ -39,6 +39,8 @@
   .tbar button.on { background: rgba(126, 224, 60, 0.9); color: #102006; border-color: #fff; }
   .tbar button.held { transform: scale(0.93); background: rgba(255, 213, 74, 0.85); color: #201800; }
   .tbar button:focus-visible { outline: 3px solid #ffd54a; outline-offset: 2px; }
+  /* на арене лишние кнопки (закупка, замедление, удочка, флажки) прячем */
+  body.ui-arena .tbar [data-act=buy], body.ui-arena .tbar [data-hold], body.ui-arena .tbar [data-mode] { display: none; }
 
   #rotate { display: none; position: fixed; inset: 0; z-index: 10; background: var(--bg); color: var(--fg);
     flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center;
@@ -113,6 +115,7 @@
 <script src="js/achievements.js"></script>
 <script src="js/net.js"></script>
 <script src="js/duel.js"></script>
+<script src="js/arena.js"></script>
 <script src="js/game.js"></script>
 <script src="js/render.js"></script>
 <script src="js/main.js"></script>

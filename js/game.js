@@ -200,6 +200,15 @@ class Game {
     this.beginLevel();
     this.banner('ДУЭЛЬ!', `Против: ${Duel.oppName}. Победит тот, кто первым одолеет босса`, '#ff8a65');
   }
+  // Арена: PvP на одной доске. Карта строится из кода комнаты, оформление — из уровня.
+  startArena(code, lvl, role) {
+    Sound.init();
+    this.duel = true;
+    this.levelIdx = clamp(lvl, 0, LEVELS.length - 1);
+    this.state = 'arena';
+    Input.lmb = false;
+    Arena.start(this, code, LEVELS[this.levelIdx].theme, role);
+  }
   // «Подарок» от соперника.
   receiveAttack(kind, from) {
     if (!['play', 'pause', 'buy', 'cheats'].includes(this.state)) return;
@@ -262,6 +271,15 @@ class Game {
     this.processInput();
     Ach.update(realDt);
     Duel.update(realDt, this);
+    if (this.state === 'arena') {
+      Arena.update(realDt, this);
+      return;
+    }
+    if (this.state === 'duelover' && Arena.on) {
+      this.winT += realDt;
+      Arena.updateFx(realDt);
+      return;
+    }
     if (this.state === 'duel') {
       this.titleT += realDt;
       return;
@@ -436,6 +454,7 @@ class Game {
       else if (ev.type === 'down') this.onMouseDown(ev.button, ev.x, ev.y);
       else if (ev.type === 'up' && ev.button === 0) this.suppressFire = false;
       else if (ev.type === 'wheel' && this.state === 'play') this.switchWeapon(ev.dy);
+      else if (ev.type === 'wheel' && this.state === 'arena') Arena.cycleGun(ev.dy);
     }
   }
 
@@ -445,6 +464,10 @@ class Game {
     if (code === 'KeyM') {
       Sound.toggleMute();
       this.say(Sound.muted ? 'Звук выключен (M)' : 'Звук включён (M)', '#e0e0e0');
+      return;
+    }
+    if (this.state === 'arena') {
+      Arena.onKey(code, this);
       return;
     }
     if (this.state === 'title') {

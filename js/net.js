@@ -209,7 +209,7 @@ function mqttChannel(client, name) {
     set(state) {
       mine = state;
       const now = Date.now();
-      if (now - lastPub > 200) {
+      if (now - lastPub > 90) {
         lastPub = now;
         publish();
       } else if (!pending) {
@@ -217,7 +217,7 @@ function mqttChannel(client, name) {
           pending = null;
           lastPub = Date.now();
           publish();
-        }, 200);
+        }, 90);
       }
     },
     peers() {

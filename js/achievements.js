@@ -27,6 +27,7 @@ const ACHIEVEMENTS = [
   { id: 'boss_titan', name: 'Смыто', desc: 'Победи Скибиди-Титана' },
   { id: 'campaign', name: 'Мастер хаоса', desc: 'Пройди всю кампанию' },
   { id: 'duel', name: 'Дуэлянт', desc: 'Выиграй дуэль у живого соперника' },
+  { id: 'flawless', name: 'Всухую', desc: 'Выиграй арену, ни разу не погибнув' },
 ];
 
 const Ach = {

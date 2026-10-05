@@ -1,6 +1,6 @@
 /* Офлайн-режим: файлы игры кэшируются при первом запуске.
    Если меняешь список скриптов в index.html — обнови ASSETS и поменяй CACHE. */
-const CACHE = 'khaos-doska-v6';
+const CACHE = 'khaos-doska-v7';
 const ASSETS = [
   './',
   './index.html',
@@ -21,6 +21,7 @@ const ASSETS = [
   './js/achievements.js',
   './js/net.js',
   './js/duel.js',
+  './js/arena.js',
   './js/game.js',
   './js/render.js',
   './js/main.js',

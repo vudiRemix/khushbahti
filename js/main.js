@@ -89,13 +89,32 @@
   // ---------- касания по доске ----------
   // Один палец целится: в режиме «огонь» касание стреляет (держи — очередь),
   // в режимах «удочка» и «флажок» касание делает это действие в точке.
+  // На арене левая часть экрана — джойстик бега, правая — прицел и огонь.
   let aimTouch = null;
+  function arenaTouchStart(e) {
+    for (const t of e.changedTouches) {
+      const p = toLogical(t.clientX, t.clientY);
+      if (Arena.menu) {
+        Input.x = p.x;
+        Input.y = p.y;
+        Input.queue.push({ type: 'down', button: 0, x: p.x, y: p.y });
+      } else if (p.x < W * 0.42 && Input.stick.id === null) {
+        Object.assign(Input.stick, { id: t.identifier, ox: p.x, oy: p.y, x: p.x, y: p.y });
+      } else if (aimTouch === null) {
+        aimTouch = t.identifier;
+        Input.x = p.x;
+        Input.y = p.y;
+        Input.lmb = true;
+      }
+    }
+  }
   canvas.addEventListener(
     'touchstart',
     (e) => {
       e.preventDefault();
       Sound.init();
       Input.touch = true;
+      if (game.state === 'arena') return arenaTouchStart(e);
       if (aimTouch !== null) return;
       const t = e.changedTouches[0];
       aimTouch = t.identifier;
@@ -120,6 +139,12 @@
     (e) => {
       e.preventDefault();
       for (const t of e.changedTouches) {
+        if (t.identifier === Input.stick.id) {
+          const p = toLogical(t.clientX, t.clientY);
+          Input.stick.x = p.x;
+          Input.stick.y = p.y;
+          continue;
+        }
         if (t.identifier !== aimTouch) continue;
         const p = toLogical(t.clientX, t.clientY);
         Input.x = clamp(p.x, 0, W);
@@ -132,6 +157,7 @@
     e.preventDefault();
     Sound.init();
     for (const t of e.changedTouches) {
+      if (t.identifier === Input.stick.id) Input.stick.id = null;
       if (t.identifier !== aimTouch) continue;
       aimTouch = null;
       Input.lmb = false;
@@ -153,7 +179,7 @@
     buy: () => Input.queue.push({ type: 'key', code: 'KeyB' }),
     reload: () => Input.queue.push({ type: 'key', code: 'KeyR' }),
     weapon: () => Input.queue.push({ type: 'key', code: 'KeyX' }),
-    grenade: () => game.armThrow('he'),
+    grenade: () => (game.state === 'arena' ? Input.queue.push({ type: 'key', code: 'KeyG' }) : game.armThrow('he')),
     fullscreen: () => goFullscreen(),
   };
   for (const b of document.querySelectorAll('.tbar button')) {
@@ -216,11 +242,14 @@
       game.update(dt);
       render(ctx, game);
       const playing = ['play', 'buy', 'pause', 'cheats'].includes(game.state);
-      const st = playing ? 'play' : 'menu';
+      const arena = game.state === 'arena';
+      const st = arena ? 'arena' : playing ? 'play' : 'menu';
       if (st !== uiState) {
         uiState = st;
-        document.body.classList.toggle('ui-play', playing);
+        document.body.classList.toggle('ui-play', playing || arena);
+        document.body.classList.toggle('ui-arena', arena);
         if (!playing) Input.keys.delete('ShiftLeft');
+        if (!arena) Input.stick.id = null;
       }
     } catch (err) {
       console.error(err);

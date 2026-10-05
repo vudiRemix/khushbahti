@@ -50,6 +50,7 @@ const choice = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 const dist2 = (ax, ay, bx, by) => (ax - bx) * (ax - bx) + (ay - by) * (ay - by);
+const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 const easeOutCubic = (t) => 1 - (1 - t) * (1 - t) * (1 - t);
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const colX = (c) => c * T + T / 2;
@@ -98,6 +99,7 @@ const Input = {
   queue: [],
   touch: false,
   mode: 'shoot', // режим касания на телефоне: shoot | rod | flag
+  stick: { id: null, ox: 0, oy: 0, x: 0, y: 0 }, // джойстик на арене (левый палец)
 };
 
 // Параметры вывода (заполняются в main.js при изменении размера окна).

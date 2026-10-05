@@ -1,7 +1,9 @@
 'use strict';
-/* Дуэль: двое играют каждый свою доску, видят друг друга и шлют «подарки».
-   Состояние матча живёт в «присутствии» каждого игрока: здоровье, босс, исход
-   и список последних отправленных атак с номерами (получатель берёт только новые). */
+/* Дуэль вдвоём, два режима:
+   • «Арена» — PvP на одной доске (js/arena.js);
+   • «Боссы» — каждый играет свою доску против босса и шлёт сопернику «подарки».
+   Состояние матча живёт в «присутствии» каждого игрока: здоровье, позиция, исход
+   и списки последних событий с номерами (получатель берёт только новые). */
 
 const DUEL_NICKS = ['Сапёр', 'Скибиди', 'Крипер', 'Нубик', 'Про100', 'Фредди', 'Гумба', 'Король', 'Пешка', 'Амогус', 'Купа', 'Соник'];
 
@@ -30,6 +32,7 @@ function cleanNick(s) {
 
 const Duel = {
   phase: 'off', // off | connecting | lobby | hosting | joining | countdown | playing | over | unavailable
+  mode: Store.get('kd_mode') === 'boss' ? 'boss' : 'arena', // arena | boss
   active: false, // идёт матч (игровые хуки включены)
   name: cleanNick(Store.get('kd_nick')) || randomNick(),
   nickAsked: !!Store.get('kd_nick'),
@@ -79,7 +82,7 @@ const Duel = {
   },
 
   lobbyState(host) {
-    if (this.lobby) this.lobby.set({ v: 1, name: this.name, host, lvl: this.lvl });
+    if (this.lobby) this.lobby.set({ v: 1, name: this.name, host, lvl: this.lvl, mode: this.mode });
   },
 
   newNick() {
@@ -145,6 +148,13 @@ const Duel = {
     await this.open(g);
   },
 
+  setMode(mode) {
+    if (this.phase !== 'lobby') return;
+    this.mode = mode === 'boss' ? 'boss' : 'arena';
+    Store.set('kd_mode', this.mode);
+    this.lobbyState(null);
+  },
+
   changeLevel(d) {
     if (this.phase !== 'lobby') return;
     this.lvl = (this.lvl + d + LEVELS.length) % LEVELS.length;
@@ -158,7 +168,12 @@ const Duel = {
       .peers()
       .filter((p) => !p.me && p.state && p.state.v === 1 && typeof p.state.host === 'string' && /^[a-z0-9]{4}$/.test(p.state.host))
       .slice(0, 5)
-      .map((p) => ({ code: p.state.host, name: cleanNick(p.state.name) || 'Игрок', lvl: clamp(Number(p.state.lvl) || 0, 0, LEVELS.length - 1) }));
+      .map((p) => ({
+        code: p.state.host,
+        name: cleanNick(p.state.name) || 'Игрок',
+        lvl: clamp(Number(p.state.lvl) || 0, 0, LEVELS.length - 1),
+        mode: p.state.mode === 'boss' ? 'boss' : 'arena',
+      }));
   },
 
   async host() {
@@ -179,10 +194,11 @@ const Duel = {
     this.lobbyState(this.code);
   },
 
-  async join(code, lvl) {
+  async join(code, lvl, mode) {
     if (this.phase !== 'lobby') return;
     this.code = code;
     this.lvl = lvl;
+    this.mode = mode === 'boss' ? 'boss' : 'arena';
     this.role = 'guest';
     this.phase = 'joining';
     this.joinT = 0;
@@ -208,6 +224,7 @@ const Duel = {
     this.room = null;
     this.opp = null;
     this.active = false;
+    Arena.stop();
     if (r) await r.leave();
   },
 
@@ -249,8 +266,10 @@ const Duel = {
 
   publish(st, g) {
     if (!this.room) return;
-    const s = { v: 1, name: this.name, role: this.role, st, lvl: this.lvl };
-    if (g) {
+    const s = { v: 1, name: this.name, role: this.role, st, lvl: this.lvl, mode: this.mode };
+    if (g && this.mode === 'arena') {
+      if (Arena.on) Object.assign(s, Arena.netState());
+    } else if (g) {
       const p = g.player, tw = g.tower;
       Object.assign(s, {
         hp: Math.max(0, Math.ceil(p.hp)),
@@ -276,7 +295,8 @@ const Duel = {
     this.active = true;
     this.phase = 'playing';
     this.oppSeen = performance.now();
-    g.startDuel(this.lvl);
+    if (this.mode === 'arena') g.startArena(this.code, this.lvl, this.role);
+    else g.startDuel(this.lvl);
     this.publish('play', g);
   },
 
@@ -299,6 +319,7 @@ const Duel = {
       this.joinT += dt;
       if (opp && opp.state.st === 'count') {
         this.lvl = clamp(Number(opp.state.lvl) || 0, 0, LEVELS.length - 1);
+        this.mode = opp.state.mode === 'boss' ? 'boss' : 'arena';
         this.startCountdown();
       } else if (this.joinT > 12) {
         this.note = 'Соперник не ответил. Выбери другую дуэль.';
@@ -313,6 +334,7 @@ const Duel = {
   },
 
   tick(dt, g, opp) {
+    if (this.mode === 'arena') return this.tickArena(dt, g, opp);
     this.pubT -= dt;
     if (this.pubT <= 0) {
       this.pubT = 0.25;
@@ -340,18 +362,37 @@ const Duel = {
     }
   },
 
+  // Арена: часто шлём своё состояние, разбираем чужое, проверяем счёт.
+  tickArena(dt, g, opp) {
+    if (opp) Arena.remote(opp.state);
+    this.pubT -= dt;
+    if (this.pubT <= 0) {
+      this.pubT = 0.08;
+      this.publish('play', g);
+    }
+    if (this.result) return;
+    if (!opp && performance.now() - this.oppSeen > 6000) this.finish(g, true, 'Соперник вышел из игры');
+    else {
+      const r = Arena.check();
+      if (r) this.finish(g, r.win, r.reason);
+    }
+  },
+
   finish(g, win, reason) {
     this.result = { win, reason };
     this.phase = 'over';
     const st = g.state === 'dead' ? 'dead' : g.state === 'win' ? 'win' : 'play';
     this.publish(st, g);
-    if (['play', 'pause', 'buy', 'cheats'].includes(g.state)) {
+    if (['play', 'pause', 'buy', 'cheats', 'arena'].includes(g.state)) {
       g.state = 'duelover';
       g.winT = 0;
-      if (win) Sound.win();
+      Arena.menu = false;
+      if (win === null) Sound.whoosh();
+      else if (win) Sound.win();
       else Sound.wasted();
     }
     if (win) Ach.unlock('duel');
+    if (win && this.mode === 'arena' && Arena.on && Arena.me.dn === 0 && Arena.opDn >= ARENA.frags) Ach.unlock('flawless');
   },
 
   // Отправить «подарок» сопернику.
