@@ -26,6 +26,7 @@ const CHEATS = {
   SKIBIDI: 'скибиди доп-доп ес-ес',
   SANS: 'бой как в Undertale прямо сейчас',
   SIUUU: 'на поле выбегает футболист №7',
+  DURAK: 'босс зовёт сыграть в дурака',
 };
 
 const TILE_LOOT = [['sun', 16], ['steak', 22], ['ammo', 14], ['tnt', 9], ['dice', 11], ['potion', 8], ['gapple', 5], ['ice', 7], ['pellet', 5]];
@@ -112,6 +113,8 @@ class Game {
     this.meeting = null;
     this.siuT = rand(...SIU.first);
     this.footballer = null;
+    this.durakT = 0; // > 0 — скоро босс позовёт играть в дурака
+    this.foolCapT = 0;
     this.dogT = 0;
     this.starT = 0;
     this.starOffset = 0;
@@ -345,6 +348,16 @@ class Game {
         return;
       }
     }
+    // босс в ярости зовёт сыграть в дурака
+    if (this.durakT > 0 && !this.duel && !this.jumpscare && !this.meeting && !this.tower.dead) {
+      this.durakT -= realDt;
+      if (this.durakT <= 0) {
+        this.durakT = 0;
+        Durak.start(this, 'boss');
+        return;
+      }
+    }
+    if (this.foolCapT > 0) this.foolCapT -= realDt;
     this.updateBoost(realDt);
     this.updateGun(realDt);
     this.updateRod(realDt);
@@ -1954,6 +1967,11 @@ class Game {
     Sound.roar();
     tw.onRage(this);
     if (this.duel) Duel.send('stars', this);
+    else if (this.state === 'play') {
+      // через пару секунд — партия в дурака с боссом
+      this.durakT = 3;
+      this.say(`<${tw.speaker}> Сыграем в дурака? Проиграешь — колпак твой!`, '#ff8a65');
+    }
   }
 
   bossEmote(str) {
@@ -2171,6 +2189,9 @@ class Game {
         break;
       case 'SIUUU':
         this.siuT = 0;
+        break;
+      case 'DURAK':
+        this.durakT = 0.05;
         break;
     }
     Sound.cheat();

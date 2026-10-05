@@ -16,6 +16,12 @@ function render(ctx, g) {
   ctx.fillRect(0, 0, W, H);
   if (g.state === 'arena' || (g.state === 'duelover' && Arena.on)) return renderArena(ctx, g, now);
   if (g.state === 'durak') {
+    // партия с боссом идёт прямо на его доске — она просвечивает за столом
+    if (Durak.mode === 'boss') {
+      ctx.save();
+      drawWorld(ctx, g, g.t, now);
+      ctx.restore();
+    }
     renderDurak(ctx, g, now);
     Ach.draw(ctx);
     if (!Input.touch) drawPointer(ctx);
@@ -461,6 +467,11 @@ function drawScreenFx(ctx, g, now) {
 // ---------- интерфейс ----------
 function drawHUD(ctx, g, now) {
   drawGtaHud(ctx, g, now);
+  // проиграл боссу в дурака — колпак поверх значка оружия
+  if (g.foolCapT > 0) {
+    drawFoolCap(ctx, 48, 30 + Math.sin(now * 4) * 2, 0.55);
+    text(ctx, `ДУРАК ${Math.ceil(g.foolCapT)}`, 48, 104, { font: `bold 13px ${FONT.ui}`, color: '#ffd54a', stroke: '#000', lw: 4, align: 'center' });
+  }
   drawPvzBank(ctx, g, now);
   drawMinesPanel(ctx, g);
   drawMinecraftHud(ctx, g, now);
@@ -954,7 +965,7 @@ function drawTitle(ctx, g, now) {
 
   text(ctx, `Рекорд: $${pad(g.best, 8)}`, 640, 636, { font: `30px ${FONT.gta}`, color: '#3fbf4a', stroke: '#000', lw: 6, align: 'center' });
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', 1020, 662, 240, 40, toggleFullscreen, { size: 11 });
-  text(ctx, `версия ${GAME_VERSION} · новое: дурак, футболист №7 (чит SIUUU), драугр, музыка (${Input.touch ? 'в паузе' : 'N'})`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
+  text(ctx, `версия ${GAME_VERSION} · новое: дурак с боссом (чит DURAK), футболист №7 (SIUUU), драугр, музыка (${Input.touch ? 'в паузе' : 'N'})`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', 20, 662, 200, 40, () => Sound.toggleMute(), { size: 11 });
   text(ctx, Input.touch ? 'Нажми «Играть»' : 'Нажми «Играть» или Enter', 640, 684, { font: `bold 15px ${FONT.ui}`, color: 'rgba(255,255,255,0.75)', align: 'center' });
   if (Input.touch) text(ctx, 'На телефоне: режимы и действия — кнопками по краям экрана', 640, 706, { font: `bold 14px ${FONT.ui}`, color: '#ffe082', align: 'center' });
@@ -1306,15 +1317,17 @@ function drawCheats(ctx, g) {
   ctx.fillRect(0, 0, W, H);
   text(ctx, 'ЧИТ-КОДЫ', 640, 110, { font: `56px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 9, align: 'center' });
   text(ctx, 'Как в GTA San Andreas. С читами рекорд не засчитывается.', 640, 146, { font: `bold 16px ${FONT.ui}`, color: '#cfd8dc', align: 'center' });
-  const rowH = Math.min(110, Math.floor(330 / Math.ceil(Object.keys(CHEATS).length / 2)));
-  Object.keys(CHEATS).forEach((name, i) => {
-    const x = i % 2 ? 660 : 300, y = 172 + Math.floor(i / 2) * rowH;
-    mcButton(ctx, g, name, x, y, 320, 50, () => {
+  // больше восьми кодов — три колонки, чтобы подписи не налезали на кнопки
+  const names = Object.keys(CHEATS), cols = names.length > 8 ? 3 : 2, bw = cols === 3 ? 330 : 320;
+  const rowH = Math.min(110, Math.floor(330 / Math.ceil(names.length / cols)));
+  names.forEach((name, i) => {
+    const x = cols === 3 ? 95 + (i % 3) * 370 : i % 2 ? 660 : 300, y = 172 + Math.floor(i / cols) * rowH;
+    mcButton(ctx, g, name, x, y, bw, 50, () => {
       g.activateCheat(name);
       g.state = 'play';
       g.suppressFire = true;
     }, { size: 16 });
-    text(ctx, CHEATS[name], x + 160, y + 70, { font: `15px ${FONT.ui}`, color: '#eef3e6', align: 'center' });
+    text(ctx, CHEATS[name], x + bw / 2, y + 70, { font: `15px ${FONT.ui}`, color: '#eef3e6', align: 'center' });
   });
   mcButton(ctx, g, 'НАЗАД', 540, 520, 200, 44, () => (g.state = 'pause'), { size: 13 });
 }

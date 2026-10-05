@@ -1,5 +1,8 @@
 'use strict';
-/* Дурак — подкидной, колода 36 карт, вдвоём: против бота или с другом по сети (режим дуэли).
+/* Дурак — подкидной. Главное место — бой с боссом кампании: впадая в ярость, босс вызывает
+   сыграть в дурака (колода 24 карты). Карты, которые забрал босс, бьют по его HP, карты,
+   которые забрал ты, — по твоему здоровью; итог партии — большой урон боссу или колпак тебе.
+   Ещё можно сыграть вдвоём: с ботом (36 карт) или с другом по сети (режим дуэли).
    Правила (dk*) — чистые функции над состоянием партии. Хозяин комнаты (или игра с ботом)
    ведёт настоящее состояние; гость шлёт свои ходы и рисует то, что прислал хозяин.
    На валетах, дамах и королях — шахматные конь, ферзь и король, в тему доски. */
@@ -7,6 +10,15 @@
 const DK_RANKS = ['6', '7', '8', '9', '10', 'В', 'Д', 'К', 'Т'];
 const DK_SUITS = ['♠', '♣', '♦', '♥'];
 const DK = { w: 84, h: 120, think: [0.7, 1.2], auto: 0.9 };
+// Партия с боссом: колода с девяток, урон за взятые карты и за итог.
+const DK_BOSS = { minRank: 3, perCard: 0.02, hurtPerCard: 0.5, win: 0.2, money: 1000, lose: 4, cap: 20 };
+const DK_TAUNTS = {
+  attack: ['Козыри у меня!', 'Лови!', 'Отбивайся, если сможешь!', 'Хе-хе-хе!'],
+  beat: ['Бито!', 'Слабовато!', 'И это всё?'],
+  take: ['Беру… пока что.', 'Ах ты ж!', 'Это ещё не конец!'],
+  youTake: ['Бери-бери!', 'Хе-хе, полная рука!', 'Дурак растёт!'],
+  bito: ['Ладно, бито…', 'Повезло тебе.'],
+};
 
 const dkSuit = (c) => Math.floor(c / 9);
 const dkRank = (c) => c % 9;
@@ -25,8 +37,9 @@ function dkSort(hand, trump) {
 }
 
 // Новая раздача: по 6 карт, нижняя карта колоды — козырь, первым ходит тот, у кого младший козырь.
-function dkNew() {
-  const deck = shuffle([...Array(36).keys()]);
+// minRank — с какого достоинства колода: 0 — с шестёрок (36 карт), 3 — с девяток (24).
+function dkNew(minRank = 0) {
+  const deck = shuffle([...Array(36).keys()].filter((c) => dkRank(c) >= minRank));
   const st = { deck, trumpCard: deck[0], trump: dkSuit(deck[0]), hands: [[], []], table: [], out: 0, attacker: 0, taking: false, limit: 6, over: false, fool: -1, v: 1, log: '', end: '' };
   for (let i = 0; i < 6; i++) for (const p of [0, 1]) st.hands[p].push(deck.pop());
   let best = null;
@@ -319,8 +332,14 @@ const Durak = {
   start(g, mode = 'bot') {
     this.on = true;
     this.mode = mode;
+    this.g = g;
     this.me = mode === 'guest' ? 1 : 0;
-    this.oppName = mode === 'bot' ? 'Бот ' + choice(DUEL_NICKS) : Duel.oppName || 'Соперник';
+    this.oppName = mode === 'bot' ? 'Бот ' + choice(DUEL_NICKS) : mode === 'boss' ? g.tower.name : Duel.oppName || 'Соперник';
+    this.hurt = 0; // сколько здоровья снимем с тебя, когда вернёшься в бой
+    this.ko = false; // босс погиб прямо за картами
+    this.floats = [];
+    this.taunt = mode === 'boss' ? 'Сыграем в дурака? Проиграешь — колпак твой!' : '';
+    this.tauntT = mode === 'boss' ? 3 : 0;
     this.acts = [];
     this.seq = 0;
     this.seen = 0;
@@ -329,7 +348,7 @@ const Durak = {
     this.netPrev = null;
     if (mode !== 'guest') this.newGame();
     g.state = 'durak';
-    g.duel = mode !== 'bot';
+    g.duel = mode === 'host' || mode === 'guest';
     Input.lmb = false;
   },
 
@@ -339,7 +358,7 @@ const Durak = {
   },
 
   newGame() {
-    this.st = dkNew();
+    this.st = dkNew(this.mode === 'boss' ? DK_BOSS.minRank : 0);
     this.gameId = (this.gameId || 0) + 1;
     this.resetView();
     this.botT = rand(...DK.think) + 0.6;
@@ -368,11 +387,69 @@ const Durak = {
       if ((a.t === 'play' || a.t === 'beat') && dkAct(st, this.me, a)) dkSound('card');
       return;
     }
-    if (dkAct(st, this.me, a)) {
-      dkSound('card');
-      this.dirty = true;
-      this.autoT = 0;
-    }
+    this.doAct(this.me, a);
+  },
+
+  // Ход у бота, у хозяина и в бою с боссом: правила + последствия.
+  doAct(who, a) {
+    const st = this.st, taking = st.taking, def = 1 - st.attacker, first = !st.table.length;
+    const n = st.table.reduce((k, p) => k + (p.d === null ? 1 : 2), 0);
+    if (!dkAct(st, who, a)) return false;
+    dkSound('card');
+    this.dirty = true;
+    this.autoT = 0;
+    if (this.mode === 'boss') this.bossHook(who, a, taking, def, n, first);
+    return true;
+  },
+
+  // Бой с боссом: взятые карты — урон, реплики босса.
+  bossHook(who, a, taking, def, n, first) {
+    const g = this.g, tw = g.tower;
+    if (a.t === 'done' && taking) {
+      if (def === 1) {
+        const dmg = Math.round(tw.max * DK_BOSS.perCard * n);
+        g.damageTower(dmg, false);
+        this.float(`−${dmg} боссу`, 640, 190, '#ff5252');
+        this.tease('take');
+        if (tw.dead) {
+          this.ko = true;
+          Ach.unlock('cardko');
+          Sound.win();
+        }
+      } else {
+        this.hurt += DK_BOSS.hurtPerCard * n;
+        this.float(`−${DK_BOSS.hurtPerCard * n} ❤`, 640, 560, '#ff8a80');
+        this.tease('youTake');
+      }
+    } else if (a.t === 'done') this.tease(who === 1 ? 'bito' : 'beat');
+    else if (a.t === 'take' && who === 1) this.tease('take');
+    else if (a.t === 'play' && who === 1 && first) this.tease('attack');
+  },
+
+  tease(kind) {
+    this.taunt = choice(DK_TAUNTS[kind]);
+    this.tauntT = 2.2;
+  },
+
+  float(str, x, y, color) {
+    this.floats.push({ str, x, y, color, t: 0 });
+  },
+
+  // Обратно в бой с боссом: итог партии и взятые карты.
+  exitBoss(surrender = false) {
+    const g = this.g, st = this.st;
+    this.on = false;
+    g.state = 'play';
+    g.suppressFire = true;
+    Input.lmb = false;
+    const lost = surrender || (st && st.over && st.fool === 0);
+    if (lost) {
+      this.hurt += DK_BOSS.lose;
+      g.foolCapT = DK_BOSS.cap;
+      g.say(`<${g.tower.speaker}> Ха! Дурак! Носи колпак.`, '#ff8a65');
+    } else if (st && st.over && st.fool === 1) g.say(`${g.tower.name} остался в дураках!`, '#ffd54a');
+    if (this.hurt > 0) g.takeDamage(this.hurt, 'Дурак');
+    this.st = null;
   },
 
   again() {
@@ -471,21 +548,22 @@ const Durak = {
   // ---------- кадр ----------
   update(dt, g) {
     if (this.hintT > 0) this.hintT -= dt;
+    if (this.tauntT > 0) this.tauntT -= dt;
+    for (const f of this.floats || []) f.t += dt;
+    if (this.floats) this.floats = this.floats.filter((f) => f.t < 1.4);
+    if (this.ko) return this.animate(dt);
     const st = this.st;
     if (!st) return this.animate(dt);
     if (this.mode !== 'guest' && !st.over && !this.menu) {
       // бот думает
-      if (this.mode === 'bot') {
+      if (this.mode === 'bot' || this.mode === 'boss') {
         const who = this.mustAct(st);
         if (who === 1) {
           this.botT -= dt;
           if (this.botT <= 0) {
             this.botT = rand(...DK.think);
             const a = dkBotMove(st, 1);
-            if (a && dkAct(st, 1, a)) {
-              dkSound('card');
-              this.autoT = 0;
-            }
+            if (a) this.doAct(1, a);
           }
         }
       }
@@ -495,9 +573,7 @@ const Durak = {
         this.autoT += dt;
         if (this.autoT >= DK.auto) {
           this.autoT = 0;
-          dkAct(st, f.who, f.a);
-          dkSound('card');
-          this.dirty = true;
+          this.doAct(f.who, f.a);
         }
       } else this.autoT = 0;
     }
@@ -517,6 +593,14 @@ const Durak = {
   onOver(st) {
     this.ended = true;
     const win = st.fool === 1 - this.me, draw = st.fool === 2;
+    if (this.mode === 'boss' && win) {
+      // босс в дураках — большой урон сразу, чтобы было видно на полоске
+      const tw = this.g.tower;
+      this.g.damageTower(Math.round(tw.max * DK_BOSS.win), true);
+      this.g.addMoney(DK_BOSS.money);
+      if (tw.dead) Ach.unlock('cardko');
+    }
+    if (this.mode === 'boss') this.tease(win ? 'take' : 'youTake');
     if (draw) Sound.whoosh();
     else if (win) {
       Sound.win();
@@ -532,6 +616,7 @@ const Durak = {
 
   onKey(code, g) {
     if (code === 'Escape') this.menu = !this.menu;
+    else if ((code === 'Enter' || code === 'Space') && this.mode === 'boss' && (this.ko || (this.st && this.st.over))) this.exitBoss();
     else if ((code === 'Enter' || code === 'Space') && this.st && this.st.over) this.again();
     else if (code === 'Space' && !this.menu) {
       const b = this.mainButton();
@@ -666,20 +751,25 @@ const Durak = {
 
 // ---------- экран ----------
 function renderDurak(ctx, g, now) {
-  const D = Durak, st = D.st;
+  const D = Durak, st = D.st, boss = D.mode === 'boss';
   g.buttons = [];
-  // сукно
+  // сукно: зелёное, а в бою с боссом — бордовое
   const felt = ctx.createRadialGradient(640, 360, 80, 640, 360, 760);
-  felt.addColorStop(0, '#1f6b3a');
-  felt.addColorStop(1, '#0b2e18');
+  felt.addColorStop(0, boss ? '#6b1f2a' : '#1f6b3a');
+  felt.addColorStop(1, boss ? '#2a0b10' : '#0b2e18');
   ctx.fillStyle = felt;
+  ctx.globalAlpha = boss ? 0.84 : 1;
   ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = 1;
   ctx.strokeStyle = 'rgba(255,255,255,0.05)';
   ctx.lineWidth = 2;
   rr(ctx, 230, 200, 820, 250, 30);
   ctx.stroke();
-  text(ctx, 'ДУРАК', 24, 40, { font: `30px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 5 });
-  text(ctx, D.mode === 'bot' ? `против бота · счёт ${D.score.w} : ${D.score.l}` : 'с другом по сети', 24, 64, { font: `bold 14px ${FONT.ui}`, color: '#c8e6c9' });
+  text(ctx, boss ? 'ДУРАК С БОССОМ' : 'ДУРАК', 24, 40, { font: `30px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 5 });
+  const sub = boss
+    ? `взятая боссом карта — −${Math.round(DK_BOSS.perCard * 100)}% его HP, твоя — −${DK_BOSS.hurtPerCard} ❤`
+    : D.mode === 'bot' ? `против бота · счёт ${D.score.w} : ${D.score.l}` : 'с другом по сети';
+  text(ctx, sub, 24, 64, { font: `bold 14px ${FONT.ui}`, color: boss ? '#ffcdd2' : '#c8e6c9' });
   mcButton(ctx, g, 'МЕНЮ', 1130, 14, 130, 40, () => (D.menu = true), { size: 11 });
   if (!st) {
     text(ctx, D.status(), 640, 360, { font: `bold 24px ${FONT.ui}`, color: '#fff', align: 'center' });
@@ -688,7 +778,28 @@ function renderDurak(ctx, g, now) {
   const me = D.me, opp = 1 - me;
   // соперник
   text(ctx, `${D.oppName} · карт: ${st.hands[opp].length}`, 640, 150, { font: `bold 16px ${FONT.ui}`, color: '#fff', align: 'center', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
-  if (st.attacker === opp && !st.over) text(ctx, 'ходит', 640, 170, { font: `bold 13px ${FONT.ui}`, color: '#ffd54a', align: 'center' });
+  if (boss) {
+    // полоска HP босса — та же, что в бою
+    const tw = g.tower, k = clamp(tw.hp / tw.max, 0, 1);
+    rr(ctx, 490, 160, 300, 14, 7);
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fill();
+    if (k > 0) {
+      rr(ctx, 490, 160, 300 * k, 14, 7);
+      ctx.fillStyle = '#e53935';
+      ctx.fill();
+    }
+    text(ctx, `${Math.ceil(tw.hp)} / ${tw.max}`, 640, 172, { font: `bold 11px ${FONT.ui}`, color: '#fff', align: 'center' });
+    if (D.tauntT > 0 && D.taunt) {
+      ctx.font = `bold 17px ${FONT.ui}`;
+      const w = ctx.measureText(D.taunt).width + 28;
+      rr(ctx, 820, 96, w, 40, 12);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      poly(ctx, [834, 130, 812, 146, 852, 134], '#fff');
+      text(ctx, D.taunt, 834, 122, { font: `bold 17px ${FONT.ui}`, color: '#111' });
+    }
+  } else if (st.attacker === opp && !st.over) text(ctx, 'ходит', 640, 170, { font: `bold 13px ${FONT.ui}`, color: '#ffd54a', align: 'center' });
   // колода и козырь
   if (st.deck.length) {
     drawCardFace(ctx, st.trumpCard, 150, 318, Math.PI / 2, { trump: true });
@@ -752,6 +863,14 @@ function renderDurak(ctx, g, now) {
     });
   }
 
+  for (const f of D.floats || []) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - f.t / 1.4);
+    text(ctx, f.str, f.x, f.y - f.t * 40, { font: `30px ${FONT.gta}`, color: f.color, stroke: '#000', lw: 6, align: 'center' });
+    ctx.restore();
+  }
+  if (boss && D.hurt > 0 && !st.over) text(ctx, `взято карт: −${D.hurt} ❤ после партии`, 24, 700, { font: `bold 15px ${FONT.ui}`, color: '#ff8a80' });
+  if (boss && st.attacker === opp && !st.over) text(ctx, 'ходит босс', 640, 190, { font: `bold 13px ${FONT.ui}`, color: '#ffd54a', align: 'center' });
   // подсказки и кнопка
   const msg = D.hintT > 0 ? D.hint : D.status();
   if (msg) text(ctx, msg, 640, 498, { font: `bold 19px ${FONT.ui}`, color: D.hintT > 0 ? '#ffcc80' : '#fff', align: 'center', stroke: 'rgba(0,0,0,0.55)', lw: 4 });
@@ -765,8 +884,23 @@ function renderDurak(ctx, g, now) {
     mcButton(ctx, g, 'В МЕНЮ', 650, 380, 190, 50, () => Duel.close(g), { size: 13 });
     return;
   }
-  if (st.over) drawDurakOver(ctx, g, now);
+  if (D.ko) drawDurakKo(ctx, g, now);
+  else if (st.over) drawDurakOver(ctx, g, now);
   drawDurakMenu(ctx, g);
+}
+
+// Босс погиб прямо за картами.
+function drawDurakKo(ctx, g, now) {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, W, H);
+  const sc = 1 + Math.sin(now * 4) * 0.03;
+  ctx.save();
+  ctx.translate(640, 300);
+  ctx.scale(sc, sc);
+  text(ctx, 'БОСС ПОВЕРЖЕН КАРТАМИ!', 0, 0, { font: `60px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 9, align: 'center' });
+  ctx.restore();
+  text(ctx, `${Durak.oppName} не унёс столько карт`, 640, 350, { font: `bold 22px ${FONT.ui}`, color: '#fff', align: 'center' });
+  mcButton(ctx, g, 'В БОЙ!', 540, 400, 200, 54, () => Durak.exitBoss(), { size: 16, fill: '#c62828' });
 }
 
 Object.assign(Durak, {
@@ -788,7 +922,8 @@ function drawDurakOver(ctx, g, now) {
   const win = st.fool === 1 - D.me, draw = st.fool === 2;
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.fillRect(0, 0, W, H);
-  const title = draw ? 'НИЧЬЯ' : win ? 'ПОБЕДА!' : 'ТЫ ДУРАК!';
+  const boss = D.mode === 'boss';
+  const title = draw ? 'НИЧЬЯ' : win ? (boss ? 'БОСС — ДУРАК!' : 'ПОБЕДА!') : 'ТЫ ДУРАК!';
   const sc = 1 + Math.sin(now * 4) * 0.03;
   ctx.save();
   ctx.translate(640, 300);
@@ -797,8 +932,14 @@ function drawDurakOver(ctx, g, now) {
   ctx.restore();
   // колпак — над тем, кто остался в дураках: над соперником или над твоими картами
   if (!draw) drawFoolCap(ctx, 640, (win ? 130 : 560) + Math.sin(now * 3) * 4, 1.1);
-  const sub = draw ? 'Оба вышли одновременно' : win ? `${D.oppName} остался в дураках` : `У тебя остались карты — колпак твой`;
+  let sub = draw ? 'Оба вышли одновременно' : win ? `${D.oppName} остался в дураках` : `У тебя остались карты — колпак твой`;
+  if (boss && win) sub = `${D.oppName} в дураках: −${Math.round(DK_BOSS.win * 100)}% HP боссу и +$${DK_BOSS.money}`;
+  if (boss && !win && !draw) sub = `Колпак твой на ${DK_BOSS.cap} секунд и −${DK_BOSS.lose + D.hurt} ❤`;
   text(ctx, sub, 640, 350, { font: `bold 22px ${FONT.ui}`, color: '#fff', align: 'center' });
+  if (boss) {
+    mcButton(ctx, g, 'В БОЙ!', 540, 410, 200, 54, () => D.exitBoss(), { size: 16, fill: '#c62828' });
+    return;
+  }
   if (D.mode === 'bot') text(ctx, `Счёт против бота: ${D.score.w} : ${D.score.l}${D.score.d ? ` (ничьих ${D.score.d})` : ''}`, 640, 384, { font: `bold 18px ${FONT.ui}`, color: '#c8e6c9', align: 'center' });
   mcButton(ctx, g, 'ЕЩЁ РАЗ', 440, 420, 190, 52, () => D.again(), { size: 14, fill: '#2e7d32' });
   if (D.mode === 'bot') mcButton(ctx, g, 'В МЕНЮ', 650, 420, 190, 52, () => g.toTitle(), { size: 14 });
@@ -813,7 +954,12 @@ function drawDurakMenu(ctx, g) {
   ctx.fillRect(0, 0, W, H);
   text(ctx, 'ПАУЗА', 640, 220, { font: `56px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 8, align: 'center' });
   mcButton(ctx, g, 'ПРОДОЛЖИТЬ', 480, 260, 320, 46, () => (D.menu = false));
-  if (D.mode === 'bot') {
+  if (D.mode === 'boss') {
+    mcButton(ctx, g, 'СДАТЬСЯ (ТЫ ДУРАК)', 480, 316, 320, 46, () => {
+      D.menu = false;
+      D.exitBoss(true);
+    });
+  } else if (D.mode === 'bot') {
     mcButton(ctx, g, 'НОВАЯ РАЗДАЧА', 480, 316, 320, 46, () => {
       D.menu = false;
       D.newGame();
