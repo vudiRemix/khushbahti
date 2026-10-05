@@ -1,6 +1,6 @@
 /* Офлайн-режим: файлы игры кэшируются при первом запуске.
    Если меняешь список скриптов в index.html — обнови ASSETS и поменяй CACHE. */
-const CACHE = 'khaos-doska-v5';
+const CACHE = 'khaos-doska-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -27,7 +27,12 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // cache: 'reload' — мимо HTTP-кэша браузера, чтобы после обновления не смешались старые и новые файлы
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -44,7 +49,9 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   e.respondWith(
     caches.match(req).then((hit) => {
-      const net = fetch(req)
+      // свои файлы перепроверяем на сервере (no-cache), чужие (шрифты, CDN) берём как есть
+      const own = new URL(req.url).origin === self.location.origin;
+      const net = (own ? fetch(req.url, { cache: 'no-cache' }) : fetch(req))
         .then((res) => {
           if (res && (res.ok || res.type === 'opaque')) {
             const copy = res.clone();

@@ -45,6 +45,27 @@
   @keyframes turn { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
   @media (prefers-reduced-motion: reduce) { #rotate .phone { animation: none; } }
   @media (orientation: portrait) { body.touch #rotate { display: flex; } }
+
+  /* Окно ввода ника для дуэли */
+  #nick { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+    padding: 16px; background: rgba(0, 0, 0, 0.6); touch-action: manipulation; }
+  #nick[hidden] { display: none; }
+  #nick form { width: min(420px, 100%); box-sizing: border-box; padding: 20px; border-radius: 14px;
+    background: #1b1f17; border: 2px solid #ff8a65; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    font: 600 16px/1.3 system-ui, sans-serif; color: var(--fg); }
+  #nick label { display: block; margin-bottom: 4px; font-size: 18px; }
+  #nick p { margin: 0 0 12px; font-weight: 400; font-size: 14px; color: #b0bec5; }
+  #nick input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; border: 2px solid #546e7a;
+    background: #0d1208; color: #fff; font: 600 20px system-ui, sans-serif;
+    -webkit-user-select: text; user-select: text; touch-action: manipulation; }
+  #nick input:focus { outline: none; border-color: #ffd54a; }
+  #nick .row { display: flex; gap: 8px; margin-top: 14px; }
+  #nick button { flex: 1; min-height: 44px; border-radius: 8px; border: 2px solid rgba(255, 255, 255, 0.3);
+    background: #2c3328; color: #fff; font: 600 15px system-ui, sans-serif; touch-action: manipulation; }
+  #nick button[type=submit] { background: #8a4a3a; border-color: #ff8a65; }
+  #nick button:focus-visible { outline: 3px solid #ffd54a; outline-offset: 2px; }
+  /* телефон боком с открытой клавиатурой: прижимаем окно к верху */
+  @media (max-height: 420px) { #nick { align-items: flex-start; overflow-y: auto; padding-top: 8px; } #nick p { display: none; } }
 </style>
 </head>
 <body>
@@ -64,6 +85,18 @@
   <button type="button" data-act="fullscreen" aria-label="На весь экран">⛶<small>экран</small></button>
 </div>
 <div id="rotate"><div class="phone">📱</div>Поверни телефон горизонтально<br>— так играть удобнее</div>
+<div id="nick" hidden>
+  <form autocomplete="off">
+    <label for="nick-input">Твой ник</label>
+    <p>Его увидит соперник в списке дуэлей и во время боя. До 16 символов.</p>
+    <input id="nick-input" type="text" maxlength="16" spellcheck="false" autocapitalize="off" enterkeyhint="done">
+    <div class="row">
+      <button type="button" data-nick="random">Случайный</button>
+      <button type="button" data-nick="cancel">Отмена</button>
+      <button type="submit">Готово</button>
+    </div>
+  </form>
+</div>
 <noscript>Для игры нужен включённый JavaScript.</noscript>
 <script>
 // ---- js/core.js ----
@@ -4801,8 +4834,15 @@ Ach.load();
    channel = { set(state), peers() → [{ id, me, state }], leave() } */
 
 const NET_PREFIX = 'khaos-doska/v1';
-const MQTT_LIB = 'https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js';
+// Библиотека лежит рядом с игрой; если её нет (сборка в один файл) — берём с CDN.
+const MQTT_LIBS = ['js/vendor/mqtt.min.js', 'https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js'];
 const MQTT_BROKERS = window.KD_MQTT_BROKERS || ['wss://broker.hivemq.com:8884/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
+
+// Короткое имя сервера для экрана лобби.
+function brokerName(url) {
+  const host = String(url).replace(/^wss?:\/\//, '').split(/[:/]/)[0];
+  return host.replace(/^(broker|mqtt)\./, '');
+}
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -4844,6 +4884,8 @@ const Net = {
   room: null,
   client: null,
   initPromise: null,
+  server: '', // к какому MQTT-серверу подключились
+  brokerIdx: 0,
 
   init() {
     if (this.status === 'ready') return Promise.resolve(true);
@@ -4879,22 +4921,51 @@ const Net = {
       this.error = 'Дуэль работает, когда игра открыта с сайта (GitHub Pages) или по ссылке claude.ai, а не из файла.';
       return false;
     }
-    try {
-      if (!window.mqtt) await loadScript(MQTT_LIB);
-    } catch (e) {
+    for (const src of MQTT_LIBS) {
+      if (window.mqtt) break;
+      try {
+        await loadScript(src);
+      } catch (e) {
+        /* пробуем следующий источник */
+      }
+    }
+    if (!window.mqtt) {
       this.error = 'Нет интернета: не загрузилась библиотека связи.';
       return false;
     }
-    for (const url of MQTT_BROKERS) {
-      const client = await connectMqtt(url, 'kd_' + this.myId);
+    // Начинаем с сервера, который выбрали в прошлый раз; остальные — запасные.
+    const n = MQTT_BROKERS.length;
+    const start = clamp(Math.floor(Number(Store.get('kd_broker')) || 0), 0, n - 1);
+    for (let k = 0; k < n; k++) {
+      const i = (start + k) % n;
+      const client = await connectMqtt(MQTT_BROKERS[i], 'kd_' + this.myId);
       if (client) {
         this.client = client;
         this.kind = 'mqtt';
+        this.brokerIdx = i;
+        this.server = brokerName(MQTT_BROKERS[i]);
         return true;
       }
     }
-    this.error = 'Не удалось подключиться к серверу дуэлей. Проверь интернет.';
+    this.error = 'Не удалось подключиться к серверу дуэлей. Проверь интернет или включи мобильный интернет вместо Wi-Fi.';
     return false;
+  },
+
+  // Можно ли переключиться на другой MQTT-сервер.
+  canSwitch() {
+    return this.kind === 'mqtt' && MQTT_BROKERS.length > 1;
+  },
+
+  // Отключиться и в следующий раз начать со следующего сервера из списка.
+  nextServer() {
+    const next = (this.brokerIdx + 1) % MQTT_BROKERS.length;
+    Store.set('kd_broker', String(next));
+    if (this.client) this.client.end(true);
+    this.client = null;
+    this.kind = null;
+    this.server = '';
+    this.status = 'idle';
+    this.initPromise = null;
   },
 
   async channel(name) {
@@ -5012,10 +5083,21 @@ function randomNick() {
   return choice(DUEL_NICKS) + randi(10, 99);
 }
 
+const NICK_MAX = 16;
+
+// Ник: без управляющих символов и лишних пробелов, не длиннее NICK_MAX.
+function cleanNick(s) {
+  return Array.from(String(s || '').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, '').replace(/\s+/g, ' ').trim())
+    .slice(0, NICK_MAX)
+    .join('')
+    .trim();
+}
+
 const Duel = {
   phase: 'off', // off | connecting | lobby | hosting | joining | countdown | playing | over | unavailable
   active: false, // идёт матч (игровые хуки включены)
-  name: Store.get('kd_nick') || randomNick(),
+  name: cleanNick(Store.get('kd_nick')) || randomNick(),
+  nickAsked: !!Store.get('kd_nick'),
   lvl: 0,
   role: '',
   code: '',
@@ -5057,6 +5139,8 @@ const Duel = {
     }
     this.lobbyState(null);
     if (this.phase === 'connecting') this.phase = 'lobby';
+    // первый раз — сразу предлагаем придумать ник, чтобы друг узнал тебя в списке
+    if (!this.nickAsked && this.phase === 'lobby') this.editNick();
   },
 
   lobbyState(host) {
@@ -5064,9 +5148,66 @@ const Duel = {
   },
 
   newNick() {
-    this.name = randomNick();
-    Store.set('kd_nick', this.name);
-    this.lobbyState(this.phase === 'hosting' ? this.code : null);
+    this.setNick(randomNick());
+  },
+
+  setNick(raw) {
+    const nick = cleanNick(raw);
+    if (!nick || this.phase !== 'lobby') return false;
+    this.name = nick;
+    this.nickAsked = true;
+    Store.set('kd_nick', nick);
+    this.lobbyState(null);
+    return true;
+  },
+
+  // Окно ввода ника (обычное поле, чтобы на телефоне появилась клавиатура).
+  editNick() {
+    const box = document.getElementById('nick');
+    if (!box || this.phase !== 'lobby') return;
+    const form = box.querySelector('form');
+    const input = box.querySelector('input');
+    this.nickAsked = true;
+    input.maxLength = NICK_MAX;
+    input.value = this.name;
+    box.hidden = false;
+    const close = () => {
+      box.hidden = true;
+      form.onsubmit = null;
+      box.onclick = null;
+      input.onkeydown = null;
+      input.blur();
+    };
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      if (this.setNick(input.value)) Sound.coin();
+      close();
+    };
+    box.onclick = (e) => {
+      if (e.target === box || e.target.closest('[data-nick=cancel]')) close();
+      else if (e.target.closest('[data-nick=random]')) input.value = randomNick();
+    };
+    input.onkeydown = (e) => {
+      if (e.key === 'Escape') close();
+    };
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 30);
+  },
+
+  nickOpen() {
+    const box = document.getElementById('nick');
+    return !!box && !box.hidden;
+  },
+
+  // Сменить MQTT-сервер (если с другом не видите друг друга).
+  async switchServer(g) {
+    if (this.phase !== 'lobby' || !Net.canSwitch()) return;
+    if (this.lobby) this.lobby.leave();
+    this.lobby = null;
+    Net.nextServer();
+    await this.open(g);
   },
 
   changeLevel(d) {
@@ -5082,7 +5223,7 @@ const Duel = {
       .peers()
       .filter((p) => !p.me && p.state && p.state.v === 1 && typeof p.state.host === 'string' && /^[a-z0-9]{4}$/.test(p.state.host))
       .slice(0, 5)
-      .map((p) => ({ code: p.state.host, name: String(p.state.name || 'Игрок').slice(0, 16), lvl: clamp(Number(p.state.lvl) || 0, 0, LEVELS.length - 1) }));
+      .map((p) => ({ code: p.state.host, name: cleanNick(p.state.name) || 'Игрок', lvl: clamp(Number(p.state.lvl) || 0, 0, LEVELS.length - 1) }));
   },
 
   async host() {
@@ -5214,7 +5355,7 @@ const Duel = {
     }
     if (opp) {
       this.opp = opp;
-      this.oppName = String(opp.state.name || 'Соперник').slice(0, 16);
+      this.oppName = cleanNick(opp.state.name) || 'Соперник';
       this.oppSeen = performance.now();
     }
     if (this.phase === 'hosting') {
@@ -8830,8 +8971,14 @@ function drawDuelLobby(ctx, g, now) {
   ctx.fillStyle = 'rgba(255,255,255,0.05)';
   ctx.fill();
   text(ctx, 'ТЫ', 116, 204, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
-  text(ctx, Duel.name, 116, 240, { font: `30px ${FONT.title}`, color: '#fff' });
-  mcButton(ctx, g, 'НОВЫЙ НИК', 420, 214, 170, 36, () => Duel.newNick(), { size: 10 });
+  let nickSize = 30;
+  ctx.font = `${nickSize}px ${FONT.title}`;
+  while (nickSize > 16 && ctx.measureText(Duel.name).width > 290) ctx.font = `${--nickSize}px ${FONT.title}`;
+  text(ctx, Duel.name, 116, 240, { font: `${nickSize}px ${FONT.title}`, color: '#fff' });
+  if (ph === 'lobby') {
+    mcButton(ctx, g, 'СВОЙ НИК', 420, 194, 170, 34, () => Duel.editNick(), { size: 10, fill: '#8a4a3a' });
+    mcButton(ctx, g, 'СЛУЧАЙНЫЙ', 420, 236, 170, 34, () => Duel.newNick(), { size: 10 });
+  }
   text(ctx, 'УРОВЕНЬ ДУЭЛИ', 116, 290, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
   const lv = LEVELS[Duel.lvl];
   if (ph === 'lobby') {
@@ -8876,9 +9023,13 @@ function drawDuelLobby(ctx, g, now) {
   Object.values(DUEL_ATTACKS).forEach((a, i) => {
     text(ctx, `${a.why} → ${a.name}`, 90 + (i % 2) * 380, 556 + Math.floor(i / 2) * 22, { font: `15px ${FONT.ui}`, color: '#eef3e6' });
   });
+  // сервер связи
+  text(ctx, 'СЕРВЕР', 900, 530, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+  text(ctx, Net.kind === 'room' ? 'claude.ai' : Net.server || '—', 900, 556, { font: `bold 17px ${FONT.ui}`, color: '#fff' });
+  if (ph === 'lobby' && Net.canSwitch()) mcButton(ctx, g, 'СМЕНИТЬ', 900, 568, 170, 34, () => Duel.switchServer(g), { size: 10 });
   const how = Net.kind === 'room'
     ? 'Друг открывает эту же игру по ссылке claude.ai (поделись ей через «Поделиться») и жмёт «Дуэль».'
-    : 'Друг открывает эту же игру на сайте и жмёт «Дуэль». Связь идёт через публичный сервер — не пиши в ник ничего личного.';
+    : 'Друг открывает эту же игру на сайте и жмёт «Дуэль». Не видите дуэли друг друга — выберите одинаковый сервер. Сервер публичный: не пиши в ник ничего личного.';
   wrapText(ctx, how, 640, 640, 1080, 20, { font: `14px ${FONT.ui}`, color: '#90a4ae', align: 'center' });
   mcButton(ctx, g, 'НАЗАД', 1030, 664, 160, 40, () => Duel.close(g), { size: 11 });
 
@@ -9037,6 +9188,7 @@ function drawDuelOver(ctx, g) {
     { passive: false }
   );
   window.addEventListener('keydown', (e) => {
+    if (e.target instanceof Element && e.target.closest('#nick')) return; // печатают ник
     if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
     Sound.init();
     Input.keys.add(e.code);

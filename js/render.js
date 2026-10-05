@@ -1304,8 +1304,14 @@ function drawDuelLobby(ctx, g, now) {
   ctx.fillStyle = 'rgba(255,255,255,0.05)';
   ctx.fill();
   text(ctx, 'ТЫ', 116, 204, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
-  text(ctx, Duel.name, 116, 240, { font: `30px ${FONT.title}`, color: '#fff' });
-  mcButton(ctx, g, 'НОВЫЙ НИК', 420, 214, 170, 36, () => Duel.newNick(), { size: 10 });
+  let nickSize = 30;
+  ctx.font = `${nickSize}px ${FONT.title}`;
+  while (nickSize > 16 && ctx.measureText(Duel.name).width > 290) ctx.font = `${--nickSize}px ${FONT.title}`;
+  text(ctx, Duel.name, 116, 240, { font: `${nickSize}px ${FONT.title}`, color: '#fff' });
+  if (ph === 'lobby') {
+    mcButton(ctx, g, 'СВОЙ НИК', 420, 194, 170, 34, () => Duel.editNick(), { size: 10, fill: '#8a4a3a' });
+    mcButton(ctx, g, 'СЛУЧАЙНЫЙ', 420, 236, 170, 34, () => Duel.newNick(), { size: 10 });
+  }
   text(ctx, 'УРОВЕНЬ ДУЭЛИ', 116, 290, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
   const lv = LEVELS[Duel.lvl];
   if (ph === 'lobby') {
@@ -1350,9 +1356,13 @@ function drawDuelLobby(ctx, g, now) {
   Object.values(DUEL_ATTACKS).forEach((a, i) => {
     text(ctx, `${a.why} → ${a.name}`, 90 + (i % 2) * 380, 556 + Math.floor(i / 2) * 22, { font: `15px ${FONT.ui}`, color: '#eef3e6' });
   });
+  // сервер связи
+  text(ctx, 'СЕРВЕР', 900, 530, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+  text(ctx, Net.kind === 'room' ? 'claude.ai' : Net.server || '—', 900, 556, { font: `bold 17px ${FONT.ui}`, color: '#fff' });
+  if (ph === 'lobby' && Net.canSwitch()) mcButton(ctx, g, 'СМЕНИТЬ', 900, 568, 170, 34, () => Duel.switchServer(g), { size: 10 });
   const how = Net.kind === 'room'
     ? 'Друг открывает эту же игру по ссылке claude.ai (поделись ей через «Поделиться») и жмёт «Дуэль».'
-    : 'Друг открывает эту же игру на сайте и жмёт «Дуэль». Связь идёт через публичный сервер — не пиши в ник ничего личного.';
+    : 'Друг открывает эту же игру на сайте и жмёт «Дуэль». Не видите дуэли друг друга — выберите одинаковый сервер. Сервер публичный: не пиши в ник ничего личного.';
   wrapText(ctx, how, 640, 640, 1080, 20, { font: `14px ${FONT.ui}`, color: '#90a4ae', align: 'center' });
   mcButton(ctx, g, 'НАЗАД', 1030, 664, 160, 40, () => Duel.close(g), { size: 11 });
 

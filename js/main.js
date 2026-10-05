@@ -71,6 +71,7 @@
     { passive: false }
   );
   window.addEventListener('keydown', (e) => {
+    if (e.target instanceof Element && e.target.closest('#nick')) return; // печатают ник
     if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
     Sound.init();
     Input.keys.add(e.code);

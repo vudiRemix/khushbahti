@@ -18,10 +18,21 @@ function randomNick() {
   return choice(DUEL_NICKS) + randi(10, 99);
 }
 
+const NICK_MAX = 16;
+
+// Ник: без управляющих символов и лишних пробелов, не длиннее NICK_MAX.
+function cleanNick(s) {
+  return Array.from(String(s || '').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, '').replace(/\s+/g, ' ').trim())
+    .slice(0, NICK_MAX)
+    .join('')
+    .trim();
+}
+
 const Duel = {
   phase: 'off', // off | connecting | lobby | hosting | joining | countdown | playing | over | unavailable
   active: false, // идёт матч (игровые хуки включены)
-  name: Store.get('kd_nick') || randomNick(),
+  name: cleanNick(Store.get('kd_nick')) || randomNick(),
+  nickAsked: !!Store.get('kd_nick'),
   lvl: 0,
   role: '',
   code: '',
@@ -63,6 +74,8 @@ const Duel = {
     }
     this.lobbyState(null);
     if (this.phase === 'connecting') this.phase = 'lobby';
+    // первый раз — сразу предлагаем придумать ник, чтобы друг узнал тебя в списке
+    if (!this.nickAsked && this.phase === 'lobby') this.editNick();
   },
 
   lobbyState(host) {
@@ -70,9 +83,66 @@ const Duel = {
   },
 
   newNick() {
-    this.name = randomNick();
-    Store.set('kd_nick', this.name);
-    this.lobbyState(this.phase === 'hosting' ? this.code : null);
+    this.setNick(randomNick());
+  },
+
+  setNick(raw) {
+    const nick = cleanNick(raw);
+    if (!nick || this.phase !== 'lobby') return false;
+    this.name = nick;
+    this.nickAsked = true;
+    Store.set('kd_nick', nick);
+    this.lobbyState(null);
+    return true;
+  },
+
+  // Окно ввода ника (обычное поле, чтобы на телефоне появилась клавиатура).
+  editNick() {
+    const box = document.getElementById('nick');
+    if (!box || this.phase !== 'lobby') return;
+    const form = box.querySelector('form');
+    const input = box.querySelector('input');
+    this.nickAsked = true;
+    input.maxLength = NICK_MAX;
+    input.value = this.name;
+    box.hidden = false;
+    const close = () => {
+      box.hidden = true;
+      form.onsubmit = null;
+      box.onclick = null;
+      input.onkeydown = null;
+      input.blur();
+    };
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      if (this.setNick(input.value)) Sound.coin();
+      close();
+    };
+    box.onclick = (e) => {
+      if (e.target === box || e.target.closest('[data-nick=cancel]')) close();
+      else if (e.target.closest('[data-nick=random]')) input.value = randomNick();
+    };
+    input.onkeydown = (e) => {
+      if (e.key === 'Escape') close();
+    };
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 30);
+  },
+
+  nickOpen() {
+    const box = document.getElementById('nick');
+    return !!box && !box.hidden;
+  },
+
+  // Сменить MQTT-сервер (если с другом не видите друг друга).
+  async switchServer(g) {
+    if (this.phase !== 'lobby' || !Net.canSwitch()) return;
+    if (this.lobby) this.lobby.leave();
+    this.lobby = null;
+    Net.nextServer();
+    await this.open(g);
   },
 
   changeLevel(d) {
@@ -88,7 +158,7 @@ const Duel = {
       .peers()
       .filter((p) => !p.me && p.state && p.state.v === 1 && typeof p.state.host === 'string' && /^[a-z0-9]{4}$/.test(p.state.host))
       .slice(0, 5)
-      .map((p) => ({ code: p.state.host, name: String(p.state.name || 'Игрок').slice(0, 16), lvl: clamp(Number(p.state.lvl) || 0, 0, LEVELS.length - 1) }));
+      .map((p) => ({ code: p.state.host, name: cleanNick(p.state.name) || 'Игрок', lvl: clamp(Number(p.state.lvl) || 0, 0, LEVELS.length - 1) }));
   },
 
   async host() {
@@ -220,7 +290,7 @@ const Duel = {
     }
     if (opp) {
       this.opp = opp;
-      this.oppName = String(opp.state.name || 'Соперник').slice(0, 16);
+      this.oppName = cleanNick(opp.state.name) || 'Соперник';
       this.oppSeen = performance.now();
     }
     if (this.phase === 'hosting') {

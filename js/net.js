@@ -7,8 +7,15 @@
    channel = { set(state), peers() → [{ id, me, state }], leave() } */
 
 const NET_PREFIX = 'khaos-doska/v1';
-const MQTT_LIB = 'https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js';
+// Библиотека лежит рядом с игрой; если её нет (сборка в один файл) — берём с CDN.
+const MQTT_LIBS = ['js/vendor/mqtt.min.js', 'https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js'];
 const MQTT_BROKERS = window.KD_MQTT_BROKERS || ['wss://broker.hivemq.com:8884/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
+
+// Короткое имя сервера для экрана лобби.
+function brokerName(url) {
+  const host = String(url).replace(/^wss?:\/\//, '').split(/[:/]/)[0];
+  return host.replace(/^(broker|mqtt)\./, '');
+}
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -50,6 +57,8 @@ const Net = {
   room: null,
   client: null,
   initPromise: null,
+  server: '', // к какому MQTT-серверу подключились
+  brokerIdx: 0,
 
   init() {
     if (this.status === 'ready') return Promise.resolve(true);
@@ -85,22 +94,51 @@ const Net = {
       this.error = 'Дуэль работает, когда игра открыта с сайта (GitHub Pages) или по ссылке claude.ai, а не из файла.';
       return false;
     }
-    try {
-      if (!window.mqtt) await loadScript(MQTT_LIB);
-    } catch (e) {
+    for (const src of MQTT_LIBS) {
+      if (window.mqtt) break;
+      try {
+        await loadScript(src);
+      } catch (e) {
+        /* пробуем следующий источник */
+      }
+    }
+    if (!window.mqtt) {
       this.error = 'Нет интернета: не загрузилась библиотека связи.';
       return false;
     }
-    for (const url of MQTT_BROKERS) {
-      const client = await connectMqtt(url, 'kd_' + this.myId);
+    // Начинаем с сервера, который выбрали в прошлый раз; остальные — запасные.
+    const n = MQTT_BROKERS.length;
+    const start = clamp(Math.floor(Number(Store.get('kd_broker')) || 0), 0, n - 1);
+    for (let k = 0; k < n; k++) {
+      const i = (start + k) % n;
+      const client = await connectMqtt(MQTT_BROKERS[i], 'kd_' + this.myId);
       if (client) {
         this.client = client;
         this.kind = 'mqtt';
+        this.brokerIdx = i;
+        this.server = brokerName(MQTT_BROKERS[i]);
         return true;
       }
     }
-    this.error = 'Не удалось подключиться к серверу дуэлей. Проверь интернет.';
+    this.error = 'Не удалось подключиться к серверу дуэлей. Проверь интернет или включи мобильный интернет вместо Wi-Fi.';
     return false;
+  },
+
+  // Можно ли переключиться на другой MQTT-сервер.
+  canSwitch() {
+    return this.kind === 'mqtt' && MQTT_BROKERS.length > 1;
+  },
+
+  // Отключиться и в следующий раз начать со следующего сервера из списка.
+  nextServer() {
+    const next = (this.brokerIdx + 1) % MQTT_BROKERS.length;
+    Store.set('kd_broker', String(next));
+    if (this.client) this.client.end(true);
+    this.client = null;
+    this.kind = null;
+    this.server = '';
+    this.status = 'idle';
+    this.initPromise = null;
   },
 
   async channel(name) {
