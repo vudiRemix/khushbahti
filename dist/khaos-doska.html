@@ -4742,6 +4742,7 @@ const ACHIEVEMENTS = [
   { id: 'boss_heli', name: 'Пять звёзд', desc: 'Сбей полицейский вертолёт' },
   { id: 'boss_titan', name: 'Смыто', desc: 'Победи Скибиди-Титана' },
   { id: 'campaign', name: 'Мастер хаоса', desc: 'Пройди всю кампанию' },
+  { id: 'duel', name: 'Дуэлянт', desc: 'Выиграй дуэль у живого соперника' },
 ];
 
 const Ach = {
@@ -4789,6 +4790,511 @@ const Ach = {
   },
 };
 Ach.load();
+
+// ---- js/net.js ----
+'use strict';
+/* Сеть для дуэли. Два способа связи с одним интерфейсом:
+   1) внутри claude.ai — возможность room: живой канал между всеми,
+      у кого сейчас открыта эта игра;
+   2) на обычном сайте (GitHub Pages и т.п.) — публичный MQTT-сервер через WebSocket.
+   Канал — это «присутствие»: каждый держит одно своё состояние, все видят состояния друг друга.
+   channel = { set(state), peers() → [{ id, me, state }], leave() } */
+
+const NET_PREFIX = 'khaos-doska/v1';
+const MQTT_LIB = 'https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js';
+const MQTT_BROKERS = window.KD_MQTT_BROKERS || ['wss://broker.hivemq.com:8884/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('load failed'));
+    document.head.appendChild(s);
+  });
+}
+
+function connectMqtt(url, clientId) {
+  return new Promise((resolve) => {
+    let done = false;
+    let client;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      if (!ok && client) client.end(true);
+      resolve(ok ? client : null);
+    };
+    const timer = setTimeout(() => finish(false), 8000);
+    try {
+      client = window.mqtt.connect(url, { clientId, connectTimeout: 7000, reconnectPeriod: 3000, keepalive: 30, clean: true });
+      client.once('connect', () => finish(true));
+      client.once('error', () => finish(false));
+    } catch (e) {
+      finish(false);
+    }
+  });
+}
+
+const Net = {
+  kind: null, // 'room' | 'mqtt'
+  status: 'idle', // idle | connecting | ready | failed
+  error: '',
+  myId: Math.random().toString(36).slice(2, 10),
+  room: null,
+  client: null,
+  initPromise: null,
+
+  init() {
+    if (this.status === 'ready') return Promise.resolve(true);
+    if (this.initPromise) return this.initPromise;
+    this.status = 'connecting';
+    this.error = '';
+    this.initPromise = this.connect().then((ok) => {
+      this.status = ok ? 'ready' : 'failed';
+      if (!ok) this.initPromise = null;
+      return ok;
+    });
+    return this.initPromise;
+  },
+
+  async connect() {
+    // 1) Игра открыта на claude.ai
+    if (window.claude && typeof window.claude.use === 'function') {
+      try {
+        const room = await window.claude.use('room');
+        if (room) {
+          this.room = room;
+          this.kind = 'room';
+          return true;
+        }
+      } catch (e) {
+        /* нет связи */
+      }
+      this.error = 'В этом окне дуэль недоступна. Открой игру по своей ссылке claude.ai, войдя в аккаунт, или на сайте игры.';
+      return false;
+    }
+    // 2) Обычный сайт
+    if (!/^https?:$/.test(location.protocol) && !window.KD_MQTT_BROKERS) {
+      this.error = 'Дуэль работает, когда игра открыта с сайта (GitHub Pages) или по ссылке claude.ai, а не из файла.';
+      return false;
+    }
+    try {
+      if (!window.mqtt) await loadScript(MQTT_LIB);
+    } catch (e) {
+      this.error = 'Нет интернета: не загрузилась библиотека связи.';
+      return false;
+    }
+    for (const url of MQTT_BROKERS) {
+      const client = await connectMqtt(url, 'kd_' + this.myId);
+      if (client) {
+        this.client = client;
+        this.kind = 'mqtt';
+        return true;
+      }
+    }
+    this.error = 'Не удалось подключиться к серверу дуэлей. Проверь интернет.';
+    return false;
+  },
+
+  async channel(name) {
+    if (this.kind === 'room') return roomChannel(this.room, name);
+    if (this.kind === 'mqtt') return mqttChannel(this.client, name);
+    throw new Error('no network');
+  },
+};
+
+// ---------- claude.ai: room ----------
+async function roomChannel(room, name) {
+  const lobby = name === 'lobby';
+  const r = lobby ? room : await room.join(name);
+  return {
+    set(state) {
+      r.presence({ kd: state }).catch(() => {});
+    },
+    peers() {
+      return r
+        .peers()
+        .filter((p) => p.kind === 'viewer' && p.presence && p.presence.kd && typeof p.presence.kd === 'object')
+        .map((p) => ({ id: p.peer, me: p.sameTab, state: p.presence.kd }));
+    },
+    async leave() {
+      if (lobby) await r.presence({ kd: null }).catch(() => {});
+      else await r.leave().catch(() => {});
+    },
+  };
+}
+
+// ---------- обычный сайт: MQTT ----------
+function mqttChannel(client, name) {
+  const base = `${NET_PREFIX}/${name}`;
+  const mineTopic = `${base}/${Net.myId}`;
+  const others = new Map(); // id → { state, seen }
+  const decoder = new TextDecoder();
+  let mine = null;
+  let lastPub = 0;
+  let pending = null;
+
+  const onMessage = (topic, payload) => {
+    if (!topic.startsWith(base + '/')) return;
+    const id = topic.slice(base.length + 1);
+    if (!id || id === Net.myId || id.includes('/')) return;
+    let state = null;
+    try {
+      const textPayload = decoder.decode(payload);
+      state = textPayload ? JSON.parse(textPayload) : null;
+    } catch (e) {
+      return;
+    }
+    if (state && typeof state === 'object') others.set(id, { state, seen: Date.now() });
+    else others.delete(id);
+  };
+  const publish = () => {
+    if (mine) client.publish(mineTopic, JSON.stringify(mine));
+  };
+  client.on('message', onMessage);
+  client.subscribe(`${base}/+`);
+  // сердцебиение: без него соперник через 7 секунд считается ушедшим
+  const heartbeat = setInterval(() => {
+    publish();
+    const now = Date.now();
+    for (const [id, p] of others) if (now - p.seen > 7000) others.delete(id);
+  }, 1500);
+
+  return {
+    set(state) {
+      mine = state;
+      const now = Date.now();
+      if (now - lastPub > 200) {
+        lastPub = now;
+        publish();
+      } else if (!pending) {
+        pending = setTimeout(() => {
+          pending = null;
+          lastPub = Date.now();
+          publish();
+        }, 200);
+      }
+    },
+    peers() {
+      const out = [...others].map(([id, p]) => ({ id, me: false, state: p.state }));
+      if (mine) out.push({ id: Net.myId, me: true, state: mine });
+      return out;
+    },
+    async leave() {
+      clearInterval(heartbeat);
+      clearTimeout(pending);
+      client.publish(mineTopic, '');
+      client.unsubscribe(`${base}/+`);
+      client.removeListener('message', onMessage);
+    },
+  };
+}
+
+// ---- js/duel.js ----
+'use strict';
+/* Дуэль: двое играют каждый свою доску, видят друг друга и шлют «подарки».
+   Состояние матча живёт в «присутствии» каждого игрока: здоровье, босс, исход
+   и список последних отправленных атак с номерами (получатель берёт только новые). */
+
+const DUEL_NICKS = ['Сапёр', 'Скибиди', 'Крипер', 'Нубик', 'Про100', 'Фредди', 'Гумба', 'Король', 'Пешка', 'Амогус', 'Купа', 'Соник'];
+
+// Что получает соперник за твои успехи.
+const DUEL_ATTACKS = {
+  mega: { name: 'Мегарыцарь', spawn: ['mega'], why: 'пройденный сапёр' },
+  wave: { name: 'волна врагов', spawn: 'pool3', why: 'каждые 15 убийств' },
+  creeper: { name: 'крипер', spawn: ['creeper'], why: 'подстреленная утка' },
+  skibidi: { name: 'два скибиди-туалета', spawn: ['skibidi', 'skibidi'], why: 'звезда Марио' },
+  stars: { name: '+1 звезда розыска', stars: 1, why: 'ярость твоего босса' },
+};
+
+function randomNick() {
+  return choice(DUEL_NICKS) + randi(10, 99);
+}
+
+const Duel = {
+  phase: 'off', // off | connecting | lobby | hosting | joining | countdown | playing | over | unavailable
+  active: false, // идёт матч (игровые хуки включены)
+  name: Store.get('kd_nick') || randomNick(),
+  lvl: 0,
+  role: '',
+  code: '',
+  lobby: null,
+  room: null,
+  opp: null,
+  oppName: '',
+  oppSeen: 0,
+  joinT: 0,
+  countT: 0,
+  pubT: 0,
+  seq: 0,
+  out: [],
+  seen: 0,
+  killsForWave: 0,
+  result: null,
+  note: '',
+
+  // ---------- лобби ----------
+  async open(g) {
+    g.state = 'duel';
+    this.note = '';
+    if (this.lobby) {
+      this.phase = 'lobby';
+      return;
+    }
+    this.phase = 'connecting';
+    const ok = await Net.init();
+    if (!ok) {
+      this.phase = 'unavailable';
+      return;
+    }
+    try {
+      this.lobby = await Net.channel('lobby');
+    } catch (e) {
+      this.phase = 'unavailable';
+      Net.error = 'Не удалось войти в лобби дуэлей.';
+      return;
+    }
+    this.lobbyState(null);
+    if (this.phase === 'connecting') this.phase = 'lobby';
+  },
+
+  lobbyState(host) {
+    if (this.lobby) this.lobby.set({ v: 1, name: this.name, host, lvl: this.lvl });
+  },
+
+  newNick() {
+    this.name = randomNick();
+    Store.set('kd_nick', this.name);
+    this.lobbyState(this.phase === 'hosting' ? this.code : null);
+  },
+
+  changeLevel(d) {
+    if (this.phase !== 'lobby') return;
+    this.lvl = (this.lvl + d + LEVELS.length) % LEVELS.length;
+    this.lobbyState(null);
+  },
+
+  // Открытые дуэли других игроков.
+  openDuels() {
+    if (!this.lobby) return [];
+    return this.lobby
+      .peers()
+      .filter((p) => !p.me && p.state && p.state.v === 1 && typeof p.state.host === 'string' && /^[a-z0-9]{4}$/.test(p.state.host))
+      .slice(0, 5)
+      .map((p) => ({ code: p.state.host, name: String(p.state.name || 'Игрок').slice(0, 16), lvl: clamp(Number(p.state.lvl) || 0, 0, LEVELS.length - 1) }));
+  },
+
+  async host() {
+    if (this.phase !== 'lobby') return;
+    const abc = 'abcdefghjkmnpqrstuvwxyz23456789';
+    this.code = Array.from({ length: 4 }, () => abc[randi(0, abc.length - 1)]).join('');
+    this.role = 'host';
+    this.phase = 'hosting';
+    try {
+      this.room = await Net.channel('kd-duel-' + this.code);
+    } catch (e) {
+      this.phase = 'lobby';
+      this.note = 'Не получилось создать комнату. Попробуй ещё раз.';
+      return;
+    }
+    this.resetMatch();
+    this.publish('wait');
+    this.lobbyState(this.code);
+  },
+
+  async join(code, lvl) {
+    if (this.phase !== 'lobby') return;
+    this.code = code;
+    this.lvl = lvl;
+    this.role = 'guest';
+    this.phase = 'joining';
+    this.joinT = 0;
+    try {
+      this.room = await Net.channel('kd-duel-' + code);
+    } catch (e) {
+      this.phase = 'lobby';
+      this.note = 'Не получилось войти в комнату.';
+      return;
+    }
+    this.resetMatch();
+    this.publish('wait');
+  },
+
+  async cancel() {
+    await this.leaveRoom();
+    this.phase = this.lobby ? 'lobby' : 'off';
+    this.lobbyState(null);
+  },
+
+  async leaveRoom() {
+    const r = this.room;
+    this.room = null;
+    this.opp = null;
+    this.active = false;
+    if (r) await r.leave();
+  },
+
+  // Полный выход из дуэлей (в главное меню).
+  shutdown() {
+    this.leaveRoom();
+    if (this.lobby) this.lobby.leave();
+    this.lobby = null;
+    this.phase = 'off';
+    this.active = false;
+  },
+
+  close(g) {
+    this.shutdown();
+    g.toTitle();
+  },
+
+  async toLobby(g) {
+    await this.leaveRoom();
+    this.result = null;
+    g.duel = false;
+    g.state = 'duel';
+    this.phase = this.lobby ? 'lobby' : 'off';
+    this.lobbyState(null);
+  },
+
+  // ---------- матч ----------
+  resetMatch() {
+    this.opp = null;
+    this.oppName = '';
+    this.oppSeen = performance.now();
+    this.seq = 0;
+    this.out = [];
+    this.seen = 0;
+    this.killsForWave = 0;
+    this.result = null;
+    this.pubT = 0;
+  },
+
+  publish(st, g) {
+    if (!this.room) return;
+    const s = { v: 1, name: this.name, role: this.role, st, lvl: this.lvl };
+    if (g) {
+      const p = g.player, tw = g.tower;
+      Object.assign(s, {
+        hp: Math.max(0, Math.ceil(p.hp)),
+        mhp: p.maxHp,
+        boss: Math.round(clamp(tw.hp / tw.max, 0, 1) * 100),
+        kills: g.kills,
+        money: p.money,
+        atk: this.out.slice(-6),
+      });
+    }
+    this.room.set(s);
+  },
+
+  startCountdown() {
+    this.phase = 'countdown';
+    this.countT = 3.5;
+    this.publish('count');
+    this.lobbyState(null);
+    Sound.star();
+  },
+
+  begin(g) {
+    this.active = true;
+    this.phase = 'playing';
+    this.oppSeen = performance.now();
+    g.startDuel(this.lvl);
+    this.publish('play', g);
+  },
+
+  // Каждый кадр.
+  update(dt, g) {
+    if (!this.room) return;
+    const others = this.room.peers().filter((p) => !p.me && p.state && p.state.v === 1);
+    let opp = this.opp ? others.find((p) => p.id === this.opp.id) : null;
+    if (!opp && !this.opp && (this.phase === 'hosting' || this.phase === 'joining')) {
+      opp = others.find((p) => p.state.role === (this.role === 'host' ? 'guest' : 'host'));
+    }
+    if (opp) {
+      this.opp = opp;
+      this.oppName = String(opp.state.name || 'Соперник').slice(0, 16);
+      this.oppSeen = performance.now();
+    }
+    if (this.phase === 'hosting') {
+      if (opp) this.startCountdown();
+    } else if (this.phase === 'joining') {
+      this.joinT += dt;
+      if (opp && opp.state.st === 'count') {
+        this.lvl = clamp(Number(opp.state.lvl) || 0, 0, LEVELS.length - 1);
+        this.startCountdown();
+      } else if (this.joinT > 12) {
+        this.note = 'Соперник не ответил. Выбери другую дуэль.';
+        this.cancel();
+      }
+    } else if (this.phase === 'countdown') {
+      this.countT -= dt;
+      if (this.countT <= 0) this.begin(g);
+    } else if (this.phase === 'playing') {
+      this.tick(dt, g, opp);
+    }
+  },
+
+  tick(dt, g, opp) {
+    this.pubT -= dt;
+    if (this.pubT <= 0) {
+      this.pubT = 0.25;
+      const st = g.state === 'dead' ? 'dead' : g.state === 'win' ? 'win' : 'play';
+      this.publish(st, g);
+    }
+    if (opp) {
+      const atk = Array.isArray(opp.state.atk) ? opp.state.atk.filter((a) => a && Number.isFinite(a.i)).sort((a, b) => a.i - b.i) : [];
+      for (const a of atk) {
+        if (a.i > this.seen && DUEL_ATTACKS[a.k]) {
+          this.seen = a.i;
+          g.receiveAttack(a.k, this.oppName);
+        }
+      }
+      if (!this.result) {
+        if (opp.state.st === 'dead') this.finish(g, true, `${this.oppName} погиб`);
+        else if (opp.state.st === 'win') this.finish(g, false, `${this.oppName} первым победил босса`);
+      }
+    } else if (!this.result && performance.now() - this.oppSeen > 6000) {
+      this.finish(g, true, 'Соперник вышел из игры');
+    }
+    if (!this.result) {
+      if (g.state === 'dead') this.finish(g, false, 'Ты погиб');
+      else if (g.state === 'win') this.finish(g, true, 'Ты первым победил босса');
+    }
+  },
+
+  finish(g, win, reason) {
+    this.result = { win, reason };
+    this.phase = 'over';
+    const st = g.state === 'dead' ? 'dead' : g.state === 'win' ? 'win' : 'play';
+    this.publish(st, g);
+    if (['play', 'pause', 'buy', 'cheats'].includes(g.state)) {
+      g.state = 'duelover';
+      g.winT = 0;
+      if (win) Sound.win();
+      else Sound.wasted();
+    }
+    if (win) Ach.unlock('duel');
+  },
+
+  // Отправить «подарок» сопернику.
+  send(kind, g) {
+    if (!this.active || this.result || !DUEL_ATTACKS[kind]) return;
+    this.out.push({ i: ++this.seq, k: kind });
+    if (this.out.length > 12) this.out.shift();
+    this.pubT = 0;
+    if (g) FX.text(g, 640, 560, `Сопернику: ${DUEL_ATTACKS[kind].name}!`, { color: '#ffab91', font: `bold 18px ${FONT.ui}`, life: 1.6 });
+  },
+
+  countKill(g) {
+    if (!this.active) return;
+    if (++this.killsForWave >= 15) {
+      this.killsForWave = 0;
+      this.send('wave', g);
+    }
+  },
+};
 
 // ---- js/game.js ----
 'use strict';
@@ -4975,6 +5481,7 @@ class Game {
   // Новый забег с уровня i. На поздних уровнях даём стартовые деньги на закупку.
   startCampaign(i) {
     Sound.init();
+    this.duel = false;
     this.levelIdx = clamp(i, 0, LEVELS.length - 1);
     this.resetRun();
     this.player.money = this.levelIdx * 2500;
@@ -4984,6 +5491,24 @@ class Game {
   }
   retry() {
     this.startCampaign(this.levelIdx);
+  }
+  // Дуэль: тот же уровень, что у соперника, без заставки.
+  startDuel(lvl) {
+    this.startCampaign(lvl);
+    this.duel = true;
+    this.beginLevel();
+    this.banner('ДУЭЛЬ!', `Против: ${Duel.oppName}. Победит тот, кто первым одолеет босса`, '#ff8a65');
+  }
+  // «Подарок» от соперника.
+  receiveAttack(kind, from) {
+    if (!['play', 'pause', 'buy', 'cheats'].includes(this.state)) return;
+    const a = DUEL_ATTACKS[kind];
+    if (a.stars) this.bonusStars += a.stars;
+    const list = a.spawn === 'pool3' ? [0, 1, 2].map(() => this.pickEnemy()) : a.spawn || [];
+    for (const t of list) this.spawnEnemy(t);
+    this.banner('ПОДАРОК ОТ СОПЕРНИКА', `${from} прислал: ${a.name}`, '#ff8a65');
+    this.say(`<${from}> прислал тебе: ${a.name}`, '#ffab91');
+    Sound.warn();
   }
   nextLevel() {
     if (this.levelIdx >= LEVELS.length - 1) return this.toTitle();
@@ -5008,6 +5533,8 @@ class Game {
     }
   }
   toTitle() {
+    if (Duel.phase !== 'off') Duel.shutdown();
+    this.duel = false;
     this.state = 'title';
     this.titleT = 0;
   }
@@ -5033,6 +5560,16 @@ class Game {
     realDt = Math.min(realDt, 0.05);
     this.processInput();
     Ach.update(realDt);
+    Duel.update(realDt, this);
+    if (this.state === 'duel') {
+      this.titleT += realDt;
+      return;
+    }
+    if (this.state === 'duelover') {
+      this.winT += realDt;
+      this.updateFx(realDt * 0.3, realDt);
+      return;
+    }
     if (this.state === 'title' || this.state === 'levels' || this.state === 'achievements') {
       this.titleT += realDt;
       this.pac.mouth += realDt * 10;
@@ -5215,6 +5752,18 @@ class Game {
     }
     if (this.state === 'levels' || this.state === 'achievements') {
       if (code === 'Escape' || code === 'Backspace') this.toTitle();
+      return;
+    }
+    if (this.state === 'duel') {
+      if (code === 'Escape' || code === 'Backspace') {
+        if (Duel.phase === 'hosting' || Duel.phase === 'joining') Duel.cancel();
+        else Duel.close(this);
+      }
+      return;
+    }
+    if (this.state === 'duelover' || (this.duel && (this.state === 'dead' || this.state === 'win'))) {
+      if ((code === 'Enter' || code === 'Space') && Duel.result) Duel.toLobby(this);
+      else if (code === 'Escape') Duel.close(this);
       return;
     }
     if (this.state === 'intro') {
@@ -5825,6 +6374,7 @@ class Game {
     const live = this.mf.liveMines();
     this.fieldsCleared++;
     this.totalFields++;
+    if (this.duel) Duel.send('mega', this);
     Ach.unlock('sapper');
     if (this.fieldBlasts === 0) Ach.unlock('sapperPro');
     this.addMoney(1000, 640, 330);
@@ -6293,6 +6843,7 @@ class Game {
 
   onKill(e, src) {
     this.kills++;
+    if (this.duel) Duel.countKill(this);
     Ach.unlock('first');
     if (src === 'shell' && ++this.shellKills >= 3) Ach.unlock('shell');
     if (src !== 'pac') this.addMoney(e.def.bounty * (this.bloodMoon ? 2 : 1), e.x, e.y - 50);
@@ -6603,6 +7154,7 @@ class Game {
     this.bonusStars++;
     Sound.roar();
     tw.onRage(this);
+    if (this.duel) Duel.send('stars', this);
   }
 
   bossEmote(str) {
@@ -6759,6 +7311,7 @@ class Game {
   // ---------- чит-коды GTA ----------
   // Буквы копятся в буфер. Пока набирается чит, игровые действия этих клавиш не срабатывают.
   handleCheatKey(code) {
+    if (this.duel) return false; // в дуэли читы выключены
     const m = /^Key([A-Z])$/.exec(code);
     if (!m) {
       if (!/^Shift/.test(code)) this.typed = '';
@@ -6861,6 +7414,7 @@ class Game {
       this.popups.push({ kind: 'star', x, y, t: 0 });
       this.starT = 9;
       Ach.unlock('star');
+      if (this.duel) Duel.send('skibidi', this);
       Sound.starMusic(9);
       this.banner('ЗВЕЗДА!', 'Неуязвимость и двойной урон на 9 секунд', '#ffd23f');
     } else {
@@ -6876,6 +7430,7 @@ class Game {
     d.state = 'hit';
     d.hitT = 0;
     this.ducksShot++;
+    if (this.duel) Duel.send('creeper', this);
     if (this.ducksShot >= 5) Ach.unlock('ducks');
     this.addMoney(500, d.x, d.y - 36, '#a5d6a7');
     Sound.quack();
@@ -6977,7 +7532,7 @@ let nightCtx = null;
 
 function render(ctx, g) {
   const now = performance.now() / 1000;
-  const menu = g.state === 'title' || g.state === 'levels' || g.state === 'achievements' || g.state === 'intro';
+  const menu = g.state === 'title' || g.state === 'levels' || g.state === 'achievements' || g.state === 'intro' || g.state === 'duel';
   const wt = menu ? g.titleT + g.introT : g.t;
   ctx.setTransform(View.k, 0, 0, View.k, 0, 0);
   ctx.globalAlpha = 1;
@@ -7002,6 +7557,8 @@ function render(ctx, g) {
   else if (g.state === 'levels') drawLevels(ctx, g, now);
   else if (g.state === 'achievements') drawAchievements(ctx, g, now);
   else if (g.state === 'intro') drawIntro(ctx, g, now);
+  else if (g.state === 'duel') drawDuelLobby(ctx, g, now);
+  else if (g.state === 'duelover') drawDuelOver(ctx, g, now);
   else if (g.state === 'pause') drawPause(ctx, g, now);
   else if (g.state === 'cheats') drawCheats(ctx, g, now);
   else if (g.state === 'buy') drawBuy(ctx, g, now);
@@ -7420,6 +7977,7 @@ function drawHUD(ctx, g, now) {
   drawMinecraftHud(ctx, g, now);
   drawPubgBars(ctx, g);
   drawCsAmmo(ctx, g);
+  if (g.duel) drawOpponentPanel(ctx, g);
   drawChat(ctx, g);
   drawBanner(ctx, g);
   if (g.cheatMsg) {
@@ -7861,9 +8419,10 @@ function drawTitle(ctx, g, now) {
   text(ctx, 'ХАОС-ДОСКА', 0, 0, { font: `104px ${FONT.title}`, color: tg, stroke: '#1a0b00', lw: 14, align: 'center' });
   ctx.restore();
   text(ctx, 'шахматы × сапёр × CS × Minecraft × GTA × PvZ × FNAF × Clash Royale × Pac-Man × PUBG × змейка × Mario × Duck Hunt × Among Us × скибиди', 640, 198, { font: `bold 15px ${FONT.ui}`, color: '#d7e8c4', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 4 });
-  mcButton(ctx, g, 'УРОВНИ', 296, 226, 180, 56, () => (g.state = 'levels'), { size: 13 });
-  mcButton(ctx, g, 'ИГРАТЬ', 496, 226, 288, 56, () => g.start(), { size: 22 });
-  mcButton(ctx, g, `ДОСТИЖЕНИЯ ${Ach.got.size}/${ACHIEVEMENTS.length}`, 804, 226, 200, 56, () => (g.state = 'achievements'), { size: 10 });
+  mcButton(ctx, g, 'УРОВНИ', 226, 226, 160, 56, () => (g.state = 'levels'), { size: 12 });
+  mcButton(ctx, g, 'ИГРАТЬ', 402, 226, 260, 56, () => g.start(), { size: 22 });
+  mcButton(ctx, g, 'ДУЭЛЬ', 678, 226, 170, 56, () => Duel.open(g), { size: 14, fill: '#8a4a3a' });
+  mcButton(ctx, g, `ДОСТИЖЕНИЯ ${Ach.got.size}/${ACHIEVEMENTS.length}`, 864, 226, 190, 56, () => (g.state = 'achievements'), { size: 9 });
 
   rr(ctx, 210, 306, 860, 296, 14);
   ctx.fillStyle = 'rgba(10,16,8,0.78)';
@@ -7901,11 +8460,12 @@ function drawPause(ctx, g) {
   text(ctx, 'ПАУЗА', 640, 118, { font: `64px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 10, align: 'center' });
   const bx = 640 - 160;
   mcButton(ctx, g, 'ПРОДОЛЖИТЬ', bx, 150, 320, 42, () => g.resume());
-  mcButton(ctx, g, 'ЗАНОВО ЭТОТ УРОВЕНЬ', bx, 200, 320, 42, () => g.retry());
+  if (g.duel) text(ctx, 'Дуэль идёт — соперник не на паузе!', 640, 228, { font: `bold 18px ${FONT.ui}`, color: '#ffab91', align: 'center', stroke: '#000', lw: 4 });
+  else mcButton(ctx, g, 'ЗАНОВО ЭТОТ УРОВЕНЬ', bx, 200, 320, 42, () => g.retry());
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', bx, 250, 320, 42, () => Sound.toggleMute());
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', bx, 300, 320, 42, toggleFullscreen);
   mcButton(ctx, g, 'В ГЛАВНОЕ МЕНЮ', bx, 350, 320, 42, () => g.toTitle());
-  if (Input.touch) mcButton(ctx, g, 'ЧИТ-КОДЫ', bx, 400, 320, 42, () => (g.state = 'cheats'));
+  if (Input.touch && !g.duel) mcButton(ctx, g, 'ЧИТ-КОДЫ', bx, 400, 320, 42, () => (g.state = 'cheats'));
   const py = Input.touch ? 456 : 410;
   rr(ctx, 380, py, 520, 712 - py, 12);
   ctx.fillStyle = 'rgba(10,16,8,0.8)';
@@ -7964,8 +8524,11 @@ function drawDead(ctx, g) {
   if (g.deadT > 1.5) {
     text(ctx, `Причина: ${g.deathCause}`, 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#ffcdd2', stroke: '#000', lw: 4, align: 'center' });
     drawStats(ctx, g, 318);
-    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.retry());
-    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
+    if (g.duel) drawDuelButtons(ctx, g, 560 + (g.newRecord || g.cheated ? 20 : 0));
+    else {
+      mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.retry());
+      mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
+    }
   }
 }
 
@@ -7989,9 +8552,12 @@ function drawWin(ctx, g, now) {
     text(ctx, line1, 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#c8f7a0', stroke: '#000', lw: 4, align: 'center' });
     drawStats(ctx, g, 318);
     const by = 560 + (g.newRecord || g.cheated ? 20 : 0);
-    if (final) mcButton(ctx, g, 'С НАЧАЛА', 640 - 250, by, 240, 46, () => g.startCampaign(0));
-    else mcButton(ctx, g, 'ДАЛЬШЕ ▶', 640 - 250, by, 240, 46, () => g.nextLevel());
-    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, by, 240, 46, () => g.toTitle());
+    if (g.duel) drawDuelButtons(ctx, g, by);
+    else {
+      if (final) mcButton(ctx, g, 'С НАЧАЛА', 640 - 250, by, 240, 46, () => g.startCampaign(0));
+      else mcButton(ctx, g, 'ДАЛЬШЕ ▶', 640 - 250, by, 240, 46, () => g.nextLevel());
+      mcButton(ctx, g, 'В МЕНЮ', 640 + 10, by, 240, 46, () => g.toTitle());
+    }
   }
 }
 
@@ -8211,9 +8777,9 @@ function drawAchievements(ctx, g) {
   const half = Math.ceil(ACHIEVEMENTS.length / 2);
   ACHIEVEMENTS.forEach((a, i) => {
     const col = i < half ? 0 : 1, row = i % half;
-    const x = 70 + col * 580, y = 118 + row * 41;
+    const x = 70 + col * 580, y = 116 + row * 39;
     const got = Ach.got.has(a.id);
-    rr(ctx, x, y, 560, 36, 8);
+    rr(ctx, x, y, 560, 35, 8);
     ctx.fillStyle = got ? 'rgba(16,124,16,0.35)' : 'rgba(255,255,255,0.06)';
     ctx.fill();
     circ(ctx, x + 20, y + 18, 13, got ? '#107c10' : '#424242');
@@ -8240,6 +8806,161 @@ function drawCheats(ctx, g) {
     text(ctx, CHEATS[name], x + 160, y + 78, { font: `15px ${FONT.ui}`, color: '#eef3e6', align: 'center' });
   });
   mcButton(ctx, g, 'НАЗАД', 540, 520, 200, 44, () => (g.state = 'pause'), { size: 13 });
+}
+
+// ---------- дуэль ----------
+const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
+
+function drawDuelLobby(ctx, g, now) {
+  ctx.fillStyle = 'rgba(8,8,14,0.9)';
+  ctx.fillRect(0, 0, W, H);
+  text(ctx, 'ДУЭЛЬ', 640, 78, { font: `56px ${FONT.title}`, color: '#ff8a65', stroke: '#000', lw: 8, align: 'center' });
+  wrapText(ctx, 'Каждый играет свою доску. Твои успехи прилетают сопернику «подарками». Побеждает тот, кто первым одолеет босса, или тот, кто проживёт дольше.', 640, 114, 900, 22, { font: `16px ${FONT.ui}`, color: '#cfd8dc', align: 'center' });
+
+  const ph = Duel.phase;
+  if (ph === 'connecting' || ph === 'unavailable') {
+    if (ph === 'connecting') text(ctx, 'Подключение…', 640, 300, { font: `bold 26px ${FONT.ui}`, color: '#fff', align: 'center' });
+    else wrapText(ctx, Net.error || 'Связь недоступна.', 640, 290, 820, 30, { font: `bold 20px ${FONT.ui}`, color: '#ff8a80', align: 'center' });
+    mcButton(ctx, g, 'НАЗАД', 540, 620, 200, 44, () => Duel.close(g), { size: 13 });
+    return;
+  }
+
+  // левая колонка: ты, уровень, кнопка
+  rr(ctx, 90, 168, 520, 330, 14);
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fill();
+  text(ctx, 'ТЫ', 116, 204, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+  text(ctx, Duel.name, 116, 240, { font: `30px ${FONT.title}`, color: '#fff' });
+  mcButton(ctx, g, 'НОВЫЙ НИК', 420, 214, 170, 36, () => Duel.newNick(), { size: 10 });
+  text(ctx, 'УРОВЕНЬ ДУЭЛИ', 116, 290, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+  const lv = LEVELS[Duel.lvl];
+  if (ph === 'lobby') {
+    mcButton(ctx, g, '◄', 116, 304, 44, 40, () => Duel.changeLevel(-1), { size: 12 });
+    mcButton(ctx, g, '►', 546, 304, 44, 40, () => Duel.changeLevel(1), { size: 12 });
+  }
+  text(ctx, `${Duel.lvl + 1}. ${lv.name}`, 353, 332, { font: `bold 20px ${FONT.ui}`, color: '#fff', align: 'center' });
+  if (ph === 'lobby') {
+    mcButton(ctx, g, 'СОЗДАТЬ ДУЭЛЬ', 150, 380, 400, 56, () => Duel.host(), { size: 16, fill: '#8a4a3a' });
+  } else if (ph === 'hosting') {
+    const dots = '.'.repeat(1 + (Math.floor(now * 2) % 3));
+    text(ctx, `Ждём соперника${dots}`, 350, 396, { font: `bold 22px ${FONT.ui}`, color: '#fff', align: 'center' });
+    text(ctx, `комната ${Duel.code.toUpperCase()}`, 350, 424, { font: `16px ${FONT.ui}`, color: '#b0bec5', align: 'center' });
+    mcButton(ctx, g, 'ОТМЕНА', 270, 440, 160, 40, () => Duel.cancel(), { size: 11 });
+  } else if (ph === 'joining') {
+    text(ctx, 'Подключаемся к сопернику…', 350, 410, { font: `bold 22px ${FONT.ui}`, color: '#fff', align: 'center' });
+    mcButton(ctx, g, 'ОТМЕНА', 270, 440, 160, 40, () => Duel.cancel(), { size: 11 });
+  }
+  if (Duel.note) wrapText(ctx, Duel.note, 350, 478, 480, 20, { font: `bold 15px ${FONT.ui}`, color: '#ff8a80', align: 'center' });
+
+  // правая колонка: открытые дуэли
+  rr(ctx, 650, 168, 540, 330, 14);
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fill();
+  text(ctx, 'ОТКРЫТЫЕ ДУЭЛИ', 676, 204, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+  const list = Duel.openDuels();
+  if (!list.length) {
+    wrapText(ctx, 'Пока никого. Создай дуэль — или попроси друга создать, и она появится здесь.', 920, 300, 460, 26, { font: `17px ${FONT.ui}`, color: '#b0bec5', align: 'center' });
+  }
+  list.forEach((d, i) => {
+    const y = 224 + i * 54;
+    rr(ctx, 670, y, 500, 46, 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fill();
+    text(ctx, d.name, 690, y + 21, { font: `bold 18px ${FONT.ui}`, color: '#fff' });
+    text(ctx, `уровень ${d.lvl + 1}: ${LEVELS[d.lvl].name}`, 690, y + 39, { font: `13px ${FONT.ui}`, color: '#b0bec5' });
+    if (ph === 'lobby') mcButton(ctx, g, 'ВОЙТИ', 1040, y + 6, 116, 34, () => Duel.join(d.code, d.lvl), { size: 11 });
+  });
+
+  // подарки и подсказка
+  text(ctx, 'ПОДАРКИ СОПЕРНИКУ', 90, 530, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+  Object.values(DUEL_ATTACKS).forEach((a, i) => {
+    text(ctx, `${a.why} → ${a.name}`, 90 + (i % 2) * 380, 556 + Math.floor(i / 2) * 22, { font: `15px ${FONT.ui}`, color: '#eef3e6' });
+  });
+  const how = Net.kind === 'room'
+    ? 'Друг открывает эту же игру по ссылке claude.ai (поделись ей через «Поделиться») и жмёт «Дуэль».'
+    : 'Друг открывает эту же игру на сайте и жмёт «Дуэль». Связь идёт через публичный сервер — не пиши в ник ничего личного.';
+  wrapText(ctx, how, 640, 640, 1080, 20, { font: `14px ${FONT.ui}`, color: '#90a4ae', align: 'center' });
+  mcButton(ctx, g, 'НАЗАД', 1030, 664, 160, 40, () => Duel.close(g), { size: 11 });
+
+  if (ph === 'countdown') {
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(0, 0, W, H);
+    text(ctx, `${Duel.name}  VS  ${Duel.oppName}`, 640, 250, { font: `34px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 6, align: 'center' });
+    const n = Math.ceil(Duel.countT - 0.5);
+    text(ctx, n > 0 ? String(n) : 'В БОЙ!', 640, 420, { font: `140px ${FONT.gta}`, color: n > 0 ? '#ffd54a' : '#ff5252', stroke: '#000', lw: 10, align: 'center' });
+  }
+}
+
+function drawOpponentPanel(ctx, g) {
+  const o = Duel.opp && Duel.opp.state;
+  const x = 8, y = 166, w = 152, h = 78;
+  rr(ctx, x, y, w, h, 8);
+  ctx.fillStyle = 'rgba(0,0,0,0.68)';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#ff8a65';
+  ctx.stroke();
+  text(ctx, `VS ${Duel.oppName || 'соперник'}`, x + 8, y + 18, { font: `bold 13px ${FONT.ui}`, color: '#ffab91' });
+  if (!o) {
+    text(ctx, 'нет связи…', x + 8, y + 44, { font: `13px ${FONT.ui}`, color: '#bbb' });
+    return;
+  }
+  const hp = clamp(num(o.hp) / Math.max(1, num(o.mhp, 20)), 0, 1);
+  const boss = clamp(num(o.boss, 100) / 100, 0, 1);
+  const bar = (yy, ratio, color, label) => {
+    text(ctx, label, x + 8, yy + 9, { font: `bold 11px ${FONT.ui}`, color: '#ddd' });
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(x + 44, yy, w - 52, 10);
+    ctx.fillStyle = color;
+    ctx.fillRect(x + 44, yy, (w - 52) * ratio, 10);
+  };
+  bar(y + 26, hp, '#e53935', 'жизнь');
+  bar(y + 42, boss, '#ff9800', 'босс');
+  const st = o.st === 'dead' ? 'погиб' : o.st === 'win' ? 'победил!' : `☠ ${num(o.kills)}  $${num(o.money)}`;
+  text(ctx, st, x + 8, y + 70, { font: `12px ${FONT.ui}`, color: '#eee' });
+}
+
+function drawDuelButtons(ctx, g, by) {
+  mcButton(ctx, g, 'В ЛОББИ', 640 - 250, by, 240, 46, () => Duel.toLobby(g));
+  mcButton(ctx, g, 'В МЕНЮ', 640 + 10, by, 240, 46, () => Duel.close(g));
+  if (Duel.result) {
+    const r = Duel.result;
+    text(ctx, `${r.win ? 'Дуэль выиграна' : 'Дуэль проиграна'}: ${r.reason}`, 640, by + 76, { font: `bold 18px ${FONT.ui}`, color: r.win ? '#a5f07a' : '#ff8a80', align: 'center', stroke: '#000', lw: 4 });
+  }
+}
+
+function drawDuelOver(ctx, g) {
+  const r = Duel.result || { win: true, reason: '' };
+  const k = Math.min(1, g.winT * 2);
+  ctx.fillStyle = `rgba(0,0,0,${0.65 * k})`;
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = k;
+  text(ctx, r.win ? 'ПОБЕДА В ДУЭЛИ!' : 'ПОРАЖЕНИЕ', 640, 150, { font: `72px ${FONT.title}`, color: r.win ? '#7ee03c' : '#ff5252', stroke: '#000', lw: 10, align: 'center' });
+  text(ctx, r.reason, 640, 200, { font: `bold 22px ${FONT.ui}`, color: '#fff', stroke: '#000', lw: 5, align: 'center' });
+  const o = (Duel.opp && Duel.opp.state) || {};
+  const p = g.player;
+  const rows = [
+    ['', 'Ты', Duel.oppName || 'Соперник'],
+    ['Здоровье', `${Math.max(0, Math.ceil(p.hp))}`, `${num(o.hp)}`],
+    ['Босс', `${Math.round(clamp(g.tower.hp / g.tower.max, 0, 1) * 100)}%`, `${num(o.boss, 100)}%`],
+    ['Убито врагов', String(g.kills), String(num(o.kills))],
+    ['Деньги', `$${p.money}`, `$${num(o.money)}`],
+  ];
+  rr(ctx, 380, 240, 520, 200, 12);
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fill();
+  rows.forEach(([a, b, c], i) => {
+    const y = 276 + i * 36;
+    const f = i === 0 ? `bold 17px ${FONT.ui}` : `17px ${FONT.ui}`;
+    text(ctx, a, 404, y, { font: f, color: '#bbb' });
+    text(ctx, b, 690, y, { font: `bold 18px ${FONT.ui}`, color: '#fff', align: 'right' });
+    text(ctx, c, 870, y, { font: `bold 18px ${FONT.ui}`, color: '#ffab91', align: 'right' });
+  });
+  ctx.globalAlpha = 1;
+  if (g.winT > 0.8) {
+    mcButton(ctx, g, 'В ЛОББИ', 640 - 250, 480, 240, 46, () => Duel.toLobby(g));
+    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 480, 240, 46, () => Duel.close(g));
+  }
 }
 
 // ---- js/main.js ----

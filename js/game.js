@@ -182,6 +182,7 @@ class Game {
   // Новый забег с уровня i. На поздних уровнях даём стартовые деньги на закупку.
   startCampaign(i) {
     Sound.init();
+    this.duel = false;
     this.levelIdx = clamp(i, 0, LEVELS.length - 1);
     this.resetRun();
     this.player.money = this.levelIdx * 2500;
@@ -191,6 +192,24 @@ class Game {
   }
   retry() {
     this.startCampaign(this.levelIdx);
+  }
+  // Дуэль: тот же уровень, что у соперника, без заставки.
+  startDuel(lvl) {
+    this.startCampaign(lvl);
+    this.duel = true;
+    this.beginLevel();
+    this.banner('ДУЭЛЬ!', `Против: ${Duel.oppName}. Победит тот, кто первым одолеет босса`, '#ff8a65');
+  }
+  // «Подарок» от соперника.
+  receiveAttack(kind, from) {
+    if (!['play', 'pause', 'buy', 'cheats'].includes(this.state)) return;
+    const a = DUEL_ATTACKS[kind];
+    if (a.stars) this.bonusStars += a.stars;
+    const list = a.spawn === 'pool3' ? [0, 1, 2].map(() => this.pickEnemy()) : a.spawn || [];
+    for (const t of list) this.spawnEnemy(t);
+    this.banner('ПОДАРОК ОТ СОПЕРНИКА', `${from} прислал: ${a.name}`, '#ff8a65');
+    this.say(`<${from}> прислал тебе: ${a.name}`, '#ffab91');
+    Sound.warn();
   }
   nextLevel() {
     if (this.levelIdx >= LEVELS.length - 1) return this.toTitle();
@@ -215,6 +234,8 @@ class Game {
     }
   }
   toTitle() {
+    if (Duel.phase !== 'off') Duel.shutdown();
+    this.duel = false;
     this.state = 'title';
     this.titleT = 0;
   }
@@ -240,6 +261,16 @@ class Game {
     realDt = Math.min(realDt, 0.05);
     this.processInput();
     Ach.update(realDt);
+    Duel.update(realDt, this);
+    if (this.state === 'duel') {
+      this.titleT += realDt;
+      return;
+    }
+    if (this.state === 'duelover') {
+      this.winT += realDt;
+      this.updateFx(realDt * 0.3, realDt);
+      return;
+    }
     if (this.state === 'title' || this.state === 'levels' || this.state === 'achievements') {
       this.titleT += realDt;
       this.pac.mouth += realDt * 10;
@@ -422,6 +453,18 @@ class Game {
     }
     if (this.state === 'levels' || this.state === 'achievements') {
       if (code === 'Escape' || code === 'Backspace') this.toTitle();
+      return;
+    }
+    if (this.state === 'duel') {
+      if (code === 'Escape' || code === 'Backspace') {
+        if (Duel.phase === 'hosting' || Duel.phase === 'joining') Duel.cancel();
+        else Duel.close(this);
+      }
+      return;
+    }
+    if (this.state === 'duelover' || (this.duel && (this.state === 'dead' || this.state === 'win'))) {
+      if ((code === 'Enter' || code === 'Space') && Duel.result) Duel.toLobby(this);
+      else if (code === 'Escape') Duel.close(this);
       return;
     }
     if (this.state === 'intro') {
@@ -1032,6 +1075,7 @@ class Game {
     const live = this.mf.liveMines();
     this.fieldsCleared++;
     this.totalFields++;
+    if (this.duel) Duel.send('mega', this);
     Ach.unlock('sapper');
     if (this.fieldBlasts === 0) Ach.unlock('sapperPro');
     this.addMoney(1000, 640, 330);
@@ -1500,6 +1544,7 @@ class Game {
 
   onKill(e, src) {
     this.kills++;
+    if (this.duel) Duel.countKill(this);
     Ach.unlock('first');
     if (src === 'shell' && ++this.shellKills >= 3) Ach.unlock('shell');
     if (src !== 'pac') this.addMoney(e.def.bounty * (this.bloodMoon ? 2 : 1), e.x, e.y - 50);
@@ -1810,6 +1855,7 @@ class Game {
     this.bonusStars++;
     Sound.roar();
     tw.onRage(this);
+    if (this.duel) Duel.send('stars', this);
   }
 
   bossEmote(str) {
@@ -1966,6 +2012,7 @@ class Game {
   // ---------- чит-коды GTA ----------
   // Буквы копятся в буфер. Пока набирается чит, игровые действия этих клавиш не срабатывают.
   handleCheatKey(code) {
+    if (this.duel) return false; // в дуэли читы выключены
     const m = /^Key([A-Z])$/.exec(code);
     if (!m) {
       if (!/^Shift/.test(code)) this.typed = '';
@@ -2068,6 +2115,7 @@ class Game {
       this.popups.push({ kind: 'star', x, y, t: 0 });
       this.starT = 9;
       Ach.unlock('star');
+      if (this.duel) Duel.send('skibidi', this);
       Sound.starMusic(9);
       this.banner('ЗВЕЗДА!', 'Неуязвимость и двойной урон на 9 секунд', '#ffd23f');
     } else {
@@ -2083,6 +2131,7 @@ class Game {
     d.state = 'hit';
     d.hitT = 0;
     this.ducksShot++;
+    if (this.duel) Duel.send('creeper', this);
     if (this.ducksShot >= 5) Ach.unlock('ducks');
     this.addMoney(500, d.x, d.y - 36, '#a5d6a7');
     Sound.quack();

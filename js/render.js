@@ -6,7 +6,7 @@ let nightCtx = null;
 
 function render(ctx, g) {
   const now = performance.now() / 1000;
-  const menu = g.state === 'title' || g.state === 'levels' || g.state === 'achievements' || g.state === 'intro';
+  const menu = g.state === 'title' || g.state === 'levels' || g.state === 'achievements' || g.state === 'intro' || g.state === 'duel';
   const wt = menu ? g.titleT + g.introT : g.t;
   ctx.setTransform(View.k, 0, 0, View.k, 0, 0);
   ctx.globalAlpha = 1;
@@ -31,6 +31,8 @@ function render(ctx, g) {
   else if (g.state === 'levels') drawLevels(ctx, g, now);
   else if (g.state === 'achievements') drawAchievements(ctx, g, now);
   else if (g.state === 'intro') drawIntro(ctx, g, now);
+  else if (g.state === 'duel') drawDuelLobby(ctx, g, now);
+  else if (g.state === 'duelover') drawDuelOver(ctx, g, now);
   else if (g.state === 'pause') drawPause(ctx, g, now);
   else if (g.state === 'cheats') drawCheats(ctx, g, now);
   else if (g.state === 'buy') drawBuy(ctx, g, now);
@@ -449,6 +451,7 @@ function drawHUD(ctx, g, now) {
   drawMinecraftHud(ctx, g, now);
   drawPubgBars(ctx, g);
   drawCsAmmo(ctx, g);
+  if (g.duel) drawOpponentPanel(ctx, g);
   drawChat(ctx, g);
   drawBanner(ctx, g);
   if (g.cheatMsg) {
@@ -890,9 +893,10 @@ function drawTitle(ctx, g, now) {
   text(ctx, 'ХАОС-ДОСКА', 0, 0, { font: `104px ${FONT.title}`, color: tg, stroke: '#1a0b00', lw: 14, align: 'center' });
   ctx.restore();
   text(ctx, 'шахматы × сапёр × CS × Minecraft × GTA × PvZ × FNAF × Clash Royale × Pac-Man × PUBG × змейка × Mario × Duck Hunt × Among Us × скибиди', 640, 198, { font: `bold 15px ${FONT.ui}`, color: '#d7e8c4', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 4 });
-  mcButton(ctx, g, 'УРОВНИ', 296, 226, 180, 56, () => (g.state = 'levels'), { size: 13 });
-  mcButton(ctx, g, 'ИГРАТЬ', 496, 226, 288, 56, () => g.start(), { size: 22 });
-  mcButton(ctx, g, `ДОСТИЖЕНИЯ ${Ach.got.size}/${ACHIEVEMENTS.length}`, 804, 226, 200, 56, () => (g.state = 'achievements'), { size: 10 });
+  mcButton(ctx, g, 'УРОВНИ', 226, 226, 160, 56, () => (g.state = 'levels'), { size: 12 });
+  mcButton(ctx, g, 'ИГРАТЬ', 402, 226, 260, 56, () => g.start(), { size: 22 });
+  mcButton(ctx, g, 'ДУЭЛЬ', 678, 226, 170, 56, () => Duel.open(g), { size: 14, fill: '#8a4a3a' });
+  mcButton(ctx, g, `ДОСТИЖЕНИЯ ${Ach.got.size}/${ACHIEVEMENTS.length}`, 864, 226, 190, 56, () => (g.state = 'achievements'), { size: 9 });
 
   rr(ctx, 210, 306, 860, 296, 14);
   ctx.fillStyle = 'rgba(10,16,8,0.78)';
@@ -930,11 +934,12 @@ function drawPause(ctx, g) {
   text(ctx, 'ПАУЗА', 640, 118, { font: `64px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 10, align: 'center' });
   const bx = 640 - 160;
   mcButton(ctx, g, 'ПРОДОЛЖИТЬ', bx, 150, 320, 42, () => g.resume());
-  mcButton(ctx, g, 'ЗАНОВО ЭТОТ УРОВЕНЬ', bx, 200, 320, 42, () => g.retry());
+  if (g.duel) text(ctx, 'Дуэль идёт — соперник не на паузе!', 640, 228, { font: `bold 18px ${FONT.ui}`, color: '#ffab91', align: 'center', stroke: '#000', lw: 4 });
+  else mcButton(ctx, g, 'ЗАНОВО ЭТОТ УРОВЕНЬ', bx, 200, 320, 42, () => g.retry());
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', bx, 250, 320, 42, () => Sound.toggleMute());
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', bx, 300, 320, 42, toggleFullscreen);
   mcButton(ctx, g, 'В ГЛАВНОЕ МЕНЮ', bx, 350, 320, 42, () => g.toTitle());
-  if (Input.touch) mcButton(ctx, g, 'ЧИТ-КОДЫ', bx, 400, 320, 42, () => (g.state = 'cheats'));
+  if (Input.touch && !g.duel) mcButton(ctx, g, 'ЧИТ-КОДЫ', bx, 400, 320, 42, () => (g.state = 'cheats'));
   const py = Input.touch ? 456 : 410;
   rr(ctx, 380, py, 520, 712 - py, 12);
   ctx.fillStyle = 'rgba(10,16,8,0.8)';
@@ -993,8 +998,11 @@ function drawDead(ctx, g) {
   if (g.deadT > 1.5) {
     text(ctx, `Причина: ${g.deathCause}`, 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#ffcdd2', stroke: '#000', lw: 4, align: 'center' });
     drawStats(ctx, g, 318);
-    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.retry());
-    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
+    if (g.duel) drawDuelButtons(ctx, g, 560 + (g.newRecord || g.cheated ? 20 : 0));
+    else {
+      mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.retry());
+      mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
+    }
   }
 }
 
@@ -1018,9 +1026,12 @@ function drawWin(ctx, g, now) {
     text(ctx, line1, 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#c8f7a0', stroke: '#000', lw: 4, align: 'center' });
     drawStats(ctx, g, 318);
     const by = 560 + (g.newRecord || g.cheated ? 20 : 0);
-    if (final) mcButton(ctx, g, 'С НАЧАЛА', 640 - 250, by, 240, 46, () => g.startCampaign(0));
-    else mcButton(ctx, g, 'ДАЛЬШЕ ▶', 640 - 250, by, 240, 46, () => g.nextLevel());
-    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, by, 240, 46, () => g.toTitle());
+    if (g.duel) drawDuelButtons(ctx, g, by);
+    else {
+      if (final) mcButton(ctx, g, 'С НАЧАЛА', 640 - 250, by, 240, 46, () => g.startCampaign(0));
+      else mcButton(ctx, g, 'ДАЛЬШЕ ▶', 640 - 250, by, 240, 46, () => g.nextLevel());
+      mcButton(ctx, g, 'В МЕНЮ', 640 + 10, by, 240, 46, () => g.toTitle());
+    }
   }
 }
 
@@ -1240,9 +1251,9 @@ function drawAchievements(ctx, g) {
   const half = Math.ceil(ACHIEVEMENTS.length / 2);
   ACHIEVEMENTS.forEach((a, i) => {
     const col = i < half ? 0 : 1, row = i % half;
-    const x = 70 + col * 580, y = 118 + row * 41;
+    const x = 70 + col * 580, y = 116 + row * 39;
     const got = Ach.got.has(a.id);
-    rr(ctx, x, y, 560, 36, 8);
+    rr(ctx, x, y, 560, 35, 8);
     ctx.fillStyle = got ? 'rgba(16,124,16,0.35)' : 'rgba(255,255,255,0.06)';
     ctx.fill();
     circ(ctx, x + 20, y + 18, 13, got ? '#107c10' : '#424242');
@@ -1269,4 +1280,159 @@ function drawCheats(ctx, g) {
     text(ctx, CHEATS[name], x + 160, y + 78, { font: `15px ${FONT.ui}`, color: '#eef3e6', align: 'center' });
   });
   mcButton(ctx, g, 'НАЗАД', 540, 520, 200, 44, () => (g.state = 'pause'), { size: 13 });
+}
+
+// ---------- дуэль ----------
+const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
+
+function drawDuelLobby(ctx, g, now) {
+  ctx.fillStyle = 'rgba(8,8,14,0.9)';
+  ctx.fillRect(0, 0, W, H);
+  text(ctx, 'ДУЭЛЬ', 640, 78, { font: `56px ${FONT.title}`, color: '#ff8a65', stroke: '#000', lw: 8, align: 'center' });
+  wrapText(ctx, 'Каждый играет свою доску. Твои успехи прилетают сопернику «подарками». Побеждает тот, кто первым одолеет босса, или тот, кто проживёт дольше.', 640, 114, 900, 22, { font: `16px ${FONT.ui}`, color: '#cfd8dc', align: 'center' });
+
+  const ph = Duel.phase;
+  if (ph === 'connecting' || ph === 'unavailable') {
+    if (ph === 'connecting') text(ctx, 'Подключение…', 640, 300, { font: `bold 26px ${FONT.ui}`, color: '#fff', align: 'center' });
+    else wrapText(ctx, Net.error || 'Связь недоступна.', 640, 290, 820, 30, { font: `bold 20px ${FONT.ui}`, color: '#ff8a80', align: 'center' });
+    mcButton(ctx, g, 'НАЗАД', 540, 620, 200, 44, () => Duel.close(g), { size: 13 });
+    return;
+  }
+
+  // левая колонка: ты, уровень, кнопка
+  rr(ctx, 90, 168, 520, 330, 14);
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fill();
+  text(ctx, 'ТЫ', 116, 204, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+  text(ctx, Duel.name, 116, 240, { font: `30px ${FONT.title}`, color: '#fff' });
+  mcButton(ctx, g, 'НОВЫЙ НИК', 420, 214, 170, 36, () => Duel.newNick(), { size: 10 });
+  text(ctx, 'УРОВЕНЬ ДУЭЛИ', 116, 290, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+  const lv = LEVELS[Duel.lvl];
+  if (ph === 'lobby') {
+    mcButton(ctx, g, '◄', 116, 304, 44, 40, () => Duel.changeLevel(-1), { size: 12 });
+    mcButton(ctx, g, '►', 546, 304, 44, 40, () => Duel.changeLevel(1), { size: 12 });
+  }
+  text(ctx, `${Duel.lvl + 1}. ${lv.name}`, 353, 332, { font: `bold 20px ${FONT.ui}`, color: '#fff', align: 'center' });
+  if (ph === 'lobby') {
+    mcButton(ctx, g, 'СОЗДАТЬ ДУЭЛЬ', 150, 380, 400, 56, () => Duel.host(), { size: 16, fill: '#8a4a3a' });
+  } else if (ph === 'hosting') {
+    const dots = '.'.repeat(1 + (Math.floor(now * 2) % 3));
+    text(ctx, `Ждём соперника${dots}`, 350, 396, { font: `bold 22px ${FONT.ui}`, color: '#fff', align: 'center' });
+    text(ctx, `комната ${Duel.code.toUpperCase()}`, 350, 424, { font: `16px ${FONT.ui}`, color: '#b0bec5', align: 'center' });
+    mcButton(ctx, g, 'ОТМЕНА', 270, 440, 160, 40, () => Duel.cancel(), { size: 11 });
+  } else if (ph === 'joining') {
+    text(ctx, 'Подключаемся к сопернику…', 350, 410, { font: `bold 22px ${FONT.ui}`, color: '#fff', align: 'center' });
+    mcButton(ctx, g, 'ОТМЕНА', 270, 440, 160, 40, () => Duel.cancel(), { size: 11 });
+  }
+  if (Duel.note) wrapText(ctx, Duel.note, 350, 478, 480, 20, { font: `bold 15px ${FONT.ui}`, color: '#ff8a80', align: 'center' });
+
+  // правая колонка: открытые дуэли
+  rr(ctx, 650, 168, 540, 330, 14);
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fill();
+  text(ctx, 'ОТКРЫТЫЕ ДУЭЛИ', 676, 204, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+  const list = Duel.openDuels();
+  if (!list.length) {
+    wrapText(ctx, 'Пока никого. Создай дуэль — или попроси друга создать, и она появится здесь.', 920, 300, 460, 26, { font: `17px ${FONT.ui}`, color: '#b0bec5', align: 'center' });
+  }
+  list.forEach((d, i) => {
+    const y = 224 + i * 54;
+    rr(ctx, 670, y, 500, 46, 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fill();
+    text(ctx, d.name, 690, y + 21, { font: `bold 18px ${FONT.ui}`, color: '#fff' });
+    text(ctx, `уровень ${d.lvl + 1}: ${LEVELS[d.lvl].name}`, 690, y + 39, { font: `13px ${FONT.ui}`, color: '#b0bec5' });
+    if (ph === 'lobby') mcButton(ctx, g, 'ВОЙТИ', 1040, y + 6, 116, 34, () => Duel.join(d.code, d.lvl), { size: 11 });
+  });
+
+  // подарки и подсказка
+  text(ctx, 'ПОДАРКИ СОПЕРНИКУ', 90, 530, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+  Object.values(DUEL_ATTACKS).forEach((a, i) => {
+    text(ctx, `${a.why} → ${a.name}`, 90 + (i % 2) * 380, 556 + Math.floor(i / 2) * 22, { font: `15px ${FONT.ui}`, color: '#eef3e6' });
+  });
+  const how = Net.kind === 'room'
+    ? 'Друг открывает эту же игру по ссылке claude.ai (поделись ей через «Поделиться») и жмёт «Дуэль».'
+    : 'Друг открывает эту же игру на сайте и жмёт «Дуэль». Связь идёт через публичный сервер — не пиши в ник ничего личного.';
+  wrapText(ctx, how, 640, 640, 1080, 20, { font: `14px ${FONT.ui}`, color: '#90a4ae', align: 'center' });
+  mcButton(ctx, g, 'НАЗАД', 1030, 664, 160, 40, () => Duel.close(g), { size: 11 });
+
+  if (ph === 'countdown') {
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(0, 0, W, H);
+    text(ctx, `${Duel.name}  VS  ${Duel.oppName}`, 640, 250, { font: `34px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 6, align: 'center' });
+    const n = Math.ceil(Duel.countT - 0.5);
+    text(ctx, n > 0 ? String(n) : 'В БОЙ!', 640, 420, { font: `140px ${FONT.gta}`, color: n > 0 ? '#ffd54a' : '#ff5252', stroke: '#000', lw: 10, align: 'center' });
+  }
+}
+
+function drawOpponentPanel(ctx, g) {
+  const o = Duel.opp && Duel.opp.state;
+  const x = 8, y = 166, w = 152, h = 78;
+  rr(ctx, x, y, w, h, 8);
+  ctx.fillStyle = 'rgba(0,0,0,0.68)';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#ff8a65';
+  ctx.stroke();
+  text(ctx, `VS ${Duel.oppName || 'соперник'}`, x + 8, y + 18, { font: `bold 13px ${FONT.ui}`, color: '#ffab91' });
+  if (!o) {
+    text(ctx, 'нет связи…', x + 8, y + 44, { font: `13px ${FONT.ui}`, color: '#bbb' });
+    return;
+  }
+  const hp = clamp(num(o.hp) / Math.max(1, num(o.mhp, 20)), 0, 1);
+  const boss = clamp(num(o.boss, 100) / 100, 0, 1);
+  const bar = (yy, ratio, color, label) => {
+    text(ctx, label, x + 8, yy + 9, { font: `bold 11px ${FONT.ui}`, color: '#ddd' });
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(x + 44, yy, w - 52, 10);
+    ctx.fillStyle = color;
+    ctx.fillRect(x + 44, yy, (w - 52) * ratio, 10);
+  };
+  bar(y + 26, hp, '#e53935', 'жизнь');
+  bar(y + 42, boss, '#ff9800', 'босс');
+  const st = o.st === 'dead' ? 'погиб' : o.st === 'win' ? 'победил!' : `☠ ${num(o.kills)}  $${num(o.money)}`;
+  text(ctx, st, x + 8, y + 70, { font: `12px ${FONT.ui}`, color: '#eee' });
+}
+
+function drawDuelButtons(ctx, g, by) {
+  mcButton(ctx, g, 'В ЛОББИ', 640 - 250, by, 240, 46, () => Duel.toLobby(g));
+  mcButton(ctx, g, 'В МЕНЮ', 640 + 10, by, 240, 46, () => Duel.close(g));
+  if (Duel.result) {
+    const r = Duel.result;
+    text(ctx, `${r.win ? 'Дуэль выиграна' : 'Дуэль проиграна'}: ${r.reason}`, 640, by + 76, { font: `bold 18px ${FONT.ui}`, color: r.win ? '#a5f07a' : '#ff8a80', align: 'center', stroke: '#000', lw: 4 });
+  }
+}
+
+function drawDuelOver(ctx, g) {
+  const r = Duel.result || { win: true, reason: '' };
+  const k = Math.min(1, g.winT * 2);
+  ctx.fillStyle = `rgba(0,0,0,${0.65 * k})`;
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = k;
+  text(ctx, r.win ? 'ПОБЕДА В ДУЭЛИ!' : 'ПОРАЖЕНИЕ', 640, 150, { font: `72px ${FONT.title}`, color: r.win ? '#7ee03c' : '#ff5252', stroke: '#000', lw: 10, align: 'center' });
+  text(ctx, r.reason, 640, 200, { font: `bold 22px ${FONT.ui}`, color: '#fff', stroke: '#000', lw: 5, align: 'center' });
+  const o = (Duel.opp && Duel.opp.state) || {};
+  const p = g.player;
+  const rows = [
+    ['', 'Ты', Duel.oppName || 'Соперник'],
+    ['Здоровье', `${Math.max(0, Math.ceil(p.hp))}`, `${num(o.hp)}`],
+    ['Босс', `${Math.round(clamp(g.tower.hp / g.tower.max, 0, 1) * 100)}%`, `${num(o.boss, 100)}%`],
+    ['Убито врагов', String(g.kills), String(num(o.kills))],
+    ['Деньги', `$${p.money}`, `$${num(o.money)}`],
+  ];
+  rr(ctx, 380, 240, 520, 200, 12);
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fill();
+  rows.forEach(([a, b, c], i) => {
+    const y = 276 + i * 36;
+    const f = i === 0 ? `bold 17px ${FONT.ui}` : `17px ${FONT.ui}`;
+    text(ctx, a, 404, y, { font: f, color: '#bbb' });
+    text(ctx, b, 690, y, { font: `bold 18px ${FONT.ui}`, color: '#fff', align: 'right' });
+    text(ctx, c, 870, y, { font: `bold 18px ${FONT.ui}`, color: '#ffab91', align: 'right' });
+  });
+  ctx.globalAlpha = 1;
+  if (g.winT > 0.8) {
+    mcButton(ctx, g, 'В ЛОББИ', 640 - 250, 480, 240, 46, () => Duel.toLobby(g));
+    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 480, 240, 46, () => Duel.close(g));
+  }
 }
