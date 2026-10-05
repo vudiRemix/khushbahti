@@ -262,10 +262,10 @@
   function musicTrack(g) {
     const s = g.state;
     if (s === 'ut') return 'battle';
-    if (s === 'arena') return Arena.kind === 'raid' ? 'battle' : 'action';
+    if (s === 'arena') return 'hunt';
     if (s === 'dead' || g.jumpscare) return '';
-    if (s === 'play' || s === 'pause' || s === 'buy' || s === 'cheats' || s === 'intro') return 'action';
-    return 'calm';
+    if (s === 'play' || s === 'pause' || s === 'buy' || s === 'cheats' || s === 'intro') return 'drive';
+    return 'neon';
   }
 
   // заряд «супера» на кнопке

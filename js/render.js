@@ -6,7 +6,7 @@ let nightCtx = null;
 
 function render(ctx, g) {
   const now = performance.now() / 1000;
-  const menu = g.state === 'title' || g.state === 'levels' || g.state === 'achievements' || g.state === 'intro' || g.state === 'duel';
+  const menu = g.state === 'title' || g.state === 'levels' || g.state === 'achievements' || g.state === 'intro' || g.state === 'duel' || g.state === 'top';
   const wt = menu ? g.titleT + g.introT : g.t;
   ctx.setTransform(View.k, 0, 0, View.k, 0, 0);
   ctx.globalAlpha = 1;
@@ -37,6 +37,7 @@ function render(ctx, g) {
   if (g.state === 'title') drawTitle(ctx, g, now);
   else if (g.state === 'levels') drawLevels(ctx, g, now);
   else if (g.state === 'achievements') drawAchievements(ctx, g, now);
+  else if (g.state === 'top') drawTopScreen(ctx, g, now);
   else if (g.state === 'intro') drawIntro(ctx, g, now);
   else if (g.state === 'duel') drawDuelLobby(ctx, g, now);
   else if (g.state === 'duelover') drawDuelOver(ctx, g, now);
@@ -886,6 +887,9 @@ function drawControls(ctx, x, y) {
   });
 }
 
+// Жёлтая надпись у логотипа — как в Minecraft, при каждом запуске своя.
+const TITLE_SPLASH = choice(['Теперь с Сансом!', 'Впиши ник в зал славы!', 'Музыка как в Hotline Miami!', 'Хочешь дуэль?', 'HESOYAM!']);
+
 function drawTitle(ctx, g, now) {
   ctx.fillStyle = 'rgba(8,12,6,0.66)';
   ctx.fillRect(0, 0, W, H);
@@ -899,18 +903,22 @@ function drawTitle(ctx, g, now) {
   text(ctx, 'ХАОС-ДОСКА', 6, 8, { font: `104px ${FONT.title}`, color: '#7a1010', align: 'center' });
   text(ctx, 'ХАОС-ДОСКА', 0, 0, { font: `104px ${FONT.title}`, color: tg, stroke: '#1a0b00', lw: 14, align: 'center' });
   ctx.restore();
-  // жёлтая надпись-сплэш, как в Minecraft: что нового в этой версии
+  // жёлтая надпись-сплэш, как в Minecraft; длинная — мельче, чтобы не наезжала на логотип
   ctx.save();
   ctx.translate(985, 150);
   ctx.rotate(-0.33);
-  ctx.scale(1 + Math.sin(now * 6) * 0.06, 1 + Math.sin(now * 6) * 0.06);
-  text(ctx, 'Теперь с Сансом!', 0, 0, { font: `bold 26px ${FONT.ui}`, color: '#ffff3c', stroke: '#3a3a00', lw: 5, align: 'center' });
+  ctx.font = `bold 26px ${FONT.ui}`;
+  const sk = Math.min(1, 230 / ctx.measureText(TITLE_SPLASH).width) * (1 + Math.sin(now * 6) * 0.06);
+  ctx.scale(sk, sk);
+  text(ctx, TITLE_SPLASH, 0, 0, { font: `bold 26px ${FONT.ui}`, color: '#ffff3c', stroke: '#3a3a00', lw: 5, align: 'center' });
   ctx.restore();
   text(ctx, 'шахматы × сапёр × CS × Minecraft × GTA × PvZ × FNAF × Clash Royale × Pac-Man × PUBG × змейка × Mario × Duck Hunt × Among Us × скибиди', 640, 198, { font: `bold 15px ${FONT.ui}`, color: '#d7e8c4', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 4 });
   mcButton(ctx, g, 'УРОВНИ', 226, 226, 160, 56, () => (g.state = 'levels'), { size: 12 });
   mcButton(ctx, g, 'ИГРАТЬ', 402, 226, 260, 56, () => g.start(), { size: 22 });
   mcButton(ctx, g, 'ДУЭЛЬ', 678, 226, 170, 56, () => Duel.open(g), { size: 14, fill: '#8a4a3a' });
   mcButton(ctx, g, `ДОСТИЖЕНИЯ ${Ach.got.size}/${ACHIEVEMENTS.length}`, 864, 226, 190, 56, () => (g.state = 'achievements'), { size: 9 });
+  mcButton(ctx, g, `НИК: ${Duel.name}`, 20, 16, 250, 44, () => Top.editNick(), { size: 9, fill: '#8a4a3a' });
+  mcButton(ctx, g, 'ЗАЛ СЛАВЫ', 1030, 16, 230, 44, () => Top.open(g), { size: 12, fill: '#c2185b' });
 
   rr(ctx, 210, 306, 860, 296, 14);
   ctx.fillStyle = 'rgba(10,16,8,0.78)';
@@ -937,7 +945,7 @@ function drawTitle(ctx, g, now) {
 
   text(ctx, `Рекорд: $${pad(g.best, 8)}`, 640, 636, { font: `30px ${FONT.gta}`, color: '#3fbf4a', stroke: '#000', lw: 6, align: 'center' });
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', 1020, 662, 240, 40, toggleFullscreen, { size: 11 });
-  text(ctx, `версия ${GAME_VERSION} · новое: бой с Сансом (чит SANS), ${Input.touch ? 'музыка — в паузе' : 'музыка — N'}`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
+  text(ctx, `версия ${GAME_VERSION} · новое: зал славы, музыка (${Input.touch ? 'в паузе' : 'N'})`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', 20, 662, 200, 40, () => Sound.toggleMute(), { size: 11 });
   text(ctx, Input.touch ? 'Нажми «Играть»' : 'Нажми «Играть» или Enter', 640, 684, { font: `bold 15px ${FONT.ui}`, color: 'rgba(255,255,255,0.75)', align: 'center' });
   if (Input.touch) text(ctx, 'На телефоне: режимы и действия — кнопками по краям экрана', 640, 706, { font: `bold 14px ${FONT.ui}`, color: '#ffe082', align: 'center' });
@@ -989,7 +997,7 @@ function drawStats(ctx, g, y) {
   else if (g.newRecord) text(ctx, 'НОВЫЙ РЕКОРД!', 640, y + 222, { font: `24px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 6, align: 'center' });
 }
 
-function drawDead(ctx, g) {
+function drawDead(ctx, g, now) {
   const k = Math.min(1, g.deadT / 1.2);
   ctx.save();
   ctx.globalCompositeOperation = 'saturation';
@@ -1016,6 +1024,7 @@ function drawDead(ctx, g) {
     drawStats(ctx, g, 318);
     if (g.duel) drawDuelButtons(ctx, g, 560 + (g.newRecord || g.cheated ? 20 : 0));
     else {
+      drawTopPanel(ctx, g, now);
       mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.retry());
       mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
     }
@@ -1044,6 +1053,7 @@ function drawWin(ctx, g, now) {
     const by = 560 + (g.newRecord || g.cheated ? 20 : 0);
     if (g.duel) drawDuelButtons(ctx, g, by);
     else {
+      drawTopPanel(ctx, g, now);
       if (final) mcButton(ctx, g, 'С НАЧАЛА', 640 - 250, by, 240, 46, () => g.startCampaign(0));
       else mcButton(ctx, g, 'ДАЛЬШЕ ▶', 640 - 250, by, 240, 46, () => g.nextLevel());
       mcButton(ctx, g, 'В МЕНЮ', 640 + 10, by, 240, 46, () => g.toTitle());

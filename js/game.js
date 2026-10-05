@@ -70,6 +70,7 @@ class Game {
     this.inv = { steak: 3, gapple: 1, potion: 1, tnt: 2, dice: 2, ammo: 1, ice: 1, pellet: 1, totem: 0 };
     this.sel = 0;
     this.kills = 0;
+    this.runId = Math.random().toString(36).slice(2, 10); // для зала славы: одна строка на забег
     this.tilesOpened = 0;
     this.ducksShot = 0;
     this.totalFields = 0;
@@ -301,7 +302,7 @@ class Game {
       this.updateFx(realDt * 0.3, realDt);
       return;
     }
-    if (this.state === 'title' || this.state === 'levels' || this.state === 'achievements') {
+    if (this.state === 'title' || this.state === 'levels' || this.state === 'achievements' || this.state === 'top') {
       this.titleT += realDt;
       this.pac.mouth += realDt * 10;
       return;
@@ -506,6 +507,11 @@ class Game {
     }
     if (this.state === 'levels' || this.state === 'achievements') {
       if (code === 'Escape' || code === 'Backspace') this.toTitle();
+      return;
+    }
+    if (this.state === 'top') {
+      if (code === 'Escape' || code === 'Backspace') Top.close(this);
+      else if (code === 'ArrowLeft' || code === 'ArrowRight') Top.flip(code === 'ArrowLeft' ? -1 : 1);
       return;
     }
     if (this.state === 'duel') {
@@ -1554,6 +1560,7 @@ class Game {
     Sound.wasted();
     Ach.unlock('wasted');
     this.saveBest();
+    Top.record(this);
   }
 
   win() {
@@ -1570,6 +1577,7 @@ class Game {
       Store.set('kd_unlocked', this.unlocked);
     }
     this.saveBest();
+    Top.record(this);
   }
 
   addMoney(n, x, y, color = '#7ee05a') {

@@ -116,7 +116,7 @@ const W = 1280, H = 720, T = 80, COLS = 16, ROWS = 9;
 const TAU = Math.PI * 2;
 
 // Номер выпуска: виден в главном меню. Меняй вместе с CACHE в sw.js.
-const GAME_VERSION = 10;
+const GAME_VERSION = 11;
 
 // Поле сапёра: столбцы 2..13, строки 2..6.
 const MF = { c0: 2, r0: 2, cols: 12, rows: 5 };
@@ -747,11 +747,13 @@ const Sound = (() => {
 
 // ---- js/music.js ----
 'use strict';
-/* Фоновая музыка — свой чиптюн в духе Undertale, сочинён для этой игры (чужих мелодий нет).
-   Квадратная волна — мелодия, треугольник — бас, пила с фильтром — арпеджио, шум — барабаны.
+/* Фоновая музыка — свои треки, сочинены для этой игры (чужих мелодий нет).
+   neon — меню, drive — кампания, hunt — арена и босс-рейд: синтвейв в духе саундтреков
+   Hotline Miami — бас пульсирует шестнадцатыми, бочка бьёт каждую долю и «качает» весь звук,
+   пилообразный лид с эхом, арпеджио с фильтром, который то открывается, то закрывается.
+   battle — чиптюн для боя «как в Undertale».
    Ноты планируются чуть вперёд по часам AudioContext прямо из игрового цикла:
-   когда вкладка скрыта, кадры не идут — музыка сама замолкает.
-   Треки: calm — меню, action — кампания и арена, battle — боссы и бой «как в Undertale». */
+   вкладка скрыта — кадры не идут, музыка сама замолкает. */
 
 const NOTE_IDX = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
 
@@ -764,14 +766,34 @@ function noteFreq(n) {
 
 const CHORDS = {
   C: ['C', 'E', 'G'],
-  Am: ['A', 'C', 'E'],
-  F: ['F', 'A', 'C'],
-  G: ['G', 'B', 'D'],
-  Em: ['E', 'G', 'B'],
+  Cm: ['C', 'Eb', 'G'],
+  D: ['D', 'F#', 'A'],
   Dm: ['D', 'F', 'A'],
-  Bb: ['Bb', 'D', 'F'],
+  Db: ['Db', 'F', 'Ab'],
+  Eb: ['Eb', 'G', 'Bb'],
+  Em: ['E', 'G', 'B'],
+  F: ['F', 'A', 'C'],
+  Fm: ['F', 'Ab', 'C'],
+  G: ['G', 'B', 'D'],
+  Gm: ['G', 'Bb', 'D'],
+  Ab: ['Ab', 'C', 'Eb'],
   A: ['A', 'C#', 'E'],
+  Am: ['A', 'C', 'E'],
+  Bb: ['Bb', 'D', 'F'],
+  B: ['B', 'D#', 'F#'],
 };
+
+// Аккорд снизу вверх от октавы oct: Ab → Ab4 C5 Eb5.
+function voicing(name, oct) {
+  const out = [];
+  let prev = -1;
+  for (const n of CHORDS[name]) {
+    if (NOTE_IDX[n] <= prev) oct++;
+    prev = NOTE_IDX[n];
+    out.push(n + oct);
+  }
+  return out;
+}
 
 // Строка нот: по шестнадцатой на токен; «-» тянет предыдущую ноту, «.» — пауза.
 function parseLine(str) {
@@ -783,94 +805,499 @@ function parseLine(str) {
       if (cur) cur.len++;
     } else if (tk === '.') cur = null;
     else {
-      cur = { step: i, notes: tk.split('+'), len: 1 };
+      cur = { step: i, tok: tk, len: 1 };
       out.push(cur);
     }
   });
+  out.steps = toks.length;
   return out;
 }
 
 const MUSIC_TRACKS = {
-  // Тихая тема меню: до мажор, мягкое арпеджио и простая мелодия.
-  calm: {
-    bpm: 84,
-    chords: ['C', 'Am', 'F', 'G', 'C', 'Em', 'F', 'G'],
-    lead: `
-      E5 - - - D5 - C5 - D5 - - - E5 - G5 -
-      E5 - - - - - - - . . C5 - D5 - E5 -
-      F5 - - - E5 - D5 - C5 - - - A4 - C5 -
-      D5 - - - - - - - . . . . G4 - B4 -
-      C5 - E5 - G5 - - - A5 - G5 - E5 - C5 -
-      B4 - - - - - - - . . B4 - C5 - D5 -
-      A5 - - - G5 - F5 - E5 - - - D5 - C5 -
-      D5 - - - - - - - - - - - . . . .`,
-    bass: 'half',
-    arp: 'eighths',
-    drums: { h: '..x...x...x...x.' },
-    vol: { lead: 0.035, bass: 0.09, arp: 0.022 },
+  // Меню: мечтательный синтвейв в фа миноре, медленно, с эхом.
+  neon: {
+    bpm: 96,
+    bass: 'r - - - - - - - r - - - o - - -',
+    arp: '0 - 2 - 3 - 4 - 3 - 2 - 1 - 2 -',
+    drums: { k: 'x.......x.......', s: '........x.......', h: '..x...x...x...x.' },
+    parts: [
+      { chords: ['Fm', 'Db', 'Ab', 'Eb'], drums: 'off', pad: true, sweep: [500, 1300] },
+      {
+        chords: ['Fm', 'Db', 'Ab', 'Eb', 'Fm', 'Db', 'Ab', 'Eb'],
+        pad: true,
+        sweep: [1300, 2200],
+        lead: `
+          C6 - - - - - - - Ab5 - - - G5 - Ab5 -
+          F5 - - - - - - - - - - - . . . .
+          Eb6 - - - - - - - C6 - - - Bb5 - C6 -
+          G5 - - - - - - - - - - - . . . .
+          C6 - - - - - - - Ab5 - - - G5 - Ab5 -
+          F6 - - - - - Eb6 - Db6 - - - C6 - - -
+          C6 - - - - - - - Eb6 - - - Ab5 - - -
+          Bb5 - - - - - - - G5 - - - - - - -`,
+      },
+      {
+        chords: ['Db', 'Eb', 'Fm', 'Fm', 'Db', 'Eb', 'C', 'C'],
+        pad: true,
+        sweep: [2200, 900],
+        lead: `
+          Ab5 - - - - - - - F5 - - - Ab5 - Db6 -
+          Bb5 - - - - - - - G5 - - - Eb5 - - -
+          C6 - - - - - - - - - - - Ab5 - - -
+          F5 - - - - - - - . . . . . . . .
+          F6 - - - - - - - Db6 - - - Ab5 - - -
+          G5 - - - Bb5 - - - Eb6 - - - - - - -
+          E6 - - - - - - - C6 - - - G5 - - -
+          Bb5 - - - - - - - G5 - - - E5 - - -`,
+      },
+    ],
+    sound: {
+      gain: 0.33, // общая громкость трека: подобрана по замеру LUFS, чтобы не глушить звуки игры
+      lead: { wave: 'saw2', vol: 0.1, cutoff: 2200, q: 1, vib: true, delay: 0.5, verb: 0.35 },
+      bass: { wave: 'soft', vol: 0.11 },
+      arp: { wave: 'square', vol: 0.05, q: 4, delay: 0.45 },
+      pad: { vol: 0.035, cutoff: 1100 },
+      drums: { k: 0.55, s: 0.56, h: 0.3 },
+      duck: 0.45,
+      fb: 0.42,
+      dlyWet: 0.5,
+      verbWet: 0.7,
+    },
   },
-  // Бодрая тема для кампании и арены: ля минор, бас восьмыми.
-  action: {
+
+  // Кампания: напористый синтвейв в до миноре — бас катится шестнадцатыми, бочка качает.
+  drive: {
+    bpm: 124,
+    bass: 'r r o r r o r o r r o r r o r o',
+    arp: '0 1 2 3 4 3 2 1 0 1 2 3 4 3 2 1',
+    drums: { k: 'x...x...x...x...', s: '....x.......x...', h: 'x.x.x.x.x.x.x.x.', o: '..x...x...x...x.' },
+    parts: [
+      { chords: ['Cm', 'Ab', 'Eb', 'Bb'], drums: 'hats', sweep: [450, 1400] },
+      {
+        chords: ['Cm', 'Ab', 'Eb', 'Bb', 'Cm', 'Ab', 'Eb', 'Bb'],
+        sweep: [1400, 2600],
+        lead: `
+          G5 - - - Eb5 - - - C5 - D5 - Eb5 - G5 -
+          Ab5 - - - - - G5 - Eb5 - - - C5 - - -
+          Bb5 - - - G5 - - - Eb5 - G5 - Bb5 - C6 -
+          D6 - - - C6 - Bb5 - F5 - - - - - - -
+          G5 - - - Eb5 - - - C5 - D5 - Eb5 - G5 -
+          Ab5 - - - - - Bb5 - C6 - - - Eb6 - - -
+          D6 - - - C6 - Bb5 - G5 - - - Eb5 - F5 -
+          D5 - - - - - - - . . . . . . . .`,
+      },
+      {
+        chords: ['Ab', 'Bb', 'Gm', 'Cm', 'Ab', 'Bb', 'G', 'G'],
+        pad: true,
+        sweep: [2600, 3200],
+        lead: `
+          C6 - - - - - - - Bb5 - - - Ab5 - - -
+          D6 - - - - - - - F6 - - - D6 - - -
+          Bb5 - - - D6 - - - G5 - - - Bb5 - - -
+          C6 - - - - - - - - - - - . . . .
+          Eb6 - - - C6 - - - Ab5 - C6 - Eb6 - - -
+          F6 - - - D6 - - - Bb5 - D6 - F6 - - -
+          G5 - B5 - D6 - B5 - G5 - B5 - D6 - F6 -
+          Eb6 - - - D6 - - - B5 - - - G5 - - -`,
+      },
+      {
+        chords: ['Cm', 'Ab', 'Eb', 'Bb', 'Cm', 'Ab', 'Eb', 'Bb'],
+        pad: true,
+        sweep: [2000, 3200],
+        lead: 'same:1',
+      },
+      { chords: ['Ab', 'Bb', 'Cm', 'Cm'], bass: false, drums: 'off', pad: true, sweep: [3000, 600] },
+    ],
+    sound: {
+      gain: 0.27, // общая громкость трека: подобрана по замеру LUFS, чтобы не глушить звуки игры
+      lead: { wave: 'saw2', vol: 0.12, cutoff: 3600, q: 1.2, vib: true, delay: 0.35, verb: 0.2 },
+      bass: { wave: 'pluck', vol: 0.09, cutoff: 1600, drive: 3 },
+      arp: { wave: 'square', vol: 0.07, q: 6, delay: 0.25 },
+      pad: { vol: 0.028, cutoff: 1300 },
+      drums: { k: 0.75, s: 1.4, h: 0.16, o: 0.18 },
+      duck: 0.6,
+      fb: 0.35,
+      dlyWet: 0.45,
+      verbWet: 0.6,
+    },
+  },
+
+  // Арена и босс-рейд: тёмный и быстрый, ми минор, бас с перегрузом.
+  hunt: {
     bpm: 132,
-    chords: ['Am', 'F', 'C', 'G', 'Am', 'F', 'C', 'G'],
-    lead: `
-      A4 - C5 - E5 - A5 - G5 - E5 - . . C5 -
-      F5 - - - E5 - C5 - A4 - - - C5 - D5 -
-      E5 - - - G5 - E5 - C5 - - - D5 - E5 -
-      D5 - - - B4 - G4 - . . G4 - A4 - B4 -
-      C6 - - - B5 - A5 - E5 - - - A5 - B5 -
-      C6 - - - A5 - F5 - C5 - - - F5 - G5 -
-      E5 - G5 - C6 - - - B5 - G5 - E5 - G5 -
-      D5 - - - - - - - B4 - D5 - G5 - B5 -`,
-    bass: 'drive',
-    arp: 'sixteenths',
-    drums: { k: 'x...x...x...x...', s: '....x.......x...', h: 'x.x.x.x.x.x.x.x.' },
-    vol: { lead: 0.04, bass: 0.1, arp: 0.014 },
+    bass: 'r . r o r . r o r . r o r r o r',
+    arp: '3 2 0 2 3 2 0 2 4 2 0 2 3 2 0 2',
+    drums: { k: 'x...x...x...x...', s: '....x.......x...', h: 'xxxxxxxxxxxxxxxx', o: '..x...x...x...x.' },
+    parts: [
+      { chords: ['Em', 'C', 'D', 'B'], drums: 'hats', sweep: [400, 1200] },
+      {
+        chords: ['Em', 'C', 'D', 'B', 'Em', 'C', 'D', 'B'],
+        sweep: [1200, 2400],
+        lead: `
+          E5 - - - B5 - - - - - - - G5 - A5 -
+          B5 - - - - - G5 - E5 - - - - - - -
+          F#5 - - - A5 - - - D6 - - - C6 - - -
+          B5 - - - - - - - A5 - - - F#5 - D#5 -
+          E5 - - - B5 - - - - - - - G5 - A5 -
+          B5 - - - C6 - - - E6 - - - D6 - C6 -
+          A5 - - - - - - - F#5 - - - A5 - C6 -
+          B5 - - - - - - - - - - - . . . .`,
+      },
+      {
+        chords: ['Am', 'Em', 'C', 'B', 'Am', 'Em', 'C', 'B'],
+        pad: true,
+        sweep: [2400, 3000],
+        lead: `
+          A5 - - - C6 - - - E6 - - - - - - -
+          D6 - - - B5 - - - G5 - - - - - - -
+          E6 - - - - - D6 - C6 - - - G5 - - -
+          F#5 - - - - - - - D#5 - - - F#5 - A5 -
+          C6 - - - B5 - A5 - E5 - - - A5 - B5 -
+          G5 - - - - - - - B5 - - - E6 - - -
+          E6 - - - D6 - C6 - B5 - - - G5 - - -
+          F#5 - - - A5 - - - B5 - - - D#6 - - -`,
+      },
+      {
+        chords: ['Em', 'C', 'D', 'B', 'Em', 'C', 'D', 'B'],
+        pad: true,
+        sweep: [1800, 3000],
+        lead: 'same:1',
+      },
+      { chords: ['C', 'D', 'B', 'B'], bass: false, drums: 'hats', pad: true, sweep: [2800, 500] },
+    ],
+    sound: {
+      gain: 0.25, // общая громкость трека: подобрана по замеру LUFS, чтобы не глушить звуки игры
+      lead: { wave: 'saw2', vol: 0.13, cutoff: 3000, q: 2, vib: true, delay: 0.3, verb: 0.18 },
+      bass: { wave: 'pluck', vol: 0.09, cutoff: 2000, drive: 6 },
+      arp: { wave: 'sawtooth', vol: 0.09, q: 8, delay: 0.2 },
+      pad: { vol: 0.03, cutoff: 1200 },
+      drums: { k: 0.8, s: 1.4, h: 0.14, o: 0.16 },
+      duck: 0.65,
+      fb: 0.3,
+      dlyWet: 0.4,
+      verbWet: 0.55,
+    },
   },
-  // Боевая тема: ре минор, быстро и с напором.
+
+  // Бой «как в Undertale»: чиптюн в ре миноре, быстро и с напором.
   battle: {
     bpm: 150,
-    chords: ['Dm', 'Dm', 'C', 'C', 'Bb', 'Bb', 'C', 'A'],
-    lead: `
-      A4 - D5 - F5 - A5 - G5 F5 E5 D5 E5 - F5 -
-      A5 - - - C6 - A5 - G5 - F5 - E5 - D5 -
-      E5 - G5 - C6 - G5 - E5 - C5 - E5 - G5 -
-      F5 - E5 - D5 - C5 - E5 - - - . . . .
-      D5 - F5 - Bb5 - F5 - D5 - F5 - A5 - Bb5 -
-      C6 - - - Bb5 - A5 - G5 - F5 - D5 - F5 -
-      G5 - - - E5 - C5 - G5 - A5 - Bb5 - C6 -
-      C#6 - - - A5 - - - E5 - - - C#5 - E5 -`,
-    bass: 'pump',
-    arp: 'sixteenths',
+    bass: 'r . o . r . o . r . o . r . o .',
+    arp: '0 1 2 1 0 1 2 1 0 1 2 1 0 1 2 1',
     drums: { k: 'x..x..x.x..x..x.', s: '....x.......x..x', h: 'xxxxxxxxxxxxxxxx' },
-    vol: { lead: 0.042, bass: 0.1, arp: 0.012 },
+    parts: [
+      {
+        chords: ['Dm', 'Dm', 'C', 'C', 'Bb', 'Bb', 'C', 'A'],
+        sweep: [1600, 1600],
+        lead: `
+          A4 - D5 - F5 - A5 - G5 F5 E5 D5 E5 - F5 -
+          A5 - - - C6 - A5 - G5 - F5 - E5 - D5 -
+          E5 - G5 - C6 - G5 - E5 - C5 - E5 - G5 -
+          F5 - E5 - D5 - C5 - E5 - - - . . . .
+          D5 - F5 - Bb5 - F5 - D5 - F5 - A5 - Bb5 -
+          C6 - - - Bb5 - A5 - G5 - F5 - D5 - F5 -
+          G5 - - - E5 - C5 - G5 - A5 - Bb5 - C6 -
+          C#6 - - - A5 - - - E5 - - - C#5 - E5 -`,
+      },
+    ],
+    sound: {
+      lead: { wave: 'square', vol: 0.042 },
+      bass: { wave: 'triangle', vol: 0.1, oct: 2 },
+      arp: { wave: 'sawtooth', vol: 0.012, q: 0.7 },
+      drums: { k: 0.28, s: 0.09, h: 0.025, chip: true },
+      duck: 0,
+      verbWet: 0,
+    },
   },
 };
 
-// Бас и арпеджио строятся из аккордов, мелодия и барабаны — из строк.
+// Партии собираются в один цикл: по шестнадцатым — список нот.
 function compileTrack(tr) {
-  const bars = tr.chords.length, steps = bars * 16;
+  const bars = tr.parts.reduce((n, p) => n + p.chords.length, 0);
+  const steps = bars * 16;
   const byStep = Array.from({ length: steps }, () => []);
-  const add = (step, inst, notes, len) => byStep[step % steps].push({ inst, freqs: notes.map(noteFreq).filter(Boolean), len });
-  for (const ev of parseLine(tr.lead)) add(ev.step, 'lead', ev.notes, ev.len);
-  tr.chords.forEach((name, bar) => {
-    const ch = CHORDS[name], root = ch[0], s0 = bar * 16;
-    if (tr.bass === 'half') {
-      add(s0, 'bass', [root + '2'], 8);
-      add(s0 + 8, 'bass', [ch[2] + '2'], 8);
-    } else if (tr.bass === 'drive') {
-      for (let i = 0; i < 8; i++) add(s0 + i * 2, 'bass', [root + (i % 4 === 2 ? '3' : '2')], 2);
-    } else {
-      for (let i = 0; i < 8; i++) add(s0 + i * 2, 'bass', [root + (i % 2 ? '3' : '2')], 1);
+  const add = (step, ev) => byStep[step % steps].push(ev);
+  const bassPat = parseLine(tr.bass), arpPat = parseLine(tr.arp);
+  const leads = [];
+  let bar0 = 0;
+  tr.parts.forEach((part, pi) => {
+    const n = part.chords.length;
+    const s0 = bar0 * 16;
+    let lead = part.lead || '';
+    if (lead.startsWith('same:')) lead = tr.parts[Number(lead.slice(5))].lead;
+    leads.push(lead);
+    if (lead) {
+      const evs = parseLine(lead);
+      if (evs.steps !== n * 16) console.warn(`music: партия ${pi} — ${evs.steps} шестнадцатых вместо ${n * 16}`);
+      for (const ev of evs) add(s0 + ev.step, { inst: 'lead', freqs: ev.tok.split('+').map(noteFreq).filter(Boolean), len: ev.len });
     }
-    const tones = [ch[0] + '4', ch[1] + '4', ch[2] + '4', ch[1] + '4'];
-    if (tr.arp === 'eighths') for (let i = 0; i < 8; i++) add(s0 + i * 2, 'arp', [tones[i % 4]], 2);
-    else for (let i = 0; i < 16; i++) add(s0 + i, 'arp', [tones[i % 4]], 1);
-    for (const [inst, pat] of Object.entries(tr.drums)) {
-      for (let i = 0; i < 16; i++) if (pat[i] === 'x') byStep[s0 + i].push({ inst, freqs: [], len: 1 });
-    }
+    part.chords.forEach((name, b) => {
+      const st = s0 + b * 16;
+      const ch = CHORDS[name];
+      const root = ch[0];
+      if (part.bass !== false) {
+        const oct = tr.sound.bass.oct || (NOTE_IDX[root] >= 9 ? 1 : 2);
+        for (const ev of bassPat) {
+          const note = ev.tok === 'o' ? root + (oct + 1) : ev.tok === 'f' ? ch[2] + (NOTE_IDX[ch[2]] > NOTE_IDX[root] ? oct : oct + 1) : root + oct;
+          add(st + ev.step, { inst: 'bass', freqs: [noteFreq(note)], len: ev.len });
+        }
+      }
+      if (part.arp !== false) {
+        const v = voicing(name, 4);
+        const tones = [v[0], v[1], v[2], root + 5, ch[1] + (Number(v[1].slice(-1)) + 1)];
+        const sw = part.sweep || [1600, 1600];
+        for (const ev of arpPat) {
+          const k = (b * 16 + ev.step) / (n * 16);
+          add(st + ev.step, { inst: 'arp', freqs: [noteFreq(tones[Number(ev.tok)])], len: ev.len, cut: sw[0] + (sw[1] - sw[0]) * k });
+        }
+      }
+      if (part.pad) add(st, { inst: 'pad', freqs: voicing(name, 3).map(noteFreq), len: 16 });
+      const dm = part.drums || 'full';
+      for (const [inst, pat] of Object.entries(tr.drums)) {
+        if (dm === 'off' || (dm === 'hats' && inst !== 'h' && inst !== 'o')) continue;
+        for (let i = 0; i < 16; i++) if (pat[i] === 'x') byStep[st + i].push({ inst, freqs: [], len: 1 });
+      }
+    });
+    bar0 += n;
   });
-  return { stepDur: 60 / tr.bpm / 4, steps, byStep, vol: tr.vol };
+  return { bpm: tr.bpm, stepDur: 60 / tr.bpm / 4, steps, byStep, sound: tr.sound };
+}
+
+// ---------- синтезатор ----------
+const musicNoise = new WeakMap();
+function noiseFor(ctx) {
+  let b = musicNoise.get(ctx);
+  if (!b) {
+    b = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    musicNoise.set(ctx, b);
+  }
+  return b;
+}
+
+// «Комната» для реверба: затухающий шум.
+function impulse(ctx, sec) {
+  const len = Math.floor(ctx.sampleRate * sec);
+  const b = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = b.getChannelData(c);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+  }
+  return b;
+}
+
+function softClip(amount) {
+  const n = 1024, c = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    c[i] = Math.tanh(x * amount) / Math.tanh(amount);
+  }
+  return c;
+}
+
+// Шина трека: громкость, «качание» от бочки, эхо и реверб.
+function makeMusicBus(ctx, dest, track) {
+  const s = track.sound, nodes = [];
+  const node = (n) => (nodes.push(n), n);
+  const gain = (v, to) => {
+    const g = node(ctx.createGain());
+    g.gain.value = v;
+    if (to) g.connect(to);
+    return g;
+  };
+  const out = gain(s.gain || 0.55, dest);
+  const duck = gain(1, out);
+  const bus = { ctx, out, duck, nodes, noise: noiseFor(ctx), s, beat: 60 / track.bpm };
+  let dly = null, verb = null;
+  if (s.fb) {
+    dly = node(ctx.createDelay(2));
+    dly.delayTime.value = bus.beat * 0.75;
+    const lp = node(ctx.createBiquadFilter());
+    lp.type = 'lowpass';
+    lp.frequency.value = 2600;
+    dly.connect(lp);
+    lp.connect(gain(s.fb, dly));
+    lp.connect(gain(s.dlyWet, out));
+  }
+  if (s.verbWet) {
+    verb = node(ctx.createConvolver());
+    verb.buffer = impulse(ctx, 1.6);
+    verb.connect(gain(s.verbWet, out));
+  }
+  const send = (src, to, v) => {
+    if (to && v) src.connect(gain(v, to));
+  };
+  bus.lead = gain(1, out);
+  send(bus.lead, dly, s.lead.delay);
+  send(bus.lead, verb, s.lead.verb);
+  bus.arp = gain(1, duck);
+  send(bus.arp, dly, s.arp.delay);
+  bus.pad = gain(1, duck);
+  send(bus.pad, verb, 0.4);
+  if (s.bass.drive) {
+    bus.bass = node(ctx.createWaveShaper());
+    bus.bass.curve = softClip(s.bass.drive);
+    bus.bass.connect(gain(1 / Math.sqrt(s.bass.drive), duck));
+  } else bus.bass = gain(1, duck);
+  bus.drums = gain(1, out);
+  bus.snare = gain(1, out);
+  send(bus.snare, verb, 0.35);
+  return bus;
+}
+
+function freeMusicBus(bus) {
+  for (const n of bus.nodes) n.disconnect();
+}
+
+// Одна нота или удар барабана в момент t.
+function playMusicEvent(bus, ev, t, stepDur) {
+  const ctx = bus.ctx, s = bus.s;
+  const dur = ev.len * stepDur;
+  const osc = (type, f, det, dest) => {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f, t);
+    if (det) o.detune.setValueAtTime(det, t);
+    o.connect(dest);
+    o.start(t);
+    return o;
+  };
+  const lowpass = (f, q, dest) => {
+    const fl = ctx.createBiquadFilter();
+    fl.type = 'lowpass';
+    fl.frequency.setValueAtTime(f, t);
+    fl.Q.value = q || 0.7;
+    fl.connect(dest);
+    return fl;
+  };
+  // огибающая: быстрая атака, спад до sus, затухание к концу ноты
+  const env = (vol, d, dest, atk = 0.012, sus = 0.55) => {
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + atk);
+    g.gain.exponentialRampToValueAtTime(vol * sus, t + Math.max(atk + 0.02, d * 0.5));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    g.connect(dest);
+    return g;
+  };
+  const noise = (type, f0, vol, d, dest, q, at = t) => {
+    const src = ctx.createBufferSource();
+    src.buffer = bus.noise;
+    const fl = ctx.createBiquadFilter();
+    fl.type = type;
+    fl.frequency.value = f0;
+    if (q) fl.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, at);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + d);
+    src.connect(fl);
+    fl.connect(g);
+    g.connect(dest);
+    src.start(at, Math.random() * 0.5);
+    src.stop(at + d + 0.02);
+  };
+  const stopAll = (list, end) => list.forEach((o) => o.stop(end));
+
+  if (ev.inst === 'lead') {
+    const L = s.lead;
+    for (const f of ev.freqs) {
+      const d = dur * 0.95;
+      const g = env(L.vol, d + 0.06, bus.lead, 0.01, L.wave === 'square' ? 0.55 : 0.75);
+      const dest = L.cutoff ? lowpass(L.cutoff, L.q, g) : g;
+      const list = L.wave === 'saw2' ? [osc('sawtooth', f, -9, dest), osc('sawtooth', f, 9, dest)] : [osc(L.wave, f, 0, dest)];
+      if (L.vib && d > 0.3) {
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = 5.5;
+        const depth = ctx.createGain();
+        depth.gain.setValueAtTime(0, t);
+        depth.gain.linearRampToValueAtTime(14, t + 0.3);
+        lfo.connect(depth);
+        for (const o of list) depth.connect(o.detune);
+        lfo.start(t);
+        list.push(lfo);
+      }
+      stopAll(list, t + d + 0.1);
+    }
+  } else if (ev.inst === 'bass') {
+    const B = s.bass;
+    for (const f of ev.freqs) {
+      if (B.wave === 'pluck') {
+        // пила + квадрат через фильтр, который захлопывается — «щелчок» как у синтвейв-баса
+        const d = Math.max(0.09, dur * 0.85);
+        const g = env(B.vol, d, bus.bass, 0.004, 0.6);
+        const fl = lowpass(B.cutoff, 5, g);
+        fl.frequency.exponentialRampToValueAtTime(170, t + 0.14);
+        stopAll([osc('sawtooth', f, 0, fl), osc('square', f, -6, fl)], t + d + 0.02);
+      } else if (B.wave === 'soft') {
+        const d = dur * 0.95;
+        const g = env(B.vol, d, bus.bass, 0.03, 0.8);
+        stopAll([osc('triangle', f, 0, g), osc('sine', f / 2, 0, g)], t + d + 0.02);
+      } else {
+        const d = dur * 0.9;
+        stopAll([osc(B.wave, f, 0, env(B.vol, d, bus.bass))], t + d + 0.02);
+      }
+    }
+  } else if (ev.inst === 'arp') {
+    const A = s.arp;
+    for (const f of ev.freqs) {
+      const d = dur * 0.9;
+      const g = env(A.vol, d, bus.arp, 0.005, 0.4);
+      stopAll([osc(A.wave, f, 0, lowpass(ev.cut, A.q, g))], t + d + 0.02);
+    }
+  } else if (ev.inst === 'pad') {
+    const P = s.pad;
+    const d = dur;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(P.vol, t + 0.35);
+    g.gain.setValueAtTime(P.vol, t + d - 0.1);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.4);
+    g.connect(bus.pad);
+    const fl = lowpass(P.cutoff, 0.7, g);
+    const list = [];
+    for (const f of ev.freqs) list.push(osc('sawtooth', f, -11, fl), osc('sawtooth', f, 11, fl));
+    stopAll(list, t + d + 0.45);
+  } else if (ev.inst === 'k') {
+    const D = s.drums;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    const tail = D.chip ? 0.14 : 0.32;
+    o.frequency.setValueAtTime(D.chip ? 150 : 165, t);
+    o.frequency.exponentialRampToValueAtTime(D.chip ? 45 : 42, t + (D.chip ? 0.12 : 0.11));
+    g.gain.setValueAtTime(D.k, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + tail);
+    o.connect(g);
+    g.connect(bus.drums);
+    o.start(t);
+    o.stop(t + tail + 0.02);
+    if (!D.chip) noise('highpass', 2500, D.k * 0.12, 0.012, bus.drums);
+    // бочка «приглушает» бас, арпеджио и подклад — весь трек дышит в такт
+    if (s.duck) {
+      bus.duck.gain.setValueAtTime(1 - s.duck, t);
+      bus.duck.gain.linearRampToValueAtTime(1, t + bus.beat * 0.6);
+    }
+  } else if (ev.inst === 's') {
+    const D = s.drums;
+    if (D.chip) noise('bandpass', 1800, D.s, 0.11, bus.snare);
+    else {
+      // хлопок: три быстрых всплеска шума и хвост в реверб
+      for (const dt of [0, 0.011, 0.022]) noise('bandpass', 1300, D.s, 0.03, bus.snare, 1.2, t + dt);
+      noise('bandpass', 1500, D.s * 0.8, 0.24, bus.snare, 0.9, t + 0.03);
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(200, t);
+      o.frequency.exponentialRampToValueAtTime(140, t + 0.08);
+      g.gain.setValueAtTime(D.s * 0.6, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+      o.connect(g);
+      g.connect(bus.snare);
+      o.start(t);
+      o.stop(t + 0.1);
+    }
+  } else if (ev.inst === 'h') noise('highpass', s.drums.chip ? 7000 : 8000, s.drums.h, s.drums.chip ? 0.035 : 0.03, bus.drums);
+  else if (ev.inst === 'o') noise('highpass', 6500, s.drums.o, 0.2, bus.drums);
 }
 
 const Music = {
@@ -879,7 +1306,7 @@ const Music = {
   cur: null,
   step: 0,
   nextT: 0,
-  out: null, // свой регулятор громкости у каждого трека — чтобы старый трек мягко затухал
+  bus: null, // своя шина у каждого трека — чтобы старый трек мягко затухал
   cache: {},
 
   toggle() {
@@ -889,17 +1316,20 @@ const Music = {
     else this.name = '';
   },
 
+  compiled(name) {
+    return this.cache[name] || (this.cache[name] = compileTrack(MUSIC_TRACKS[name]));
+  },
+
   fadeOut() {
     const a = Sound.audio();
-    if (a && this.out) {
-      const t = a.ctx.currentTime;
-      this.out.gain.cancelScheduledValues(t);
-      this.out.gain.setValueAtTime(this.out.gain.value, t);
-      this.out.gain.linearRampToValueAtTime(0, t + 0.6);
-      const old = this.out;
-      setTimeout(() => old.disconnect(), 900);
+    if (a && this.bus) {
+      const t = a.ctx.currentTime, g = this.bus.out.gain, old = this.bus;
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(g.value, t);
+      g.linearRampToValueAtTime(0, t + 0.6);
+      setTimeout(() => freeMusicBus(old), 2500);
     }
-    this.out = null;
+    this.bus = null;
     this.cur = null;
   },
 
@@ -912,10 +1342,8 @@ const Music = {
       this.name = want;
       this.fadeOut();
       if (want) {
-        this.cur = this.cache[want] || (this.cache[want] = compileTrack(MUSIC_TRACKS[want]));
-        this.out = a.ctx.createGain();
-        this.out.gain.value = 0.55;
-        this.out.connect(a.master);
+        this.cur = this.compiled(want);
+        this.bus = makeMusicBus(a.ctx, a.master, this.cur);
         this.step = 0;
         this.nextT = a.ctx.currentTime + 0.1;
       }
@@ -924,66 +1352,22 @@ const Music = {
     const now = a.ctx.currentTime;
     if (this.nextT < now - 0.2) this.nextT = now + 0.05; // вкладка спала — не играем пропущенное пачкой
     while (this.nextT < now + 0.25) {
-      for (const ev of this.cur.byStep[this.step]) this.play(a, ev, this.nextT);
+      for (const ev of this.cur.byStep[this.step]) playMusicEvent(this.bus, ev, this.nextT, this.cur.stepDur);
       this.nextT += this.cur.stepDur;
       this.step = (this.step + 1) % this.cur.steps;
     }
   },
 
-  play(a, ev, t) {
-    const ctx = a.ctx, out = this.out, v = this.cur.vol;
-    const dur = ev.len * this.cur.stepDur;
-    const voice = (type, f, vol, d, filter) => {
-      const o = ctx.createOscillator();
-      o.type = type;
-      o.frequency.setValueAtTime(f, t);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
-      g.gain.exponentialRampToValueAtTime(vol * 0.55, t + Math.max(0.03, d * 0.5));
-      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
-      if (filter) {
-        const f2 = ctx.createBiquadFilter();
-        f2.type = 'lowpass';
-        f2.frequency.value = filter;
-        o.connect(f2);
-        f2.connect(g);
-      } else o.connect(g);
-      g.connect(out);
-      o.start(t);
-      o.stop(t + d + 0.02);
-    };
-    const hit = (filter, f0, vol, d) => {
-      const src = ctx.createBufferSource();
-      src.buffer = a.noiseBuf;
-      const fl = ctx.createBiquadFilter();
-      fl.type = filter;
-      fl.frequency.value = f0;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(vol, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
-      src.connect(fl);
-      fl.connect(g);
-      g.connect(out);
-      src.start(t, Math.random());
-      src.stop(t + d + 0.02);
-    };
-    if (ev.inst === 'lead') for (const f of ev.freqs) voice('square', f, v.lead, dur * 0.95, 0);
-    else if (ev.inst === 'bass') for (const f of ev.freqs) voice('triangle', f, v.bass, dur * 0.9, 0);
-    else if (ev.inst === 'arp') for (const f of ev.freqs) voice('sawtooth', f, v.arp, dur * 0.9, 1600);
-    else if (ev.inst === 'k') {
-      const o = ctx.createOscillator();
-      o.frequency.setValueAtTime(150, t);
-      o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.28, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-      o.connect(g);
-      g.connect(out);
-      o.start(t);
-      o.stop(t + 0.16);
-    } else if (ev.inst === 's') hit('bandpass', 1800, 0.09, 0.11);
-    else if (ev.inst === 'h') hit('highpass', 7000, 0.025, 0.035);
+  // Записать кусок трека без звука (для проверки громкости и превью); only — только эти инструменты.
+  render(name, seconds, only = null, rate = 44100) {
+    const tr = this.compiled(name);
+    const ctx = new OfflineAudioContext(2, Math.ceil(rate * seconds), rate);
+    const bus = makeMusicBus(ctx, ctx.destination, tr);
+    let t = 0.05;
+    for (let i = 0; t < seconds; i++, t += tr.stepDur) {
+      for (const ev of tr.byStep[i % tr.steps]) if (!only || only.includes(ev.inst)) playMusicEvent(bus, ev, t, tr.stepDur);
+    }
+    return ctx.startRendering();
   },
 };
 
@@ -5200,6 +5584,19 @@ function loadScript(src) {
   });
 }
 
+// Библиотека MQTT: своя копия рядом с игрой, иначе CDN.
+async function loadMqttLib() {
+  for (const src of MQTT_LIBS) {
+    if (window.mqtt) break;
+    try {
+      await loadScript(src);
+    } catch (e) {
+      /* пробуем следующий источник */
+    }
+  }
+  return !!window.mqtt;
+}
+
 function connectMqtt(url, clientId) {
   return new Promise((resolve) => {
     let done = false;
@@ -5267,15 +5664,7 @@ const Net = {
       this.error = 'Дуэль работает, когда игра открыта с сайта (GitHub Pages) или по ссылке claude.ai, а не из файла.';
       return false;
     }
-    for (const src of MQTT_LIBS) {
-      if (window.mqtt) break;
-      try {
-        await loadScript(src);
-      } catch (e) {
-        /* пробуем следующий источник */
-      }
-    }
-    if (!window.mqtt) {
+    if (!(await loadMqttLib())) {
       this.error = 'Нет интернета: не загрузилась библиотека связи.';
       return false;
     }
@@ -5446,6 +5835,42 @@ function cleanNick(s) {
     .trim();
 }
 
+// Окно ввода ника (обычное поле, чтобы на телефоне появилась клавиатура). Ник общий: дуэли и зал славы.
+function askNick(hint, onDone) {
+  const box = document.getElementById('nick');
+  if (!box) return;
+  const form = box.querySelector('form');
+  const input = box.querySelector('input');
+  box.querySelector('p').textContent = hint;
+  input.maxLength = NICK_MAX;
+  input.value = Duel.name;
+  box.hidden = false;
+  const close = () => {
+    box.hidden = true;
+    form.onsubmit = null;
+    box.onclick = null;
+    input.onkeydown = null;
+    input.blur();
+  };
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    const nick = cleanNick(input.value);
+    close();
+    if (nick) onDone(nick);
+  };
+  box.onclick = (e) => {
+    if (e.target === box || e.target.closest('[data-nick=cancel]')) close();
+    else if (e.target.closest('[data-nick=random]')) input.value = randomNick();
+  };
+  input.onkeydown = (e) => {
+    if (e.key === 'Escape') close();
+  };
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 30);
+}
+
 const Duel = {
   phase: 'off', // off | connecting | lobby | hosting | joining | countdown | playing | over | unavailable
   mode: duelMode(Store.get('kd_mode')), // arena | raid | boss
@@ -5507,47 +5932,20 @@ const Duel = {
 
   setNick(raw) {
     const nick = cleanNick(raw);
-    if (!nick || this.phase !== 'lobby') return false;
+    if (!nick) return false;
     this.name = nick;
     this.nickAsked = true;
     Store.set('kd_nick', nick);
-    this.lobbyState(null);
+    if (this.phase === 'lobby') this.lobbyState(null);
     return true;
   },
 
-  // Окно ввода ника (обычное поле, чтобы на телефоне появилась клавиатура).
   editNick() {
-    const box = document.getElementById('nick');
-    if (!box || this.phase !== 'lobby') return;
-    const form = box.querySelector('form');
-    const input = box.querySelector('input');
+    if (this.phase !== 'lobby') return;
     this.nickAsked = true;
-    input.maxLength = NICK_MAX;
-    input.value = this.name;
-    box.hidden = false;
-    const close = () => {
-      box.hidden = true;
-      form.onsubmit = null;
-      box.onclick = null;
-      input.onkeydown = null;
-      input.blur();
-    };
-    form.onsubmit = (e) => {
-      e.preventDefault();
-      if (this.setNick(input.value)) Sound.coin();
-      close();
-    };
-    box.onclick = (e) => {
-      if (e.target === box || e.target.closest('[data-nick=cancel]')) close();
-      else if (e.target.closest('[data-nick=random]')) input.value = randomNick();
-    };
-    input.onkeydown = (e) => {
-      if (e.key === 'Escape') close();
-    };
-    setTimeout(() => {
-      input.focus();
-      input.select();
-    }, 30);
+    askNick('Его увидит соперник в списке дуэлей и во время боя. До 16 символов.', (nick) => {
+      if (this.setNick(nick)) Sound.coin();
+    });
   },
 
   nickOpen() {
@@ -9267,6 +9665,428 @@ function drawUtGameOver(ctx, B) {
   }
 }
 
+// ---- js/top.js ----
+'use strict';
+/* Зал славы — как на старых игровых автоматах: закончил забег, вписал ник — попал в топ.
+   Топ этого устройства хранится в браузере. Общий топ — на тех же бесплатных MQTT-серверах,
+   что и дуэль: у каждого ника одно «закреплённое» (retained) сообщение с его лучшим забегом,
+   и каждый, кто открывает зал славы, получает их все. Ни регистрации, ни базы данных —
+   и никакой защиты: топ держится на честном слове игроков. Свои рекорды игра помнит и
+   при каждом заходе в зал славы досылает их, если сервер их потерял. */
+
+const TOP_TOPIC = NET_PREFIX + '/top';
+const TOP_LOCAL = 10; // строк в топе устройства
+const TOP_MAX = 100; // строк в общем топе
+const TOP_ROWS = 10; // строк на странице
+
+// Ключ ника: регистр и «ё» не важны. Два разных 32-битных хеша — чтобы ники почти не совпадали.
+function topKey(nick) {
+  const s = cleanNick(nick).toLowerCase().replace(/ё/g, 'е');
+  let a = 0x811c9dc5, b = 0x9747b28c;
+  for (const ch of s) {
+    const c = ch.codePointAt(0);
+    a = Math.imul(a ^ c, 16777619) >>> 0;
+    b = Math.imul(b ^ c, 0x5bd1e995) >>> 0;
+    b = (b ^ (b >>> 15)) >>> 0;
+  }
+  return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0');
+}
+
+// Запись из сети — чужие данные: проверяем и обрезаем.
+function cleanTopEntry(o) {
+  if (!o || typeof o !== 'object') return null;
+  const n = cleanNick(o.n);
+  const s = Math.floor(Number(o.s));
+  if (!n || !Number.isFinite(s) || s <= 0 || s > 1e9) return null;
+  const int = (v, max) => clamp(Math.floor(Number(v)) || 0, 0, max);
+  return { n, s, l: int(o.l, 9), w: o.w ? 1 : 0, k: int(o.k, 1e6), t: int(o.t, 1e6), d: int(o.d, 4e12) };
+}
+
+function loadJson(key, def) {
+  try {
+    const v = JSON.parse(Store.get(key) || 'null');
+    return v && typeof v === 'object' ? v : def;
+  } catch (e) {
+    return def;
+  }
+}
+
+const fmtScore = (s) => '$' + String(s).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+// Одна короткая сессия с сервером: забрать все записи топа и дослать свои, если их там нет.
+function topSession(url, mine) {
+  return new Promise((resolve) => {
+    const got = new Map();
+    let client = null, done = false, idle = null;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      clearTimeout(idle);
+      clearTimeout(hard);
+      if (client) client.end(true);
+      resolve(ok ? got : null);
+    };
+    const hard = setTimeout(() => finish(got.size > 0), 12000);
+    const publishMine = () => {
+      const send = mine.filter((e) => !(got.has(topKey(e.n)) && got.get(topKey(e.n)).s >= e.s));
+      if (!send.length) return finish(true);
+      let left = send.length;
+      for (const e of send) {
+        client.publish(`${TOP_TOPIC}/${topKey(e.n)}`, JSON.stringify(e), { qos: 1, retain: true }, (err) => {
+          if (!err) got.set(topKey(e.n), e);
+          if (--left === 0) finish(true);
+        });
+      }
+    };
+    // закреплённые сообщения приходят сразу после подписки — ждём, пока поток стихнет
+    const wait = () => {
+      clearTimeout(idle);
+      idle = setTimeout(publishMine, 1300);
+    };
+    connectMqtt(url, 'kdt_' + Math.random().toString(36).slice(2, 10)).then((c) => {
+      if (!c) return finish(false);
+      if (done) return c.end(true);
+      client = c;
+      c.on('message', (topic, payload) => {
+        const key = String(topic).split('/').pop();
+        if (got.size >= 500 || !/^[0-9a-f]{16}$/.test(key)) return;
+        let e = null;
+        try {
+          e = cleanTopEntry(JSON.parse(String(payload)));
+        } catch (err) {
+          /* мусор пропускаем */
+        }
+        if (e && topKey(e.n) === key) got.set(key, e);
+        wait();
+      });
+      c.subscribe(TOP_TOPIC + '/+', { qos: 0 }, (err) => (err ? finish(false) : wait()));
+    });
+  });
+}
+
+const Top = {
+  local: loadJson('kd_top', []).map(cleanTopEntry).filter(Boolean).slice(0, TOP_LOCAL),
+  localIds: loadJson('kd_top_ids', []),
+  mine: loadJson('kd_top_mine', {}), // лучший забег каждого своего ника — его досылаем серверу
+  auto: Store.get('kd_top_auto') === '1', // уже записывался — дальше записываем сам
+  global: [],
+  status: 'idle', // idle | loading | ready | offline
+  error: '',
+  loadedAt: 0,
+  syncing: null,
+  run: null, // { id, entry, sent }
+  tab: 'all', // all | local
+  page: 0,
+  back: 'title',
+
+  available() {
+    return /^https?:$/.test(location.protocol) || !!window.KD_MQTT_BROKERS;
+  },
+
+  saveLocal() {
+    Store.set('kd_top', JSON.stringify(this.local));
+    Store.set('kd_top_ids', JSON.stringify(this.localIds));
+  },
+
+  // Конец забега (смерть или победа над боссом): обновить запись этого забега.
+  record(g) {
+    if (g.duel || g.cheated) return;
+    const s = Math.floor(g.player.earned);
+    if (s <= 0) return;
+    if (!this.run || this.run.id !== g.runId) this.run = { id: g.runId, entry: null, sent: false };
+    const final = g.state === 'win' && g.levelIdx >= LEVELS.length - 1;
+    this.run.entry = { n: Duel.name, s, l: g.levelIdx + 1, w: final ? 1 : 0, k: g.kills, t: Math.round(g.runT), d: Date.now() };
+    this.putLocal(this.run);
+    if (this.auto || this.run.sent) this.submit();
+    else if (Date.now() - this.loadedAt > 15000) this.sync();
+  },
+
+  // Топ устройства: одна строка на забег.
+  putLocal(run) {
+    const i = this.localIds.indexOf(run.id);
+    if (i >= 0) {
+      this.local.splice(i, 1);
+      this.localIds.splice(i, 1);
+    }
+    const at = this.local.findIndex((e) => e.s < run.entry.s);
+    const pos = at < 0 ? this.local.length : at;
+    this.local.splice(pos, 0, { ...run.entry });
+    this.localIds.splice(pos, 0, run.id);
+    this.local.length = Math.min(this.local.length, TOP_LOCAL);
+    this.localIds.length = this.local.length;
+    this.saveLocal();
+  },
+
+  // Записать забег в общий топ под текущим ником.
+  submit() {
+    const r = this.run;
+    if (!r || !r.entry) return;
+    r.entry.n = Duel.name;
+    r.sent = true;
+    this.putLocal(r);
+    const key = topKey(r.entry.n);
+    if (!this.mine[key] || this.mine[key].s < r.entry.s) {
+      this.mine[key] = { ...r.entry };
+      Store.set('kd_top_mine', JSON.stringify(this.mine));
+    }
+    if (!this.auto) {
+      this.auto = true;
+      Store.set('kd_top_auto', '1');
+    }
+    // своя запись видна в таблице сразу, не дожидаясь сервера
+    this.merge(new Map([[key, this.mine[key]]]));
+    this.sync(true);
+  },
+
+  merge(map) {
+    const all = new Map(this.global.map((e) => [topKey(e.n), e]));
+    for (const [k, e] of map) if (!all.has(k) || all.get(k).s < e.s) all.set(k, e);
+    this.global = [...all.values()].sort((a, b) => b.s - a.s || a.d - b.d).slice(0, TOP_MAX);
+  },
+
+  // Забрать общий топ со всех серверов (и дослать свои записи).
+  sync(again) {
+    if (this.syncing) {
+      if (again) this.syncAgain = true;
+      return this.syncing;
+    }
+    if (!this.available()) {
+      this.status = 'offline';
+      this.error = 'Общий топ работает, когда игра открыта с сайта.';
+      return Promise.resolve();
+    }
+    this.status = 'loading';
+    this.syncing = (async () => {
+      if (!(await loadMqttLib())) {
+        this.status = 'offline';
+        this.error = 'Нет интернета — не загрузилась библиотека связи.';
+        return;
+      }
+      const mine = Object.values(this.mine);
+      const res = await Promise.all(MQTT_BROKERS.map((u) => topSession(u, mine)));
+      const ok = res.filter(Boolean);
+      if (!ok.length) {
+        this.status = 'offline';
+        this.error = 'Нет связи с сервером. Твои рекорды сохранены — отправлю, когда появится связь.';
+        return;
+      }
+      this.global = [];
+      for (const m of ok) this.merge(m);
+      this.merge(new Map(mine.map((e) => [topKey(e.n), e])));
+      this.status = 'ready';
+      this.error = '';
+      this.loadedAt = Date.now();
+    })().finally(() => {
+      this.syncing = null;
+      if (this.syncAgain) {
+        this.syncAgain = false;
+        this.sync();
+      }
+    });
+    return this.syncing;
+  },
+
+  open(g) {
+    if (g.state !== 'top') this.back = g.state === 'dead' || g.state === 'win' ? g.state : 'title';
+    g.state = 'top';
+    this.page = 0;
+    if (this.status !== 'loading' && Date.now() - this.loadedAt > 15000) this.sync();
+  },
+
+  close(g) {
+    if (this.back === 'title') g.toTitle();
+    else g.state = this.back;
+  },
+
+  list() {
+    return this.tab === 'local' ? this.local : this.global;
+  },
+
+  pages() {
+    return Math.max(1, Math.ceil(this.list().length / TOP_ROWS));
+  },
+
+  flip(d) {
+    this.page = clamp(this.page + d, 0, this.pages() - 1);
+  },
+
+  // Место забега в общем топе (1 — первое).
+  rank(entry) {
+    const key = topKey(entry.n);
+    return 1 + this.global.filter((e) => e.s > entry.s && topKey(e.n) !== key).length;
+  },
+
+  editNick(then) {
+    askNick('Под этим ником тебя увидят в зале славы и в дуэлях. До 16 символов.', (nick) => {
+      if (Duel.setNick(nick)) Sound.coin();
+      if (then) then();
+    });
+  },
+};
+
+// ---------- экраны ----------
+const TOP_NEON = { pink: '#ff2a8a', cyan: '#33e6ff', sun: '#ffb13b' };
+
+function neonText(ctx, str, x, y, font, color, blur = 18) {
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = blur;
+  text(ctx, str, x, y, { font, color, align: 'center' });
+  ctx.restore();
+  text(ctx, str, x, y, { font, color: '#fff7fb', align: 'center' });
+}
+
+// Фон в духе 80-х: закат с полосами и сетка до горизонта.
+function drawSynthBackdrop(ctx, now) {
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#07020f');
+  sky.addColorStop(0.55, '#1f0633');
+  sky.addColorStop(0.56, '#090212');
+  sky.addColorStop(1, '#030106');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+  const hy = 400;
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  const sun = ctx.createLinearGradient(0, hy - 230, 0, hy);
+  sun.addColorStop(0, '#ffe36e');
+  sun.addColorStop(1, '#ff2a8a');
+  ctx.beginPath();
+  ctx.arc(640, hy, 230, Math.PI, 0);
+  ctx.fillStyle = sun;
+  ctx.fill();
+  ctx.fillStyle = '#1f0633';
+  for (let i = 0; i < 7; i++) ctx.fillRect(400, hy - 20 - i * 26, 480, 3 + i * 1.6);
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,42,138,0.45)';
+  ctx.lineWidth = 1.5;
+  for (let i = -16; i <= 16; i++) {
+    ctx.beginPath();
+    ctx.moveTo(640 + i * 14, hy);
+    ctx.lineTo(640 + i * 120, H);
+    ctx.stroke();
+  }
+  const off = (now * 0.6) % 1;
+  for (let i = 0; i < 9; i++) {
+    const k = (i + off) / 9;
+    const y = hy + (H - hy) * k * k;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawTopScreen(ctx, g, now) {
+  drawSynthBackdrop(ctx, now);
+  ctx.fillStyle = 'rgba(4,0,10,0.55)';
+  ctx.fillRect(0, 0, W, H);
+  neonText(ctx, 'ЗАЛ СЛАВЫ', 640, 74, `56px ${FONT.title}`, TOP_NEON.pink, 24);
+  text(ctx, 'как на игровом автомате: лучший забег каждого ника', 640, 104, { font: `bold 16px ${FONT.ui}`, color: TOP_NEON.cyan, align: 'center' });
+  const tabs = [['all', 'ВСЕ ИГРОКИ'], ['local', 'ЭТО УСТРОЙСТВО']];
+  tabs.forEach(([id, label], i) => {
+    mcButton(ctx, g, label, 400 + i * 250, 120, 230, 40, () => {
+      Top.tab = id;
+      Top.page = 0;
+    }, { size: 11, fill: Top.tab === id ? '#c2185b' : '#3a2a4a' });
+  });
+
+  const x0 = 140, w = 1000, y0 = 176, rowH = 38;
+  rr(ctx, x0, y0, w, 38 + TOP_ROWS * rowH + 8, 12);
+  ctx.fillStyle = 'rgba(10,2,22,0.82)';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255,42,138,0.6)';
+  ctx.stroke();
+  const cols = [
+    ['МЕСТО', 196, 'center'],
+    ['НИК', 250, 'left'],
+    ['ОЧКИ', 680, 'right'],
+    ['УРОВЕНЬ', 790, 'center'],
+    ['УБИЙСТВ', 905, 'center'],
+    ['ВРЕМЯ', 1005, 'center'],
+    ['ДАТА', 1090, 'center'],
+  ];
+  for (const [label, x, align] of cols) text(ctx, label, x, y0 + 26, { font: `10px ${FONT.pixel}`, color: TOP_NEON.cyan, align });
+
+  const list = Top.list();
+  Top.page = clamp(Top.page, 0, Top.pages() - 1);
+  const me = topKey(Duel.name);
+  const from = Top.page * TOP_ROWS;
+  list.slice(from, from + TOP_ROWS).forEach((e, i) => {
+    const y = y0 + 40 + i * rowH, rank = from + i + 1;
+    const mine = Top.tab === 'local' ? Top.run && Top.localIds[from + i] === Top.run.id : topKey(e.n) === me;
+    if (mine) {
+      ctx.fillStyle = `rgba(51,230,255,${0.16 + Math.sin(now * 5) * 0.06})`;
+      ctx.fillRect(x0 + 6, y, w - 12, rowH - 4);
+    } else if (i % 2) {
+      ctx.fillStyle = 'rgba(255,255,255,0.04)';
+      ctx.fillRect(x0 + 6, y, w - 12, rowH - 4);
+    }
+    const ty = y + 25;
+    const medal = ['#ffd54a', '#e0e0e0', '#ffab70'][rank - 1];
+    text(ctx, String(rank), 196, ty, { font: `bold 20px ${FONT.ui}`, color: medal || '#b39ddb', align: 'center' });
+    text(ctx, e.n, 250, ty, { font: `bold 19px ${FONT.ui}`, color: mine ? TOP_NEON.cyan : '#fff' });
+    text(ctx, fmtScore(e.s), 680, ty, { font: `22px ${FONT.gta}`, color: '#7ee05a', align: 'right' });
+    text(ctx, e.w ? 'ВСЕ 5 ★' : `${e.l} из ${LEVELS.length}`, 790, ty, { font: `bold 16px ${FONT.ui}`, color: e.w ? TOP_NEON.sun : '#e1d5f0', align: 'center' });
+    text(ctx, String(e.k), 905, ty, { font: `bold 16px ${FONT.ui}`, color: '#e1d5f0', align: 'center' });
+    text(ctx, `${Math.floor(e.t / 60)}:${pad(e.t % 60, 2)}`, 1005, ty, { font: `bold 16px ${FONT.ui}`, color: '#e1d5f0', align: 'center' });
+    const d = new Date(e.d);
+    text(ctx, e.d ? `${pad(d.getDate(), 2)}.${pad(d.getMonth() + 1, 2)}` : '—', 1090, ty, { font: `bold 15px ${FONT.ui}`, color: '#b39ddb', align: 'center' });
+  });
+
+  // что под таблицей: пусто, загрузка, нет связи
+  let note = '';
+  if (Top.tab === 'all') {
+    if (Top.status === 'loading') note = 'Связь с сервером' + '.'.repeat(1 + (Math.floor(now * 3) % 3));
+    else if (Top.status === 'offline') note = Top.error;
+    else if (!list.length && Top.status === 'ready') note = 'Пока пусто — сыграй и стань первым!';
+  } else if (!list.length) note = 'На этом устройстве ещё никто не играл.';
+  if (note && !list.length) text(ctx, note, 640, y0 + 200, { font: `bold 20px ${FONT.ui}`, color: '#e1d5f0', align: 'center' });
+  else if (note) text(ctx, note, 640, 628, { font: `bold 15px ${FONT.ui}`, color: '#ffab91', align: 'center' });
+
+  if (Top.pages() > 1) {
+    mcButton(ctx, g, '◄', 470, 596, 60, 34, () => Top.flip(-1), { size: 12 });
+    text(ctx, `стр. ${Top.page + 1} из ${Top.pages()}`, 640, 619, { font: `bold 16px ${FONT.ui}`, color: '#e1d5f0', align: 'center' });
+    mcButton(ctx, g, '►', 750, 596, 60, 34, () => Top.flip(1), { size: 12 });
+  }
+  mcButton(ctx, g, 'НАЗАД', 150, 656, 230, 44, () => Top.close(g), { size: 12 });
+  mcButton(ctx, g, Top.status === 'loading' ? 'ЖДУ...' : 'ОБНОВИТЬ', 525, 656, 230, 44, () => Top.sync(), { size: 12 });
+  mcButton(ctx, g, `НИК: ${Duel.name}`, 900, 656, 230, 44, () => Top.editNick(), { size: 9, fill: '#8a4a3a' });
+}
+
+// Панель на экранах смерти и победы: записаться в топ.
+function drawTopPanel(ctx, g, now) {
+  const x = 866, y = 318, w = 384, h = 190;
+  rr(ctx, x, y, w, h, 12);
+  ctx.fillStyle = 'rgba(16,3,30,0.86)';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255,42,138,0.75)';
+  ctx.stroke();
+  neonText(ctx, 'ЗАЛ СЛАВЫ', x + w / 2, y + 34, `24px ${FONT.title}`, TOP_NEON.pink, 14);
+  const r = Top.run;
+  const line = (str, yy, color = '#e1d5f0') => text(ctx, str, x + w / 2, yy, { font: `bold 15px ${FONT.ui}`, color, align: 'center' });
+  if (g.cheated) return line('С читами в зал славы не пускают', y + 100, '#ff8a80');
+  if (!r || r.id !== g.runId || !r.entry) return line('Заработай хоть доллар — и попадёшь в топ', y + 100);
+  text(ctx, fmtScore(r.entry.s), x + w / 2, y + 68, { font: `30px ${FONT.gta}`, color: '#7ee05a', align: 'center' });
+  if (!r.sent) {
+    line('Впиши ник — и ты в общем топе', y + 92);
+    mcButton(ctx, g, `В ТОП КАК ${Duel.name}`, x + 22, y + 102, w - 44, 38, () => Top.submit(), { size: 10, fill: '#c2185b' });
+    mcButton(ctx, g, 'ДРУГОЙ НИК', x + 22, y + 146, w - 44, 32, () => Top.editNick(() => Top.submit()), { size: 9 });
+    return;
+  }
+  if (Top.status === 'loading') line('Записываю в зал славы' + '.'.repeat(1 + (Math.floor(now * 3) % 3)), y + 96);
+  else if (Top.status === 'offline') {
+    line('Нет связи — рекорд сохранён,', y + 90, '#ffab91');
+    line('отправлю при следующем заходе', y + 110, '#ffab91');
+  } else line(`Место #${Top.rank(r.entry)} из ${Top.global.length} · ${r.entry.n}`, y + 96, TOP_NEON.cyan);
+  mcButton(ctx, g, 'ОТКРЫТЬ ТОП', x + 22, y + 124, 196, 34, () => Top.open(g), { size: 9, fill: '#c2185b' });
+  mcButton(ctx, g, 'ДРУГОЙ НИК', x + 226, y + 124, w - 248, 34, () => Top.editNick(() => Top.submit()), { size: 8 });
+}
+
 // ---- js/game.js ----
 'use strict';
 /* Логика игры: состояние, правила, ввод. Отрисовка — в render.js. */
@@ -9340,6 +10160,7 @@ class Game {
     this.inv = { steak: 3, gapple: 1, potion: 1, tnt: 2, dice: 2, ammo: 1, ice: 1, pellet: 1, totem: 0 };
     this.sel = 0;
     this.kills = 0;
+    this.runId = Math.random().toString(36).slice(2, 10); // для зала славы: одна строка на забег
     this.tilesOpened = 0;
     this.ducksShot = 0;
     this.totalFields = 0;
@@ -9571,7 +10392,7 @@ class Game {
       this.updateFx(realDt * 0.3, realDt);
       return;
     }
-    if (this.state === 'title' || this.state === 'levels' || this.state === 'achievements') {
+    if (this.state === 'title' || this.state === 'levels' || this.state === 'achievements' || this.state === 'top') {
       this.titleT += realDt;
       this.pac.mouth += realDt * 10;
       return;
@@ -9776,6 +10597,11 @@ class Game {
     }
     if (this.state === 'levels' || this.state === 'achievements') {
       if (code === 'Escape' || code === 'Backspace') this.toTitle();
+      return;
+    }
+    if (this.state === 'top') {
+      if (code === 'Escape' || code === 'Backspace') Top.close(this);
+      else if (code === 'ArrowLeft' || code === 'ArrowRight') Top.flip(code === 'ArrowLeft' ? -1 : 1);
       return;
     }
     if (this.state === 'duel') {
@@ -10824,6 +11650,7 @@ class Game {
     Sound.wasted();
     Ach.unlock('wasted');
     this.saveBest();
+    Top.record(this);
   }
 
   win() {
@@ -10840,6 +11667,7 @@ class Game {
       Store.set('kd_unlocked', this.unlocked);
     }
     this.saveBest();
+    Top.record(this);
   }
 
   addMoney(n, x, y, color = '#7ee05a') {
@@ -11559,7 +12387,7 @@ let nightCtx = null;
 
 function render(ctx, g) {
   const now = performance.now() / 1000;
-  const menu = g.state === 'title' || g.state === 'levels' || g.state === 'achievements' || g.state === 'intro' || g.state === 'duel';
+  const menu = g.state === 'title' || g.state === 'levels' || g.state === 'achievements' || g.state === 'intro' || g.state === 'duel' || g.state === 'top';
   const wt = menu ? g.titleT + g.introT : g.t;
   ctx.setTransform(View.k, 0, 0, View.k, 0, 0);
   ctx.globalAlpha = 1;
@@ -11590,6 +12418,7 @@ function render(ctx, g) {
   if (g.state === 'title') drawTitle(ctx, g, now);
   else if (g.state === 'levels') drawLevels(ctx, g, now);
   else if (g.state === 'achievements') drawAchievements(ctx, g, now);
+  else if (g.state === 'top') drawTopScreen(ctx, g, now);
   else if (g.state === 'intro') drawIntro(ctx, g, now);
   else if (g.state === 'duel') drawDuelLobby(ctx, g, now);
   else if (g.state === 'duelover') drawDuelOver(ctx, g, now);
@@ -12439,6 +13268,9 @@ function drawControls(ctx, x, y) {
   });
 }
 
+// Жёлтая надпись у логотипа — как в Minecraft, при каждом запуске своя.
+const TITLE_SPLASH = choice(['Теперь с Сансом!', 'Впиши ник в зал славы!', 'Музыка как в Hotline Miami!', 'Хочешь дуэль?', 'HESOYAM!']);
+
 function drawTitle(ctx, g, now) {
   ctx.fillStyle = 'rgba(8,12,6,0.66)';
   ctx.fillRect(0, 0, W, H);
@@ -12452,18 +13284,22 @@ function drawTitle(ctx, g, now) {
   text(ctx, 'ХАОС-ДОСКА', 6, 8, { font: `104px ${FONT.title}`, color: '#7a1010', align: 'center' });
   text(ctx, 'ХАОС-ДОСКА', 0, 0, { font: `104px ${FONT.title}`, color: tg, stroke: '#1a0b00', lw: 14, align: 'center' });
   ctx.restore();
-  // жёлтая надпись-сплэш, как в Minecraft: что нового в этой версии
+  // жёлтая надпись-сплэш, как в Minecraft; длинная — мельче, чтобы не наезжала на логотип
   ctx.save();
   ctx.translate(985, 150);
   ctx.rotate(-0.33);
-  ctx.scale(1 + Math.sin(now * 6) * 0.06, 1 + Math.sin(now * 6) * 0.06);
-  text(ctx, 'Теперь с Сансом!', 0, 0, { font: `bold 26px ${FONT.ui}`, color: '#ffff3c', stroke: '#3a3a00', lw: 5, align: 'center' });
+  ctx.font = `bold 26px ${FONT.ui}`;
+  const sk = Math.min(1, 230 / ctx.measureText(TITLE_SPLASH).width) * (1 + Math.sin(now * 6) * 0.06);
+  ctx.scale(sk, sk);
+  text(ctx, TITLE_SPLASH, 0, 0, { font: `bold 26px ${FONT.ui}`, color: '#ffff3c', stroke: '#3a3a00', lw: 5, align: 'center' });
   ctx.restore();
   text(ctx, 'шахматы × сапёр × CS × Minecraft × GTA × PvZ × FNAF × Clash Royale × Pac-Man × PUBG × змейка × Mario × Duck Hunt × Among Us × скибиди', 640, 198, { font: `bold 15px ${FONT.ui}`, color: '#d7e8c4', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 4 });
   mcButton(ctx, g, 'УРОВНИ', 226, 226, 160, 56, () => (g.state = 'levels'), { size: 12 });
   mcButton(ctx, g, 'ИГРАТЬ', 402, 226, 260, 56, () => g.start(), { size: 22 });
   mcButton(ctx, g, 'ДУЭЛЬ', 678, 226, 170, 56, () => Duel.open(g), { size: 14, fill: '#8a4a3a' });
   mcButton(ctx, g, `ДОСТИЖЕНИЯ ${Ach.got.size}/${ACHIEVEMENTS.length}`, 864, 226, 190, 56, () => (g.state = 'achievements'), { size: 9 });
+  mcButton(ctx, g, `НИК: ${Duel.name}`, 20, 16, 250, 44, () => Top.editNick(), { size: 9, fill: '#8a4a3a' });
+  mcButton(ctx, g, 'ЗАЛ СЛАВЫ', 1030, 16, 230, 44, () => Top.open(g), { size: 12, fill: '#c2185b' });
 
   rr(ctx, 210, 306, 860, 296, 14);
   ctx.fillStyle = 'rgba(10,16,8,0.78)';
@@ -12490,7 +13326,7 @@ function drawTitle(ctx, g, now) {
 
   text(ctx, `Рекорд: $${pad(g.best, 8)}`, 640, 636, { font: `30px ${FONT.gta}`, color: '#3fbf4a', stroke: '#000', lw: 6, align: 'center' });
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', 1020, 662, 240, 40, toggleFullscreen, { size: 11 });
-  text(ctx, `версия ${GAME_VERSION} · новое: бой с Сансом (чит SANS), ${Input.touch ? 'музыка — в паузе' : 'музыка — N'}`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
+  text(ctx, `версия ${GAME_VERSION} · новое: зал славы, музыка (${Input.touch ? 'в паузе' : 'N'})`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', 20, 662, 200, 40, () => Sound.toggleMute(), { size: 11 });
   text(ctx, Input.touch ? 'Нажми «Играть»' : 'Нажми «Играть» или Enter', 640, 684, { font: `bold 15px ${FONT.ui}`, color: 'rgba(255,255,255,0.75)', align: 'center' });
   if (Input.touch) text(ctx, 'На телефоне: режимы и действия — кнопками по краям экрана', 640, 706, { font: `bold 14px ${FONT.ui}`, color: '#ffe082', align: 'center' });
@@ -12542,7 +13378,7 @@ function drawStats(ctx, g, y) {
   else if (g.newRecord) text(ctx, 'НОВЫЙ РЕКОРД!', 640, y + 222, { font: `24px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 6, align: 'center' });
 }
 
-function drawDead(ctx, g) {
+function drawDead(ctx, g, now) {
   const k = Math.min(1, g.deadT / 1.2);
   ctx.save();
   ctx.globalCompositeOperation = 'saturation';
@@ -12569,6 +13405,7 @@ function drawDead(ctx, g) {
     drawStats(ctx, g, 318);
     if (g.duel) drawDuelButtons(ctx, g, 560 + (g.newRecord || g.cheated ? 20 : 0));
     else {
+      drawTopPanel(ctx, g, now);
       mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.retry());
       mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
     }
@@ -12597,6 +13434,7 @@ function drawWin(ctx, g, now) {
     const by = 560 + (g.newRecord || g.cheated ? 20 : 0);
     if (g.duel) drawDuelButtons(ctx, g, by);
     else {
+      drawTopPanel(ctx, g, now);
       if (final) mcButton(ctx, g, 'С НАЧАЛА', 640 - 250, by, 240, 46, () => g.startCampaign(0));
       else mcButton(ctx, g, 'ДАЛЬШЕ ▶', 640 - 250, by, 240, 46, () => g.nextLevel());
       mcButton(ctx, g, 'В МЕНЮ', 640 + 10, by, 240, 46, () => g.toTitle());
@@ -13332,10 +14170,10 @@ function drawDuelOver(ctx, g) {
   function musicTrack(g) {
     const s = g.state;
     if (s === 'ut') return 'battle';
-    if (s === 'arena') return Arena.kind === 'raid' ? 'battle' : 'action';
+    if (s === 'arena') return 'hunt';
     if (s === 'dead' || g.jumpscare) return '';
-    if (s === 'play' || s === 'pause' || s === 'buy' || s === 'cheats' || s === 'intro') return 'action';
-    return 'calm';
+    if (s === 'play' || s === 'pause' || s === 'buy' || s === 'cheats' || s === 'intro') return 'drive';
+    return 'neon';
   }
 
   // заряд «супера» на кнопке

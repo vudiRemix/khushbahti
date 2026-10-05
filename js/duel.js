@@ -35,6 +35,42 @@ function cleanNick(s) {
     .trim();
 }
 
+// Окно ввода ника (обычное поле, чтобы на телефоне появилась клавиатура). Ник общий: дуэли и зал славы.
+function askNick(hint, onDone) {
+  const box = document.getElementById('nick');
+  if (!box) return;
+  const form = box.querySelector('form');
+  const input = box.querySelector('input');
+  box.querySelector('p').textContent = hint;
+  input.maxLength = NICK_MAX;
+  input.value = Duel.name;
+  box.hidden = false;
+  const close = () => {
+    box.hidden = true;
+    form.onsubmit = null;
+    box.onclick = null;
+    input.onkeydown = null;
+    input.blur();
+  };
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    const nick = cleanNick(input.value);
+    close();
+    if (nick) onDone(nick);
+  };
+  box.onclick = (e) => {
+    if (e.target === box || e.target.closest('[data-nick=cancel]')) close();
+    else if (e.target.closest('[data-nick=random]')) input.value = randomNick();
+  };
+  input.onkeydown = (e) => {
+    if (e.key === 'Escape') close();
+  };
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 30);
+}
+
 const Duel = {
   phase: 'off', // off | connecting | lobby | hosting | joining | countdown | playing | over | unavailable
   mode: duelMode(Store.get('kd_mode')), // arena | raid | boss
@@ -96,47 +132,20 @@ const Duel = {
 
   setNick(raw) {
     const nick = cleanNick(raw);
-    if (!nick || this.phase !== 'lobby') return false;
+    if (!nick) return false;
     this.name = nick;
     this.nickAsked = true;
     Store.set('kd_nick', nick);
-    this.lobbyState(null);
+    if (this.phase === 'lobby') this.lobbyState(null);
     return true;
   },
 
-  // Окно ввода ника (обычное поле, чтобы на телефоне появилась клавиатура).
   editNick() {
-    const box = document.getElementById('nick');
-    if (!box || this.phase !== 'lobby') return;
-    const form = box.querySelector('form');
-    const input = box.querySelector('input');
+    if (this.phase !== 'lobby') return;
     this.nickAsked = true;
-    input.maxLength = NICK_MAX;
-    input.value = this.name;
-    box.hidden = false;
-    const close = () => {
-      box.hidden = true;
-      form.onsubmit = null;
-      box.onclick = null;
-      input.onkeydown = null;
-      input.blur();
-    };
-    form.onsubmit = (e) => {
-      e.preventDefault();
-      if (this.setNick(input.value)) Sound.coin();
-      close();
-    };
-    box.onclick = (e) => {
-      if (e.target === box || e.target.closest('[data-nick=cancel]')) close();
-      else if (e.target.closest('[data-nick=random]')) input.value = randomNick();
-    };
-    input.onkeydown = (e) => {
-      if (e.key === 'Escape') close();
-    };
-    setTimeout(() => {
-      input.focus();
-      input.select();
-    }, 30);
+    askNick('Его увидит соперник в списке дуэлей и во время боя. До 16 символов.', (nick) => {
+      if (this.setNick(nick)) Sound.coin();
+    });
   },
 
   nickOpen() {

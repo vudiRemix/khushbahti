@@ -27,6 +27,19 @@ function loadScript(src) {
   });
 }
 
+// Библиотека MQTT: своя копия рядом с игрой, иначе CDN.
+async function loadMqttLib() {
+  for (const src of MQTT_LIBS) {
+    if (window.mqtt) break;
+    try {
+      await loadScript(src);
+    } catch (e) {
+      /* пробуем следующий источник */
+    }
+  }
+  return !!window.mqtt;
+}
+
 function connectMqtt(url, clientId) {
   return new Promise((resolve) => {
     let done = false;
@@ -94,15 +107,7 @@ const Net = {
       this.error = 'Дуэль работает, когда игра открыта с сайта (GitHub Pages) или по ссылке claude.ai, а не из файла.';
       return false;
     }
-    for (const src of MQTT_LIBS) {
-      if (window.mqtt) break;
-      try {
-        await loadScript(src);
-      } catch (e) {
-        /* пробуем следующий источник */
-      }
-    }
-    if (!window.mqtt) {
+    if (!(await loadMqttLib())) {
       this.error = 'Нет интернета: не загрузилась библиотека связи.';
       return false;
     }
