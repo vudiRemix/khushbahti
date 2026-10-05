@@ -239,9 +239,22 @@
   window.goFullscreen = goFullscreen;
 
   // Офлайн-режим и установка на главный экран (только когда игра открыта с сайта).
+  // Вышла новая версия — перезагружаемся в неё сами, но только в меню, не посреди боя.
+  let updateReady = false;
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && document.querySelector('link[rel="manifest"]')) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      // новый sw.js к этому моменту уже сложил файлы в свой кэш: кэш новее нашей версии — страница устарела
+      caches.keys().then((keys) => {
+        if (keys.some((k) => Number(k.split('-v')[1]) > GAME_VERSION)) updateReady = true;
+      }).catch(() => {});
+    });
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+        // ярлык на телефоне сам не перезагружается — проверяем обновление, когда игру снова открыли
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) reg.update().catch(() => {});
+        });
+      }).catch(() => {});
     });
   }
 
@@ -286,6 +299,10 @@
       }
       if (arena) updateSuperButton();
       Music.update(musicTrack(game));
+      if (updateReady && ['title', 'levels', 'achievements'].includes(game.state)) {
+        updateReady = false;
+        location.reload();
+      }
     } catch (err) {
       console.error(err);
     }

@@ -1,6 +1,8 @@
 /* Офлайн-режим: файлы игры кэшируются при первом запуске.
-   Если меняешь список скриптов в index.html — обнови ASSETS и поменяй CACHE. */
-const CACHE = 'khaos-doska-v9';
+   Если меняешь список скриптов в index.html — обнови ASSETS.
+   В каждом выпуске меняй CACHE вместе с GAME_VERSION в js/core.js:
+   по новому sw.js открытые вкладки узнают, что вышла новая версия. */
+const CACHE = 'khaos-doska-v10';
 const ASSETS = [
   './',
   './index.html',
@@ -47,24 +49,59 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Сначала отдаём из кэша (быстро и без сети), параллельно обновляем кэш из сети.
+// Свои файлы — сначала из сети, чтобы новая версия была видна с первой же загрузки.
+// Нет сети или она молчит дольше 3 с — отдаём из кэша. Шрифты и CDN — из кэша, если есть.
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
-  e.respondWith(
-    caches.match(req).then((hit) => {
-      // свои файлы перепроверяем на сервере (no-cache), чужие (шрифты, CDN) берём как есть
-      const own = new URL(req.url).origin === self.location.origin;
-      const net = (own ? fetch(req.url, { cache: 'no-cache' }) : fetch(req))
-        .then((res) => {
-          if (res && (res.ok || res.type === 'opaque')) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => hit);
-      return hit || net;
-    })
-  );
+  const own = new URL(req.url).origin === self.location.origin;
+  e.respondWith(own ? fresh(req) : cached(req));
 });
+
+function save(req, res) {
+  if (res && (res.ok || res.type === 'opaque')) {
+    const copy = res.clone();
+    caches.open(CACHE).then((c) => c.put(req, copy));
+  }
+  return res;
+}
+
+function fromCache(req) {
+  // ссылка-приглашение с ?параметрами офлайн открывает ту же страницу
+  return caches.match(req, { ignoreSearch: req.mode === 'navigate' });
+}
+
+// GitHub Pages отдаёт файлы с max-age=600: с таким заголовком браузер при перезагрузке
+// берёт скрипты из памяти, даже не спрашивая нас, и новая версия не видна до 10 минут.
+function revalidate(res) {
+  if (!res || res.type !== 'basic') return res;
+  const headers = new Headers(res.headers);
+  headers.set('Cache-Control', 'no-cache');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
+function fresh(req) {
+  return new Promise((resolve) => {
+    let done = false;
+    const give = (res) => {
+      if (res && !done) {
+        done = true;
+        resolve(revalidate(res));
+      }
+    };
+    const timer = setTimeout(() => fromCache(req).then(give), 3000);
+    fetch(req.url, { cache: 'no-cache' })
+      .then((res) => {
+        clearTimeout(timer);
+        give(save(req, res));
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        fromCache(req).then((hit) => give(hit || Response.error()));
+      });
+  });
+}
+
+function cached(req) {
+  return caches.match(req).then((hit) => hit || fetch(req).then((res) => save(req, res)));
+}
