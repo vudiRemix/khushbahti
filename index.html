@@ -41,6 +41,9 @@
   .tbar button:focus-visible { outline: 3px solid #ffd54a; outline-offset: 2px; }
   /* на арене лишние кнопки (закупка, замедление, удочка, флажки) прячем */
   body.ui-arena .tbar [data-act=buy], body.ui-arena .tbar [data-hold], body.ui-arena .tbar [data-mode] { display: none; }
+  /* кнопка «супера» (Brawl Stars) — только на арене */
+  .tbar button[data-act=super] { display: none; }
+  body.ui-arena .tbar button[data-act=super] { display: flex; }
 
   #rotate { display: none; position: fixed; inset: 0; z-index: 10; background: var(--bg); color: var(--fg);
     flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center;
@@ -85,6 +88,7 @@
   <button type="button" data-mode="shoot" class="on" aria-label="Режим стрельбы">🔫<small>огонь</small></button>
   <button type="button" data-mode="rod" aria-label="Режим удочки">🎣<small>удочка</small></button>
   <button type="button" data-mode="flag" aria-label="Режим флажков">🚩<small>флажок</small></button>
+  <button type="button" data-act="super" aria-label="Супер">⭐<small>супер</small></button>
   <button type="button" data-act="reload" aria-label="Перезарядка">🔄<small>перезар.</small></button>
   <button type="button" data-act="fullscreen" aria-label="На весь экран">⛶<small>экран</small></button>
 </div>
@@ -116,6 +120,7 @@
 <script src="js/net.js"></script>
 <script src="js/duel.js"></script>
 <script src="js/arena.js"></script>
+<script src="js/raid.js"></script>
 <script src="js/game.js"></script>
 <script src="js/render.js"></script>
 <script src="js/main.js"></script>

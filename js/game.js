@@ -201,13 +201,13 @@ class Game {
     this.banner('ДУЭЛЬ!', `Против: ${Duel.oppName}. Победит тот, кто первым одолеет босса`, '#ff8a65');
   }
   // Арена: PvP на одной доске. Карта строится из кода комнаты, оформление — из уровня.
-  startArena(code, lvl, role) {
+  startArena(code, lvl, role, kind = 'pvp', solo = false) {
     Sound.init();
     this.duel = true;
     this.levelIdx = clamp(lvl, 0, LEVELS.length - 1);
     this.state = 'arena';
     Input.lmb = false;
-    Arena.start(this, code, LEVELS[this.levelIdx].theme, role);
+    Arena.start(this, code, LEVELS[this.levelIdx].theme, role, kind, solo);
   }
   // «Подарок» от соперника.
   receiveAttack(kind, from) {
@@ -273,6 +273,11 @@ class Game {
     Duel.update(realDt, this);
     if (this.state === 'arena') {
       Arena.update(realDt, this);
+      // одиночный рейд идёт без сети — итог проверяем здесь
+      if (Arena.solo && !Duel.result) {
+        const r = Arena.check();
+        if (r) Duel.finish(this, r.win, r.reason);
+      }
       return;
     }
     if (this.state === 'duelover' && Arena.on) {
@@ -467,7 +472,7 @@ class Game {
       return;
     }
     if (this.state === 'arena') {
-      Arena.onKey(code, this);
+      Arena.onKey(code);
       return;
     }
     if (this.state === 'title') {

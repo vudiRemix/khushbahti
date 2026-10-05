@@ -180,6 +180,7 @@
     reload: () => Input.queue.push({ type: 'key', code: 'KeyR' }),
     weapon: () => Input.queue.push({ type: 'key', code: 'KeyX' }),
     grenade: () => (game.state === 'arena' ? Input.queue.push({ type: 'key', code: 'KeyG' }) : game.armThrow('he')),
+    super: () => Input.queue.push({ type: 'key', code: 'KeyE' }),
     fullscreen: () => goFullscreen(),
   };
   for (const b of document.querySelectorAll('.tbar button')) {
@@ -233,6 +234,17 @@
     });
   }
 
+  // заряд «супера» на кнопке
+  const superBtn = document.querySelector('[data-act=super]');
+  let superShown = -1;
+  function updateSuperButton() {
+    const k = Arena.me ? Math.floor(Arena.me.su * 10) : 0;
+    if (!superBtn || k === superShown) return;
+    superShown = k;
+    superBtn.classList.toggle('on', k >= 10);
+    superBtn.querySelector('small').textContent = k >= 10 ? 'СУПЕР!' : `супер ${k * 10}%`;
+  }
+
   let last = performance.now();
   let uiState = '';
   function frame(now) {
@@ -251,6 +263,7 @@
         if (!playing) Input.keys.delete('ShiftLeft');
         if (!arena) Input.stick.id = null;
       }
+      if (arena) updateSuperButton();
     } catch (err) {
       console.error(err);
     }

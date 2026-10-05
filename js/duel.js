@@ -1,7 +1,8 @@
 'use strict';
-/* Дуэль вдвоём, два режима:
+/* Дуэль вдвоём, три режима:
    • «Арена» — PvP на одной доске (js/arena.js);
-   • «Боссы» — каждый играет свою доску против босса и шлёт сопернику «подарки».
+   • «Босс-рейд» — вместе пешком против босса (js/raid.js), можно и одному;
+   • «Классика» — каждый играет свою доску против босса и шлёт сопернику «подарки».
    Состояние матча живёт в «присутствии» каждого игрока: здоровье, позиция, исход
    и списки последних событий с номерами (получатель берёт только новые). */
 
@@ -15,6 +16,10 @@ const DUEL_ATTACKS = {
   skibidi: { name: 'два скибиди-туалета', spawn: ['skibidi', 'skibidi'], why: 'звезда Марио' },
   stars: { name: '+1 звезда розыска', stars: 1, why: 'ярость твоего босса' },
 };
+
+// arena — PvP, raid — босс-рейд, boss — классика (своя доска у каждого).
+const duelMode = (m) => (m === 'boss' || m === 'raid' ? m : 'arena');
+const DUEL_MODE_NAMES = { arena: 'АРЕНА PvP', raid: 'БОСС-РЕЙД', boss: 'КЛАССИКА' };
 
 function randomNick() {
   return choice(DUEL_NICKS) + randi(10, 99);
@@ -32,7 +37,7 @@ function cleanNick(s) {
 
 const Duel = {
   phase: 'off', // off | connecting | lobby | hosting | joining | countdown | playing | over | unavailable
-  mode: Store.get('kd_mode') === 'boss' ? 'boss' : 'arena', // arena | boss
+  mode: duelMode(Store.get('kd_mode')), // arena | raid | boss
   active: false, // идёт матч (игровые хуки включены)
   name: cleanNick(Store.get('kd_nick')) || randomNick(),
   nickAsked: !!Store.get('kd_nick'),
@@ -150,7 +155,7 @@ const Duel = {
 
   setMode(mode) {
     if (this.phase !== 'lobby') return;
-    this.mode = mode === 'boss' ? 'boss' : 'arena';
+    this.mode = duelMode(mode);
     Store.set('kd_mode', this.mode);
     this.lobbyState(null);
   },
@@ -172,7 +177,7 @@ const Duel = {
         code: p.state.host,
         name: cleanNick(p.state.name) || 'Игрок',
         lvl: clamp(Number(p.state.lvl) || 0, 0, LEVELS.length - 1),
-        mode: p.state.mode === 'boss' ? 'boss' : 'arena',
+        mode: duelMode(p.state.mode),
       }));
   },
 
@@ -198,7 +203,7 @@ const Duel = {
     if (this.phase !== 'lobby') return;
     this.code = code;
     this.lvl = lvl;
-    this.mode = mode === 'boss' ? 'boss' : 'arena';
+    this.mode = duelMode(mode);
     this.role = 'guest';
     this.phase = 'joining';
     this.joinT = 0;
@@ -247,8 +252,20 @@ const Duel = {
     this.result = null;
     g.duel = false;
     g.state = 'duel';
-    this.phase = this.lobby ? 'lobby' : 'off';
+    this.phase = this.lobby ? 'lobby' : 'unavailable';
     this.lobbyState(null);
+  },
+
+  // Босс-рейд в одиночку — без сети.
+  startSolo(g) {
+    this.leaveRoom();
+    this.mode = 'raid';
+    this.role = 'host';
+    this.code = 'solo' + randi(100, 999);
+    this.resetMatch();
+    this.active = true;
+    this.phase = 'playing';
+    g.startArena(this.code, this.lvl, 'host', 'raid', true);
   },
 
   // ---------- матч ----------
@@ -267,7 +284,7 @@ const Duel = {
   publish(st, g) {
     if (!this.room) return;
     const s = { v: 1, name: this.name, role: this.role, st, lvl: this.lvl, mode: this.mode };
-    if (g && this.mode === 'arena') {
+    if (g && this.mode !== 'boss') {
       if (Arena.on) Object.assign(s, Arena.netState());
     } else if (g) {
       const p = g.player, tw = g.tower;
@@ -295,8 +312,8 @@ const Duel = {
     this.active = true;
     this.phase = 'playing';
     this.oppSeen = performance.now();
-    if (this.mode === 'arena') g.startArena(this.code, this.lvl, this.role);
-    else g.startDuel(this.lvl);
+    if (this.mode === 'boss') g.startDuel(this.lvl);
+    else g.startArena(this.code, this.lvl, this.role, this.mode === 'raid' ? 'raid' : 'pvp');
     this.publish('play', g);
   },
 
@@ -319,7 +336,7 @@ const Duel = {
       this.joinT += dt;
       if (opp && opp.state.st === 'count') {
         this.lvl = clamp(Number(opp.state.lvl) || 0, 0, LEVELS.length - 1);
-        this.mode = opp.state.mode === 'boss' ? 'boss' : 'arena';
+        this.mode = duelMode(opp.state.mode);
         this.startCountdown();
       } else if (this.joinT > 12) {
         this.note = 'Соперник не ответил. Выбери другую дуэль.';
@@ -334,7 +351,7 @@ const Duel = {
   },
 
   tick(dt, g, opp) {
-    if (this.mode === 'arena') return this.tickArena(dt, g, opp);
+    if (this.mode !== 'boss') return this.tickArena(dt, g, opp);
     this.pubT -= dt;
     if (this.pubT <= 0) {
       this.pubT = 0.25;
@@ -391,7 +408,8 @@ const Duel = {
       else if (win) Sound.win();
       else Sound.wasted();
     }
-    if (win) Ach.unlock('duel');
+    if (win && this.mode === 'raid') Ach.unlock('raid');
+    else if (win) Ach.unlock('duel');
     if (win && this.mode === 'arena' && Arena.on && Arena.me.dn === 0 && Arena.opDn >= ARENA.frags) Ach.unlock('flawless');
   },
 
