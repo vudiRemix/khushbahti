@@ -1,8 +1,9 @@
 'use strict';
-/* Дуэль вдвоём, три режима:
+/* Дуэль вдвоём, четыре режима:
    • «Арена» — PvP на одной доске (js/arena.js);
    • «Босс-рейд» — вместе пешком против босса (js/raid.js), можно и одному;
-   • «Классика» — каждый играет свою доску против босса и шлёт сопернику «подарки».
+   • «Классика» — каждый играет свою доску против босса и шлёт сопернику «подарки»;
+   • «Дурак» — подкидной дурак (js/durak.js), можно и с ботом.
    Состояние матча живёт в «присутствии» каждого игрока: здоровье, позиция, исход
    и списки последних событий с номерами (получатель берёт только новые). */
 
@@ -17,9 +18,9 @@ const DUEL_ATTACKS = {
   stars: { name: '+1 звезда розыска', stars: 1, why: 'ярость твоего босса' },
 };
 
-// arena — PvP, raid — босс-рейд, boss — классика (своя доска у каждого).
-const duelMode = (m) => (m === 'boss' || m === 'raid' ? m : 'arena');
-const DUEL_MODE_NAMES = { arena: 'АРЕНА PvP', raid: 'БОСС-РЕЙД', boss: 'КЛАССИКА' };
+// arena — PvP, raid — босс-рейд, boss — классика (своя доска у каждого), durak — карты.
+const duelMode = (m) => (m === 'boss' || m === 'raid' || m === 'durak' ? m : 'arena');
+const DUEL_MODE_NAMES = { arena: 'АРЕНА PvP', raid: 'БОСС-РЕЙД', boss: 'КЛАССИКА', durak: 'ДУРАК' };
 
 function randomNick() {
   return choice(DUEL_NICKS) + randi(10, 99);
@@ -239,6 +240,7 @@ const Duel = {
     this.opp = null;
     this.active = false;
     Arena.stop();
+    Durak.stop();
     if (r) await r.leave();
   },
 
@@ -265,8 +267,13 @@ const Duel = {
     this.lobbyState(null);
   },
 
-  // Босс-рейд в одиночку — без сети.
+  // Босс-рейд в одиночку или дурак с ботом — без сети.
   startSolo(g) {
+    if (this.mode === 'durak') {
+      this.shutdown();
+      Durak.start(g, 'bot');
+      return;
+    }
     this.leaveRoom();
     this.mode = 'raid';
     this.role = 'host';
@@ -293,7 +300,9 @@ const Duel = {
   publish(st, g) {
     if (!this.room) return;
     const s = { v: 1, name: this.name, role: this.role, st, lvl: this.lvl, mode: this.mode };
-    if (g && this.mode !== 'boss') {
+    if (g && this.mode === 'durak') {
+      if (Durak.on) Object.assign(s, Durak.netState());
+    } else if (g && this.mode !== 'boss') {
       if (Arena.on) Object.assign(s, Arena.netState());
     } else if (g) {
       const p = g.player, tw = g.tower;
@@ -321,7 +330,8 @@ const Duel = {
     this.active = true;
     this.phase = 'playing';
     this.oppSeen = performance.now();
-    if (this.mode === 'boss') g.startDuel(this.lvl);
+    if (this.mode === 'durak') Durak.start(g, this.role === 'host' ? 'host' : 'guest');
+    else if (this.mode === 'boss') g.startDuel(this.lvl);
     else g.startArena(this.code, this.lvl, this.role, this.mode === 'raid' ? 'raid' : 'pvp');
     this.publish('play', g);
   },
@@ -360,6 +370,7 @@ const Duel = {
   },
 
   tick(dt, g, opp) {
+    if (this.mode === 'durak') return this.tickDurak(dt, g, opp);
     if (this.mode !== 'boss') return this.tickArena(dt, g, opp);
     this.pubT -= dt;
     if (this.pubT <= 0) {
@@ -402,6 +413,18 @@ const Duel = {
       const r = Arena.check();
       if (r) this.finish(g, r.win, r.reason);
     }
+  },
+
+  // Дурак: ходы — в «присутствии», хозяин ведёт партию, гость шлёт ходы.
+  tickDurak(dt, g, opp) {
+    if (opp) Durak.remote(opp.state);
+    this.pubT -= dt;
+    if (this.pubT <= 0 || Durak.dirty) {
+      this.pubT = 0.5;
+      Durak.dirty = false;
+      this.publish('play', g);
+    }
+    if (!this.result && !opp && performance.now() - this.oppSeen > 6000) this.finish(g, true, 'Соперник вышел из игры');
   },
 
   finish(g, win, reason) {

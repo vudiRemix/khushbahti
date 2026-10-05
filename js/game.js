@@ -251,6 +251,7 @@ class Game {
   toTitle() {
     if (Duel.phase !== 'off') Duel.shutdown();
     Battle.phase = 'off';
+    Durak.stop();
     this.duel = false;
     this.state = 'title';
     this.titleT = 0;
@@ -280,6 +281,10 @@ class Game {
     Duel.update(realDt, this);
     if (this.state === 'ut') {
       Battle.update(realDt);
+      return;
+    }
+    if (this.state === 'durak') {
+      Durak.update(realDt, this);
       return;
     }
     if (this.state === 'arena') {
@@ -506,6 +511,10 @@ class Game {
     }
     if (this.state === 'arena') {
       Arena.onKey(code);
+      return;
+    }
+    if (this.state === 'durak') {
+      Durak.onKey(code, this);
       return;
     }
     if (this.state === 'title') {

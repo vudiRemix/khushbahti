@@ -35,6 +35,7 @@ const ACHIEVEMENTS = [
   { id: 'ut_kill', name: 'Плохое время', desc: 'Одолей Санса' },
   { id: 'siu', name: 'СИУУУ!', desc: 'Увидь гол футболиста №7' },
   { id: 'dovah', name: 'Довакин', desc: 'Убей драугра, пока он кричит «ФУС РО ДА!»' },
+  { id: 'durak', name: 'Не дурак', desc: 'Выиграй партию в дурака' },
 ];
 
 const Ach = {

@@ -15,6 +15,12 @@ function render(ctx, g) {
   ctx.fillStyle = '#0d1208';
   ctx.fillRect(0, 0, W, H);
   if (g.state === 'arena' || (g.state === 'duelover' && Arena.on)) return renderArena(ctx, g, now);
+  if (g.state === 'durak') {
+    renderDurak(ctx, g, now);
+    Ach.draw(ctx);
+    if (!Input.touch) drawPointer(ctx);
+    return;
+  }
   if (g.state === 'ut') {
     renderBattle(ctx, g, now);
     Ach.draw(ctx);
@@ -889,7 +895,7 @@ function drawControls(ctx, x, y) {
 }
 
 // Жёлтая надпись у логотипа — как в Minecraft, при каждом запуске своя.
-const TITLE_SPLASH = choice(['СИУУУ!', 'ФУС РО ДА!', 'Теперь с Сансом!', 'Впиши ник в зал славы!', 'Музыка как в Hotline Miami!', 'Хочешь дуэль?', 'HESOYAM!']);
+const TITLE_SPLASH = choice(['Козыри — черви!', 'СИУУУ!', 'ФУС РО ДА!', 'Теперь с Сансом!', 'Впиши ник в зал славы!', 'Музыка как в Hotline Miami!', 'Хочешь дуэль?', 'HESOYAM!']);
 
 function drawTitle(ctx, g, now) {
   ctx.fillStyle = 'rgba(8,12,6,0.66)';
@@ -914,10 +920,12 @@ function drawTitle(ctx, g, now) {
   text(ctx, TITLE_SPLASH, 0, 0, { font: `bold 26px ${FONT.ui}`, color: '#ffff3c', stroke: '#3a3a00', lw: 5, align: 'center' });
   ctx.restore();
   text(ctx, 'шахматы × сапёр × CS × Minecraft × GTA × PvZ × FNAF × Clash Royale × Pac-Man × PUBG × змейка × Mario × Duck Hunt × Among Us × скибиди', 640, 198, { font: `bold 15px ${FONT.ui}`, color: '#d7e8c4', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 4 });
-  mcButton(ctx, g, 'УРОВНИ', 226, 226, 160, 56, () => (g.state = 'levels'), { size: 12 });
-  mcButton(ctx, g, 'ИГРАТЬ', 402, 226, 260, 56, () => g.start(), { size: 22 });
-  mcButton(ctx, g, 'ДУЭЛЬ', 678, 226, 170, 56, () => Duel.open(g), { size: 14, fill: '#8a4a3a' });
-  mcButton(ctx, g, `ДОСТИЖЕНИЯ ${Ach.got.size}/${ACHIEVEMENTS.length}`, 864, 226, 190, 56, () => (g.state = 'achievements'), { size: 9 });
+  // «ИГРАТЬ» — посередине
+  mcButton(ctx, g, 'УРОВНИ', 205, 226, 150, 56, () => (g.state = 'levels'), { size: 12 });
+  mcButton(ctx, g, 'ДУЭЛЬ', 365, 226, 150, 56, () => Duel.open(g), { size: 14, fill: '#8a4a3a' });
+  mcButton(ctx, g, 'ИГРАТЬ', 525, 226, 230, 56, () => g.start(), { size: 22 });
+  mcButton(ctx, g, 'ДУРАК', 765, 226, 140, 56, () => Durak.start(g, 'bot'), { size: 14, fill: '#2e7d32' });
+  mcButton(ctx, g, `ДОСТИЖЕНИЯ ${Ach.got.size}/${ACHIEVEMENTS.length}`, 915, 226, 170, 56, () => (g.state = 'achievements'), { size: 8 });
   mcButton(ctx, g, `НИК: ${Duel.name}`, 20, 16, 250, 44, () => Top.editNick(), { size: 9, fill: '#8a4a3a' });
   mcButton(ctx, g, 'ЗАЛ СЛАВЫ', 1030, 16, 230, 44, () => Top.open(g), { size: 12, fill: '#c2185b' });
 
@@ -946,7 +954,7 @@ function drawTitle(ctx, g, now) {
 
   text(ctx, `Рекорд: $${pad(g.best, 8)}`, 640, 636, { font: `30px ${FONT.gta}`, color: '#3fbf4a', stroke: '#000', lw: 6, align: 'center' });
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', 1020, 662, 240, 40, toggleFullscreen, { size: 11 });
-  text(ctx, `версия ${GAME_VERSION} · новое: футболист №7 (чит SIUUU), драугр, зал славы, музыка (${Input.touch ? 'в паузе' : 'N'})`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
+  text(ctx, `версия ${GAME_VERSION} · новое: дурак, футболист №7 (чит SIUUU), драугр, музыка (${Input.touch ? 'в паузе' : 'N'})`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', 20, 662, 200, 40, () => Sound.toggleMute(), { size: 11 });
   text(ctx, Input.touch ? 'Нажми «Играть»' : 'Нажми «Играть» или Enter', 640, 684, { font: `bold 15px ${FONT.ui}`, color: 'rgba(255,255,255,0.75)', align: 'center' });
   if (Input.touch) text(ctx, 'На телефоне: режимы и действия — кнопками по краям экрана', 640, 706, { font: `bold 14px ${FONT.ui}`, color: '#ffe082', align: 'center' });
@@ -1322,6 +1330,7 @@ function drawDuelLobby(ctx, g, now) {
     arena: `Арена — PvP на одной доске: бегаете, стреляете и кидаете гранаты друг в друга. До ${ARENA.frags} фрагов или ${ARENA.time / 60} минут.`,
     raid: 'Босс-рейд — вместе пешком против босса уровня: подходите вплотную, бейте его и миньонов. Можно и одному.',
     boss: 'Классика — каждый играет свою доску против босса, а успехи прилетают сопернику «подарками».',
+    durak: 'Дурак — подкидной, 36 карт, вдвоём. Кто последним остался с картами, тот и дурак. Можно и с ботом.',
   }[Duel.mode];
   wrapText(ctx, about, 640, 114, 960, 22, { font: `16px ${FONT.ui}`, color: '#cfd8dc', align: 'center' });
 
@@ -1334,7 +1343,14 @@ function drawDuelLobby(ctx, g, now) {
       mcButton(ctx, g, '◄', 400, 400, 44, 40, () => (Duel.lvl = (Duel.lvl + LEVELS.length - 1) % LEVELS.length), { size: 12 });
       mcButton(ctx, g, '►', 836, 400, 44, 40, () => (Duel.lvl = (Duel.lvl + 1) % LEVELS.length), { size: 12 });
       text(ctx, `${Duel.lvl + 1}. ${LEVELS[Duel.lvl].name}`, 640, 428, { font: `bold 20px ${FONT.ui}`, color: '#fff', align: 'center' });
-      mcButton(ctx, g, 'БОСС-РЕЙД В ОДИНОЧКУ', 440, 470, 400, 52, () => Duel.startSolo(g), { size: 13, fill: '#8a4a3a' });
+      mcButton(ctx, g, 'БОСС-РЕЙД В ОДИНОЧКУ', 440, 470, 400, 52, () => {
+        Duel.mode = 'raid';
+        Duel.startSolo(g);
+      }, { size: 13, fill: '#8a4a3a' });
+      mcButton(ctx, g, 'ДУРАК С БОТОМ', 440, 534, 400, 52, () => {
+        Duel.mode = 'durak';
+        Duel.startSolo(g);
+      }, { size: 13, fill: '#2e7d32' });
     }
     mcButton(ctx, g, 'НАЗАД', 540, 620, 200, 44, () => Duel.close(g), { size: 13 });
     return;
@@ -1354,25 +1370,30 @@ function drawDuelLobby(ctx, g, now) {
     mcButton(ctx, g, 'СЛУЧАЙНЫЙ', 420, 236, 170, 34, () => Duel.newNick(), { size: 10 });
   }
   text(ctx, 'РЕЖИМ', 116, 288, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
-  const arena = Duel.mode === 'arena', raid = Duel.mode === 'raid';
+  const arena = Duel.mode === 'arena', raid = Duel.mode === 'raid', durak = Duel.mode === 'durak';
   if (ph === 'lobby') {
-    ['arena', 'raid', 'boss'].forEach((m, i) => {
-      mcButton(ctx, g, DUEL_MODE_NAMES[m], 116 + i * 160, 298, 152, 36, () => Duel.setMode(m), { size: 9, fill: Duel.mode === m ? '#8a4a3a' : '#555' });
+    ['arena', 'raid', 'boss', 'durak'].forEach((m, i) => {
+      mcButton(ctx, g, DUEL_MODE_NAMES[m], 116 + i * 120, 298, 112, 36, () => Duel.setMode(m), { size: 8, fill: Duel.mode === m ? '#8a4a3a' : '#555' });
     });
   } else {
     text(ctx, DUEL_MODE_NAMES[Duel.mode], 116, 324, { font: `bold 20px ${FONT.ui}`, color: '#fff' });
   }
-  text(ctx, arena ? 'КАРТА' : raid ? 'БОСС' : 'УРОВЕНЬ', 116, 362, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
-  const lv = LEVELS[Duel.lvl];
-  if (ph === 'lobby') {
-    mcButton(ctx, g, '◄', 116, 372, 44, 36, () => Duel.changeLevel(-1), { size: 12 });
-    mcButton(ctx, g, '►', 546, 372, 44, 36, () => Duel.changeLevel(1), { size: 12 });
+  if (durak) {
+    text(ctx, 'ИГРА', 116, 362, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+    text(ctx, 'подкидной · 36 карт · вдвоём', 353, 397, { font: `bold 20px ${FONT.ui}`, color: '#fff', align: 'center' });
+  } else {
+    text(ctx, arena ? 'КАРТА' : raid ? 'БОСС' : 'УРОВЕНЬ', 116, 362, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+    const lv = LEVELS[Duel.lvl];
+    if (ph === 'lobby') {
+      mcButton(ctx, g, '◄', 116, 372, 44, 36, () => Duel.changeLevel(-1), { size: 12 });
+      mcButton(ctx, g, '►', 546, 372, 44, 36, () => Duel.changeLevel(1), { size: 12 });
+    }
+    text(ctx, `${Duel.lvl + 1}. ${lv.name}`, 353, 397, { font: `bold 20px ${FONT.ui}`, color: '#fff', align: 'center' });
   }
-  text(ctx, `${Duel.lvl + 1}. ${lv.name}`, 353, 397, { font: `bold 20px ${FONT.ui}`, color: '#fff', align: 'center' });
   if (ph === 'lobby') {
-    if (raid) {
+    if (raid || durak) {
       mcButton(ctx, g, 'СОЗДАТЬ ДУЭЛЬ', 116, 424, 300, 50, () => Duel.host(), { size: 14, fill: '#8a4a3a' });
-      mcButton(ctx, g, 'ОДИН', 430, 424, 160, 50, () => Duel.startSolo(g), { size: 14 });
+      mcButton(ctx, g, durak ? 'С БОТОМ' : 'ОДИН', 430, 424, 160, 50, () => Duel.startSolo(g), { size: 14 });
     } else mcButton(ctx, g, 'СОЗДАТЬ ДУЭЛЬ', 150, 424, 400, 50, () => Duel.host(), { size: 16, fill: '#8a4a3a' });
   } else if (ph === 'hosting') {
     const dots = '.'.repeat(1 + (Math.floor(now * 2) % 3));
@@ -1400,17 +1421,19 @@ function drawDuelLobby(ctx, g, now) {
     ctx.fillStyle = 'rgba(255,255,255,0.07)';
     ctx.fill();
     text(ctx, d.name, 690, y + 21, { font: `bold 18px ${FONT.ui}`, color: '#fff' });
-    text(ctx, `${DUEL_MODE_NAMES[d.mode]} · ${LEVELS[d.lvl].name}`, 690, y + 39, { font: `13px ${FONT.ui}`, color: d.mode === 'boss' ? '#b0bec5' : '#ffab91' });
+    text(ctx, d.mode === 'durak' ? 'ДУРАК · подкидной' : `${DUEL_MODE_NAMES[d.mode]} · ${LEVELS[d.lvl].name}`, 690, y + 39, { font: `13px ${FONT.ui}`, color: d.mode === 'boss' ? '#b0bec5' : '#ffab91' });
     if (ph === 'lobby') mcButton(ctx, g, 'ВОЙТИ', 1040, y + 6, 116, 34, () => Duel.join(d.code, d.lvl, d.mode), { size: 11 });
   });
 
   // подарки и подсказка
-  const rules = arena
+  const rules = durak
+    ? ['козырь — нижняя карта колоды', 'первым ходит тот, у кого младший козырь', 'подкидывать — того же достоинства', 'не можешь отбиться — бери', 'кончилась колода и карты — ты вышел']
+    : arena
     ? ['АК, Nova, AWP, монтировка Фримена', 'кусты прячут, газ в конце, «супер» на E', 'Глаз Бога: стихии и реакции', 'мины спрятаны под цифрами «Сапёра»', 'зарядник HEV чинит броню']
     : raid
       ? ['вплотную к боссу урон ×1.4', 'но у логова бьёт ударная волна', 'миньоны, слаймы и хедкрабы', 'красные метки — сейчас рванёт', 'одному — 3 жизни, вдвоём — MVP по урону']
       : Object.values(DUEL_ATTACKS).map((a) => `${a.why} → ${a.name}`);
-  text(ctx, arena ? 'НА АРЕНЕ' : raid ? 'В РЕЙДЕ' : 'ПОДАРКИ СОПЕРНИКУ', 90, 530, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
+  text(ctx, durak ? 'ПРАВИЛА' : arena ? 'НА АРЕНЕ' : raid ? 'В РЕЙДЕ' : 'ПОДАРКИ СОПЕРНИКУ', 90, 530, { font: `12px ${FONT.pixel}`, color: '#ffd54a' });
   rules.forEach((str, i) => {
     text(ctx, str, 90 + (i % 2) * 380, 556 + Math.floor(i / 2) * 22, { font: `15px ${FONT.ui}`, color: '#eef3e6' });
   });
@@ -1428,7 +1451,7 @@ function drawDuelLobby(ctx, g, now) {
     ctx.fillStyle = 'rgba(0,0,0,0.75)';
     ctx.fillRect(0, 0, W, H);
     text(ctx, `${Duel.name}  VS  ${Duel.oppName}`, 640, 250, { font: `34px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 6, align: 'center' });
-    text(ctx, `${DUEL_MODE_NAMES[Duel.mode]} · ${LEVELS[Duel.lvl].name}`, 640, 290, { font: `bold 20px ${FONT.ui}`, color: '#ffab91', align: 'center' });
+    text(ctx, Duel.mode === 'durak' ? 'ДУРАК · подкидной' : `${DUEL_MODE_NAMES[Duel.mode]} · ${LEVELS[Duel.lvl].name}`, 640, 290, { font: `bold 20px ${FONT.ui}`, color: '#ffab91', align: 'center' });
     const n = Math.ceil(Duel.countT - 0.5);
     text(ctx, n > 0 ? String(n) : 'В БОЙ!', 640, 420, { font: `140px ${FONT.gta}`, color: n > 0 ? '#ffd54a' : '#ff5252', stroke: '#000', lw: 10, align: 'center' });
   }
