@@ -24,6 +24,7 @@ const CHEATS = {
   LXGIWYL: 'набор оружия',
   OSRBLHH: 'розыск +2 звезды',
   SKIBIDI: 'скибиди доп-доп ес-ес',
+  SANS: 'бой как в Undertale прямо сейчас',
 };
 
 const TILE_LOOT = [['sun', 16], ['steak', 22], ['ammo', 14], ['tnt', 9], ['dice', 11], ['potion', 8], ['gapple', 5], ['ice', 7], ['pellet', 5]];
@@ -230,6 +231,7 @@ class Game {
   beginLevel() {
     this.state = 'play';
     this.suppressFire = true;
+    this.utT = rand(70, 130); // через сколько секунд внезапно начнётся бой «как в Undertale»
     const L = this.level;
     this.say(`Уровень ${this.levelIdx + 1}: ${L.name}. ${L.tip}`, '#ffd54a');
   }
@@ -244,6 +246,7 @@ class Game {
   }
   toTitle() {
     if (Duel.phase !== 'off') Duel.shutdown();
+    Battle.phase = 'off';
     this.duel = false;
     this.state = 'title';
     this.titleT = 0;
@@ -271,6 +274,10 @@ class Game {
     this.processInput();
     Ach.update(realDt);
     Duel.update(realDt, this);
+    if (this.state === 'ut') {
+      Battle.update(realDt);
+      return;
+    }
     if (this.state === 'arena') {
       Arena.update(realDt, this);
       // одиночный рейд идёт без сети — итог проверяем здесь
@@ -320,6 +327,15 @@ class Game {
     }
 
     // --- игра ---
+    // иногда тебя внезапно кидает в бой «как в Undertale»
+    if (!this.duel && !this.jumpscare && !this.meeting && !this.tower.dead && this.utT !== undefined) {
+      this.utT -= realDt;
+      if (this.utT <= 0) {
+        this.utT = rand(150, 240);
+        Battle.start(this);
+        return;
+      }
+    }
     this.updateBoost(realDt);
     this.updateGun(realDt);
     this.updateRod(realDt);
@@ -469,6 +485,15 @@ class Game {
     if (code === 'KeyM') {
       Sound.toggleMute();
       this.say(Sound.muted ? 'Звук выключен (M)' : 'Звук включён (M)', '#e0e0e0');
+      return;
+    }
+    if (code === 'KeyN') {
+      Music.toggle();
+      this.say(Music.on ? 'Музыка включена (N)' : 'Музыка выключена (N)', '#e0e0e0');
+      return;
+    }
+    if (this.state === 'ut') {
+      Battle.onKey(code);
       return;
     }
     if (this.state === 'arena') {
@@ -2095,6 +2120,9 @@ class Game {
         break;
       case 'SKIBIDI':
         for (let i = 0; i < 3; i++) this.spawnEnemy('skibidi');
+        break;
+      case 'SANS':
+        this.utT = 0.05;
         break;
     }
     Sound.cheat();

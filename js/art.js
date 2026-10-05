@@ -996,22 +996,105 @@ function drawFist(ctx, x, y, s, fill = '#2a2a2a') {
 }
 
 // Удочка: рука в левом нижнем углу, кончик и поплавок.
+// Рука в рукаве: объёмная «труба» от локтя (за кадром) к запястью, со складками и манжетой.
+function drawSleeveArm(ctx, ex, ey, wx, wy, w0, w1) {
+  const a = Math.atan2(wy - ey, wx - ex);
+  const L = Math.hypot(wx - ex, wy - ey);
+  ctx.save();
+  ctx.translate(ex, ey);
+  ctx.rotate(a);
+  const g = ctx.createLinearGradient(0, -w0 / 2, 0, w0 / 2);
+  g.addColorStop(0, '#262d19');
+  g.addColorStop(0.28, '#5b6a3d');
+  g.addColorStop(0.55, '#46522f');
+  g.addColorStop(1, '#1f2514');
+  ctx.beginPath();
+  ctx.moveTo(0, -w0 / 2);
+  ctx.quadraticCurveTo(L * 0.55, -w0 / 2 - 6, L, -w1 / 2);
+  ctx.lineTo(L, w1 / 2);
+  ctx.quadraticCurveTo(L * 0.5, w0 / 2 + 4, 0, w0 / 2);
+  ctx.closePath();
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#151a0d';
+  ctx.stroke();
+  // складки ткани
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  for (let i = 0; i < 3; i++) {
+    const x = L * (0.42 + i * 0.14), hw = lerp(w0, w1, x / L) / 2;
+    ctx.beginPath();
+    ctx.moveTo(x - 8, -hw + 3);
+    ctx.quadraticCurveTo(x + 6, 0, x - 6, hw - 3);
+    ctx.stroke();
+  }
+  // манжета у запястья
+  rr(ctx, L - 18, -w1 / 2 - 3, 20, w1 + 6, 5);
+  ctx.fillStyle = '#2b3320';
+  ctx.fill();
+  ctx.strokeStyle = '#151a0d';
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Кулак в перчатке, обхватывающий палку (удочку) под углом ang.
+function drawGripFist(ctx, x, y, ang) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  rr(ctx, -24, -18, 46, 40, 13);
+  ctx.fillStyle = '#1e1e22';
+  ctx.fill();
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#08080a';
+  ctx.stroke();
+  // пальцы — поперёк удилища, костяшки к нам
+  for (let i = 0; i < 4; i++) {
+    rr(ctx, -21 + i * 10.5, -24, 10.5, 30, 5);
+    ctx.fillStyle = i % 2 ? '#2a2a30' : '#313137';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#0a0a0c';
+    ctx.stroke();
+    line(ctx, -17.5 + i * 10.5, -20, -17.5 + i * 10.5, -11, 'rgba(255,255,255,0.18)', 1.5);
+  }
+  // большой палец вдоль удилища
+  rr(ctx, 6, 8, 24, 12, 6);
+  ctx.fillStyle = '#2a2a30';
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#0a0a0c';
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Удочка: рука в левом нижнем углу, кончик и поплавок.
 function drawRod(ctx, o) {
-  const hx = 96, hy = 712;
+  const hx = 104, hy = 690;
   const tipX = o.tipX, tipY = o.tipY;
-  // рукав и перчатка
-  poly(ctx, [-20, 760, 60, 640, 140, 690, 80, 780], '#46512f');
-  // удилище (как палка из Minecraft — сегментами)
+  const ang = Math.atan2(tipY - hy, tipX - hx);
+  const dx = Math.cos(ang), dy = Math.sin(ang);
+  // рука в рукаве тянется из угла экрана к кулаку
+  drawSleeveArm(ctx, -90, 840, hx - 20, hy + 18, 100, 52);
+  // пробковая рукоять ниже кулака и удилище сегментами (как палка из Minecraft)
+  line(ctx, hx - dx * 38, hy - dy * 38, hx + dx * 20, hy + dy * 20, '#2b1d10', 13);
+  line(ctx, hx - dx * 36, hy - dy * 36, hx + dx * 18, hy + dy * 18, '#8d6e4a', 9);
   const n = 7;
   for (let i = 0; i < n; i++) {
     const a = i / n, b = (i + 1) / n;
     line(ctx, lerp(hx, tipX, a), lerp(hy, tipY, a), lerp(hx, tipX, b), lerp(hy, tipY, b), i % 2 ? '#7a5230' : '#9a6a3c', 9 - i * 0.8);
   }
-  circ(ctx, lerp(hx, tipX, 0.12), lerp(hy, tipY, 0.12), 9, '#555');
-  circ(ctx, lerp(hx, tipX, 0.12), lerp(hy, tipY, 0.12), 4, '#999');
-  rr(ctx, hx - 26, hy - 26, 52, 40, 16);
-  ctx.fillStyle = '#1f1f22';
-  ctx.fill();
+  // катушка под удилищем
+  const rx = hx + dx * 46 - dy * 12, ry = hy + dy * 46 + dx * 12;
+  line(ctx, hx + dx * 46, hy + dy * 46, rx, ry, '#424242', 4);
+  circ(ctx, rx, ry, 10, '#4f4f55');
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#1c1c1f';
+  ctx.stroke();
+  circ(ctx, rx, ry, 4, '#b0b0b8');
+  line(ctx, rx, ry, rx - dx * 12 - dy * 6, ry - dy * 12 + dx * 6, '#2a2a2e', 3);
+  drawGripFist(ctx, hx, hy, ang);
   // леска и поплавок
   ctx.beginPath();
   ctx.moveTo(tipX, tipY);

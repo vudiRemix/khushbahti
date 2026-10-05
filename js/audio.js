@@ -87,6 +87,10 @@ const Sound = (() => {
   const S = {
     init,
     get muted() { return muted; },
+    // для фоновой музыки (js/music.js): общий контекст, общая громкость и шум
+    audio() {
+      return ctx ? { ctx, master, noiseBuf } : null;
+    },
     toggleMute() {
       muted = !muted;
       Store.set('kd_muted', muted ? '1' : '0');

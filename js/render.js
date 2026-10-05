@@ -15,6 +15,12 @@ function render(ctx, g) {
   ctx.fillStyle = '#0d1208';
   ctx.fillRect(0, 0, W, H);
   if (g.state === 'arena' || (g.state === 'duelover' && Arena.on)) return renderArena(ctx, g, now);
+  if (g.state === 'ut') {
+    renderBattle(ctx, g, now);
+    Ach.draw(ctx);
+    if (!Input.touch && Battle.phase !== 'attack') drawPointer(ctx);
+    return;
+  }
 
   ctx.save();
   if (g.shake > 0 && !menu) ctx.translate(rand(-1, 1) * g.shake, rand(-1, 1) * g.shake);
@@ -850,7 +856,7 @@ const CONTROLS = [
   ['1–9, E', 'предметы хотбара'],
   ['Q', 'выбрать растение или фигуру для посадки'],
   ['Shift', 'замедление времени (буст)'],
-  ['Esc', 'пауза,  M — звук'],
+  ['Esc', 'пауза · M — звук · N — музыка'],
 ];
 
 const TOUCH_CONTROLS = [
@@ -937,7 +943,8 @@ function drawPause(ctx, g) {
   mcButton(ctx, g, 'ПРОДОЛЖИТЬ', bx, 150, 320, 42, () => g.resume());
   if (g.duel) text(ctx, 'Дуэль идёт — соперник не на паузе!', 640, 228, { font: `bold 18px ${FONT.ui}`, color: '#ffab91', align: 'center', stroke: '#000', lw: 4 });
   else mcButton(ctx, g, 'ЗАНОВО ЭТОТ УРОВЕНЬ', bx, 200, 320, 42, () => g.retry());
-  mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', bx, 250, 320, 42, () => Sound.toggleMute());
+  mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', bx, 250, 156, 42, () => Sound.toggleMute(), { size: 10 });
+  mcButton(ctx, g, Music.on ? 'МУЗЫКА: ВКЛ' : 'МУЗЫКА: ВЫКЛ', bx + 164, 250, 156, 42, () => Music.toggle(), { size: 10 });
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', bx, 300, 320, 42, toggleFullscreen);
   mcButton(ctx, g, 'В ГЛАВНОЕ МЕНЮ', bx, 350, 320, 42, () => g.toTitle());
   if (Input.touch && !g.duel) mcButton(ctx, g, 'ЧИТ-КОДЫ', bx, 400, 320, 42, () => (g.state = 'cheats'));
@@ -1272,14 +1279,15 @@ function drawCheats(ctx, g) {
   ctx.fillRect(0, 0, W, H);
   text(ctx, 'ЧИТ-КОДЫ', 640, 110, { font: `56px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 9, align: 'center' });
   text(ctx, 'Как в GTA San Andreas. С читами рекорд не засчитывается.', 640, 146, { font: `bold 16px ${FONT.ui}`, color: '#cfd8dc', align: 'center' });
+  const rowH = Math.min(110, Math.floor(330 / Math.ceil(Object.keys(CHEATS).length / 2)));
   Object.keys(CHEATS).forEach((name, i) => {
-    const x = i % 2 ? 660 : 300, y = 180 + Math.floor(i / 2) * 110;
+    const x = i % 2 ? 660 : 300, y = 172 + Math.floor(i / 2) * rowH;
     mcButton(ctx, g, name, x, y, 320, 50, () => {
       g.activateCheat(name);
       g.state = 'play';
       g.suppressFire = true;
     }, { size: 16 });
-    text(ctx, CHEATS[name], x + 160, y + 78, { font: `15px ${FONT.ui}`, color: '#eef3e6', align: 'center' });
+    text(ctx, CHEATS[name], x + 160, y + 70, { font: `15px ${FONT.ui}`, color: '#eef3e6', align: 'center' });
   });
   mcButton(ctx, g, 'НАЗАД', 540, 520, 200, 44, () => (g.state = 'pause'), { size: 13 });
 }

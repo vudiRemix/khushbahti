@@ -115,6 +115,17 @@
       Sound.init();
       Input.touch = true;
       if (game.state === 'arena') return arenaTouchStart(e);
+      if (game.state === 'ut') {
+        // бой «как в Undertale»: касание — это и «ок», и джойстик для души
+        for (const t of e.changedTouches) {
+          const p = toLogical(t.clientX, t.clientY);
+          Input.x = p.x;
+          Input.y = p.y;
+          Input.queue.push({ type: 'down', button: 0, x: p.x, y: p.y });
+          if (Input.stick.id === null) Object.assign(Input.stick, { id: t.identifier, ox: p.x, oy: p.y, x: p.x, y: p.y });
+        }
+        return;
+      }
       if (aimTouch !== null) return;
       const t = e.changedTouches[0];
       aimTouch = t.identifier;
@@ -234,6 +245,16 @@
     });
   }
 
+  // какая музыка нужна сейчас
+  function musicTrack(g) {
+    const s = g.state;
+    if (s === 'ut') return 'battle';
+    if (s === 'arena') return Arena.kind === 'raid' ? 'battle' : 'action';
+    if (s === 'dead' || g.jumpscare) return '';
+    if (s === 'play' || s === 'pause' || s === 'buy' || s === 'cheats' || s === 'intro') return 'action';
+    return 'calm';
+  }
+
   // заряд «супера» на кнопке
   const superBtn = document.querySelector('[data-act=super]');
   let superShown = -1;
@@ -261,9 +282,10 @@
         document.body.classList.toggle('ui-play', playing || arena);
         document.body.classList.toggle('ui-arena', arena);
         if (!playing) Input.keys.delete('ShiftLeft');
-        if (!arena) Input.stick.id = null;
+        if (!arena && game.state !== 'ut') Input.stick.id = null;
       }
       if (arena) updateSuperButton();
+      Music.update(musicTrack(game));
     } catch (err) {
       console.error(err);
     }
