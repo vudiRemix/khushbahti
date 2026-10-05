@@ -336,6 +336,118 @@ const Sound = (() => {
       if (!ok('click', 0.04)) return;
       tone({ type: 'square', f0: 1000, dur: 0.03, vol: 0.08 });
     },
+
+    // --- новые механики ---
+    awp() {
+      if (!ok('awp')) return;
+      noise({ dur: 0.5, vol: 0.8, filter: 'lowpass', f0: 3000, f1: 120 });
+      noise({ dur: 0.08, vol: 0.5, filter: 'highpass', f0: 2500 });
+      tone({ type: 'sine', f0: 140, f1: 35, dur: 0.45, vol: 0.7 });
+      tone({ type: 'square', f0: 900, dur: 0.03, vol: 0.06, delay: 0.7 });
+      noise({ dur: 0.1, vol: 0.15, filter: 'bandpass', f0: 2000, delay: 0.8 });
+    },
+    shotgun() {
+      if (!ok('shotgun')) return;
+      noise({ dur: 0.35, vol: 0.75, filter: 'lowpass', f0: 2200, f1: 150 });
+      tone({ type: 'sine', f0: 110, f1: 40, dur: 0.3, vol: 0.6 });
+      noise({ dur: 0.06, vol: 0.2, filter: 'bandpass', f0: 1500, delay: 0.45 });
+      noise({ dur: 0.06, vol: 0.2, filter: 'bandpass', f0: 1200, delay: 0.6 });
+    },
+    weapon() {
+      if (!ok('weapon', 0.1)) return;
+      noise({ dur: 0.06, vol: 0.18, filter: 'bandpass', f0: 2500, q: 2 });
+      tone({ type: 'square', f0: 600, dur: 0.03, vol: 0.06, delay: 0.08 });
+    },
+    buy() {
+      if (!ok('buy', 0.05)) return;
+      noise({ dur: 0.05, vol: 0.2, filter: 'bandpass', f0: 3000, q: 3 });
+      tone({ type: 'square', f0: 1400, dur: 0.05, vol: 0.06, delay: 0.05 });
+    },
+    creeperHiss() {
+      if (!ok('creeper', 0.3)) return;
+      noise({ dur: 1.4, vol: 0.28, filter: 'highpass', f0: 3500, attack: 0.3 });
+    },
+    skibidi() {
+      if (!ok('skibidi', 0.5)) return;
+      // «скибиди доп-доп-доп, ес-ес» — чиптюн-версия
+      const notes = [[659, 0.0], [659, 0.12], [784, 0.24], [659, 0.36], [523, 0.6], [523, 0.72], [523, 0.84], [587, 1.08], [659, 1.22]];
+      for (const [f, d] of notes) tone({ type: 'square', f0: f, dur: 0.1, vol: 0.07, delay: d });
+      for (const d of [0.6, 0.72, 0.84]) noise({ dur: 0.05, vol: 0.12, filter: 'lowpass', f0: 400, delay: d });
+    },
+    flush() {
+      if (!ok('flush', 0.2)) return;
+      noise({ dur: 0.9, vol: 0.3, filter: 'bandpass', f0: 600, f1: 200, q: 0.8, attack: 0.05 });
+    },
+    megaLand() {
+      if (!ok('mega', 0.1)) return;
+      noise({ dur: 0.7, vol: 0.7, filter: 'lowpass', f0: 500, f1: 50 });
+      tone({ type: 'sine', f0: 70, f1: 25, dur: 0.6, vol: 0.8 });
+    },
+    marioCoin() {
+      if (!ok('mcoin', 0.05)) return;
+      tone({ type: 'square', f0: 988, dur: 0.08, vol: 0.08 });
+      tone({ type: 'square', f0: 1319, dur: 0.35, vol: 0.08, delay: 0.08 });
+    },
+    bump() {
+      if (!ok('bump', 0.05)) return;
+      tone({ type: 'triangle', f0: 180, f1: 120, dur: 0.1, vol: 0.3 });
+    },
+    powerUp() {
+      if (!ok('powerup')) return;
+      [392, 494, 587, 784, 523, 659, 784, 1046].forEach((f, i) => tone({ type: 'square', f0: f, dur: 0.07, vol: 0.07, delay: i * 0.06 }));
+    },
+    oneUp() {
+      if (!ok('oneup')) return;
+      [1319, 1568, 2637, 2093, 2349, 3136].forEach((f, i) => tone({ type: 'square', f0: f, dur: 0.11, vol: 0.06, delay: i * 0.11 }));
+    },
+    starMusic(dur) {
+      if (!ok('starmusic', 1)) return;
+      // узнаваемый ритм «звезды»: та-та-та, та-та-та...
+      const bar = [[523, 0], [523, 0.15], [523, 0.3], [440, 0.52], [523, 0.67], [523, 0.82], [587, 0.97], [523, 1.12]];
+      for (let b = 0; b * 1.3 < dur; b++) {
+        for (const [f, d] of bar) {
+          tone({ type: 'square', f0: f * (b % 2 ? 1.122 : 1), dur: 0.1, vol: 0.05, delay: b * 1.3 + d });
+          tone({ type: 'triangle', f0: f / 2, dur: 0.1, vol: 0.06, delay: b * 1.3 + d });
+        }
+      }
+    },
+    quack() {
+      if (!ok('quack', 0.4)) return;
+      tone({ type: 'sawtooth', f0: 520, f1: 380, dur: 0.12, vol: 0.06 });
+      tone({ type: 'sawtooth', f0: 500, f1: 360, dur: 0.12, vol: 0.06, delay: 0.16 });
+    },
+    dogLaugh() {
+      if (!ok('dog', 1)) return;
+      for (let i = 0; i < 6; i++) {
+        tone({ type: 'square', f0: i % 2 ? 620 : 700, dur: 0.09, vol: 0.07, delay: i * 0.16 });
+        noise({ dur: 0.06, vol: 0.08, filter: 'bandpass', f0: 1200, delay: i * 0.16 });
+      }
+    },
+    meeting() {
+      if (!ok('meeting', 1)) return;
+      for (let i = 0; i < 4; i++) {
+        tone({ type: 'sawtooth', f0: 520, f1: 780, dur: 0.25, vol: 0.08, delay: i * 0.5 });
+        tone({ type: 'sawtooth', f0: 780, f1: 520, dur: 0.25, vol: 0.08, delay: i * 0.5 + 0.25 });
+      }
+      tone({ type: 'sine', f0: 90, f1: 60, dur: 0.6, vol: 0.4 });
+    },
+    eject() {
+      if (!ok('eject', 0.5)) return;
+      noise({ dur: 1.2, vol: 0.2, filter: 'bandpass', f0: 2500, f1: 300, q: 2 });
+    },
+    cheat() {
+      if (!ok('cheat', 0.2)) return;
+      tone({ type: 'sine', f0: 1046, dur: 0.15, vol: 0.12 });
+      tone({ type: 'sine', f0: 1568, dur: 0.3, vol: 0.12, delay: 0.12 });
+    },
+    pea() {
+      if (!ok('pea', 0.05)) return;
+      tone({ type: 'sine', f0: 420, f1: 220, dur: 0.07, vol: 0.12 });
+    },
+    splat() {
+      if (!ok('splat', 0.04)) return;
+      noise({ dur: 0.05, vol: 0.12, filter: 'lowpass', f0: 1200 });
+    },
   };
   return S;
 })();

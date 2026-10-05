@@ -28,11 +28,13 @@ function render(ctx, g) {
   g.buttons = [];
   if (g.state === 'title') drawTitle(ctx, g, now);
   else if (g.state === 'pause') drawPause(ctx, g, now);
+  else if (g.state === 'buy') drawBuy(ctx, g, now);
   else if (g.state === 'dead') drawDead(ctx, g, now);
   else if (g.state === 'win') drawWin(ctx, g, now);
+  if (g.meeting) drawMeeting(ctx, g, now);
   if (g.jumpscare) drawJumpscare(ctx, g, now);
-  if (g.state === 'play' && !g.jumpscare) drawCrosshair(ctx, g, now);
-  else if (!g.jumpscare && !Input.touch) drawPointer(ctx);
+  if (g.state === 'play' && !g.jumpscare && !g.meeting) drawCrosshair(ctx, g, now);
+  else if (!g.jumpscare && !g.meeting && !Input.touch) drawPointer(ctx);
 }
 
 // ---------- мир ----------
@@ -52,11 +54,25 @@ function drawWorld(ctx, g, t, now) {
 
   for (const it of g.items) if (!it.falling) it.draw(ctx);
   for (let c = 1; c < COLS; c++) if (g.def[c]) drawDefender(ctx, g.def[c], c, t);
+  for (const p of g.peas) {
+    circ(ctx, p.x, p.y, 7, '#7ee03c');
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#2e7d32';
+    ctx.stroke();
+  }
   g.pac.draw(ctx, t);
   for (const a of g.airdrops) if (a.state === 'land') a.draw(ctx);
 
   const es = g.enemies.slice().sort((a, b) => a.y - b.y);
   for (const e of es) e.draw(ctx, t);
+
+  for (const q of g.qblocks) q.draw(ctx);
+  for (const p of g.popups) {
+    if (p.t < 0) continue;
+    ctx.globalAlpha = Math.min(1, (1.2 - p.t) * 3);
+    drawMarioItem(ctx, p.kind, p.x, p.y - Math.min(p.t, 0.5) * 90, 1.2, now);
+  }
+  ctx.globalAlpha = 1;
 
   drawTowerState(ctx, g, t);
 
@@ -67,6 +83,7 @@ function drawWorld(ctx, g, t, now) {
   }
   for (const it of g.items) if (it.falling) it.draw(ctx);
   for (const a of g.airdrops) if (a.state === 'fall') a.draw(ctx);
+  for (const d of g.ducks) d.draw(ctx);
 
   for (const tn of g.tnts) {
     const k = tn.state === 'fly' ? tn.t : 1;
@@ -74,7 +91,8 @@ function drawWorld(ctx, g, t, now) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(tn.state === 'fly' ? k * 9 : 0);
-    drawTNT(ctx, 0, 0, 36);
+    if (tn.kind === 'he') drawGrenade(ctx, 0, 0, 1.3);
+    else drawTNT(ctx, 0, 0, 36);
     if (tn.state === 'fuse' && Math.floor(tn.fuse * 12) % 2 === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.fillRect(-18, -18, 36, 36);
@@ -188,6 +206,8 @@ function drawTitleCast(ctx, t) {
   drawAirdrop(ctx, 190, 300 + Math.sin(t) * 10, t, false);
   drawSun(ctx, 470, 470, 22, t);
   drawDice(ctx, 260, 470, 42, 5, -0.3);
+  drawCreeper(ctx, 90, 450, t, { walking: true });
+  drawSkibidi(ctx, 1170, 250, t, { singing: true });
 }
 
 function lightAt(n, x, y, r, a) {
@@ -258,7 +278,7 @@ function drawHands(ctx, g, now) {
   }
 
   for (const tr of g.tracers) {
-    line(ctx, tr.x1, tr.y1, tr.x2, tr.y2, `rgba(255,230,150,${0.8 * (1 - tr.t / 0.07)})`, 2);
+    line(ctx, tr.x1, tr.y1, tr.x2, tr.y2, `rgba(255,230,150,${0.8 * (1 - tr.t / 0.07)})`, tr.w || 2);
   }
   const pose = g.gunPose();
   ctx.save();
@@ -266,7 +286,7 @@ function drawHands(ctx, g, now) {
   ctx.translate(pose.px, pose.py);
   ctx.rotate(pose.rot);
   ctx.scale(pose.s, pose.s);
-  drawAK(ctx, g.gun.flash);
+  drawWeapon(ctx, g.weapon, g.gun.flash);
   ctx.restore();
   if (g.gun.punch > 0) {
     const k = g.gun.punch / 0.4;
@@ -291,6 +311,19 @@ function drawScreenFx(ctx, g, now) {
     vignette(ctx, 'rgba(10,20,70,A)', 0.55 * k);
   }
   if (g.frostFx > 0) vignette(ctx, 'rgba(200,240,255,A)', 0.8 * g.frostFx, 200);
+  if (g.starT > 0) {
+    const hue = (now * 600) % 360;
+    const a = Math.min(1, g.starT) * 0.5;
+    const gr = ctx.createRadialGradient(W / 2, H / 2, 300, W / 2, H / 2, 760);
+    gr.addColorStop(0, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, `hsla(${hue},100%,60%,${a})`);
+    ctx.fillStyle = gr;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (g.dogT > 0) {
+    const k = g.dogT > 2 ? (2.4 - g.dogT) / 0.4 : g.dogT < 0.4 ? g.dogT / 0.4 : 1;
+    drawDog(ctx, 640, 720 - easeOutCubic(clamp(k, 0, 1)) * 150, now);
+  }
   if (g.hurtFlash > 0) vignette(ctx, 'rgba(220,0,0,A)', Math.min(0.8, g.hurtFlash * 1.6), 160);
   for (const c of g.cracks) {
     const a = Math.min(1, (2.6 - c.t) / 0.8);
@@ -341,6 +374,22 @@ function drawHUD(ctx, g, now) {
   drawCsAmmo(ctx, g);
   drawChat(ctx, g);
   drawBanner(ctx, g);
+  if (g.cheatMsg) {
+    const a = Math.min(1, (4 - g.cheatMsg.t) * 2);
+    ctx.globalAlpha = a;
+    rr(ctx, 10, 166, 300, 46, 4);
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fill();
+    text(ctx, 'Чит-код активирован', 22, 186, { font: `bold 15px ${FONT.ui}`, color: '#fff' });
+    text(ctx, `${g.cheatMsg.name}: ${g.cheatMsg.text}`, 22, 204, { font: `13px ${FONT.ui}`, color: '#cfd8dc' });
+    ctx.globalAlpha = 1;
+  }
+  if (g.weaponNameT > 0 && g.arsenal[g.weapon]) {
+    ctx.globalAlpha = Math.min(1, g.weaponNameT * 2);
+    text(ctx, WEAPONS[g.weapon].name, 1270, 630, { font: `30px ${FONT.gta}`, color: '#ffd54a', align: 'right', stroke: '#000', lw: 5 });
+    ctx.globalAlpha = 1;
+  }
+  if (g.starT > 0) text(ctx, `★ ЗВЕЗДА ${Math.ceil(g.starT)}`, 640, 640, { font: `bold 16px ${FONT.ui}`, color: `hsl(${(now * 600) % 360},100%,70%)`, align: 'center', stroke: '#000', lw: 4 });
   if (g.dice) {
     const d = g.dice;
     const rot = d.t < d.dur ? d.t * 14 : 0;
@@ -354,21 +403,8 @@ function drawHUD(ctx, g, now) {
   }
 }
 
-function drawAkIcon(ctx, x, y, s) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(s, s);
-  ctx.fillStyle = '#1d1d1d';
-  ctx.fillRect(-60, -6, 40, 5); // ствол
-  ctx.fillRect(-24, -10, 46, 12); // коробка
-  poly(ctx, [22, -10, 52, -4, 54, 10, 22, 2], '#5a2a14');
-  poly(ctx, [-6, 2, 6, 2, 10, 18, 0, 19], '#1d1d1d');
-  poly(ctx, [-20, 2, -10, 2, -14, 22, -24, 20], '#7a3a16');
-  ctx.restore();
-}
-
 function drawGtaHud(ctx, g, now) {
-  const p = g.player, gun = g.gun;
+  const p = g.player;
   rr(ctx, 10, 10, 76, 76, 12);
   const wg = ctx.createRadialGradient(48, 44, 5, 48, 48, 50);
   wg.addColorStop(0, '#ffffff');
@@ -378,10 +414,11 @@ function drawGtaHud(ctx, g, now) {
   ctx.lineWidth = 3;
   ctx.strokeStyle = '#111';
   ctx.stroke();
-  if (gun.mag + gun.reserve === 0) drawFist(ctx, 48, 46, 1.2, '#1a1a1a');
+  const a = g.cur;
+  if (a.mag + a.reserve === 0 && !g.infAmmo) drawFist(ctx, 48, 46, 1.2, '#1a1a1a');
   else {
-    drawAkIcon(ctx, 50, 40, 0.62);
-    text(ctx, `${gun.mag}-${gun.reserve}`, 48, 78, { font: `bold 12px ${FONT.ui}`, color: '#111', align: 'center' });
+    drawWeaponIcon(ctx, g.weapon, 48, 42);
+    text(ctx, g.infAmmo ? '∞' : `${a.mag}-${a.reserve}`, 48, 78, { font: `bold 12px ${FONT.ui}`, color: '#111', align: 'center' });
   }
   const hh = Math.floor(g.hours), mm = Math.floor(g.clock % 60);
   text(ctx, `${pad(hh, 2)}:${pad(mm, 2)}`, 98, 40, { font: `32px ${FONT.gta}`, color: '#e8e8e8', stroke: '#000', lw: 6 });
@@ -430,10 +467,19 @@ function drawPvzBank(ctx, g, now) {
     ctx.lineWidth = sel ? 4 : 2;
     ctx.strokeStyle = sel ? '#ffeb3b' : '#7a6230';
     ctx.stroke();
-    rr(ctx, r.x + 5, r.y + 5, r.w - 10, 42, 4);
+    rr(ctx, r.x + 4, r.y + 4, r.w - 8, 44, 4);
     ctx.fillStyle = '#9ccc65';
     ctx.fill();
-    drawPiece(ctx, st.piece, true, r.x + r.w / 2, r.y + 26, 38, { shadow: false });
+    if (st.plant) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(r.x + 4, r.y + 4, r.w - 8, 44);
+      ctx.clip();
+      ctx.translate(r.x + r.w / 2, r.y + 30);
+      ctx.scale(0.55, 0.55);
+      drawPlant(ctx, type, 0, 0, now);
+      ctx.restore();
+    } else drawPiece(ctx, st.piece, true, r.x + r.w / 2, r.y + 27, 34, { shadow: false });
     text(ctx, String(st.cost), r.x + r.w / 2, r.y + r.h - 6, { font: `bold 15px ${FONT.ui}`, color: '#111', align: 'center' });
     if (g.sun < st.cost) {
       rr(ctx, r.x, r.y, r.w, r.h, 6);
@@ -558,15 +604,17 @@ function drawPubgBars(ctx, g) {
 }
 
 function drawCsAmmo(ctx, g) {
-  const gun = g.gun;
-  const col = gun.mag <= 5 ? 'rgba(255,80,60,0.95)' : 'rgba(255,184,40,0.95)';
-  text(ctx, String(gun.mag), 1194, 708, { font: `42px ${FONT.gta}`, color: col, align: 'right', stroke: 'rgba(0,0,0,0.65)', lw: 5 });
-  text(ctx, `| ${gun.reserve}`, 1270, 708, { font: `26px ${FONT.gta}`, color: col, align: 'right', stroke: 'rgba(0,0,0,0.65)', lw: 5 });
+  const gun = g.gun, a = g.cur;
+  const col = a.mag <= Math.ceil(g.wdef.mag / 6) && !g.infAmmo ? 'rgba(255,80,60,0.95)' : 'rgba(255,184,40,0.95)';
+  text(ctx, g.infAmmo ? '∞' : String(a.mag), 1194, 708, { font: `42px ${FONT.gta}`, color: col, align: 'right', stroke: 'rgba(0,0,0,0.65)', lw: 5 });
+  text(ctx, g.infAmmo ? '| ∞' : `| ${a.reserve}`, 1270, 708, { font: `26px ${FONT.gta}`, color: col, align: 'right', stroke: 'rgba(0,0,0,0.65)', lw: 5 });
   ctx.fillStyle = col;
   rr(ctx, 1124, 678, 8, 26, 3);
   ctx.fill();
+  drawGrenade(ctx, 1076, 694, 1);
+  text(ctx, `×${g.grenades}`, 1090, 704, { font: `bold 16px ${FONT.ui}`, color: g.grenades ? '#fff' : '#888', stroke: '#000', lw: 3 });
   if (gun.reload > 0) text(ctx, 'ПЕРЕЗАРЯДКА', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: '#ffd54a', align: 'right', stroke: '#000', lw: 4 });
-  else if (gun.mag === 0 && gun.reserve === 0) text(ctx, 'НЕТ ПАТРОНОВ', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: '#ff5252', align: 'right', stroke: '#000', lw: 4 });
+  else if (a.mag === 0 && a.reserve === 0 && !g.infAmmo) text(ctx, 'НЕТ ПАТРОНОВ — B', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: '#ff5252', align: 'right', stroke: '#000', lw: 4 });
 }
 
 function drawChat(ctx, g) {
@@ -603,12 +651,48 @@ function drawBanner(ctx, g) {
 function drawCrosshair(ctx, g) {
   const gun = g.gun;
   const x = Input.x, y = Input.y;
+  if (g.weapon === 'awp') {
+    ctx.beginPath();
+    ctx.arc(x, y, 30, 0, TAU);
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    line(ctx, x - 44, y, x - 6, y, '#000', 2);
+    line(ctx, x + 6, y, x + 44, y, '#000', 2);
+    line(ctx, x, y - 44, x, y - 6, '#000', 2);
+    line(ctx, x, y + 6, x, y + 44, '#000', 2);
+    circ(ctx, x, y, 2.5, '#ff1744');
+  } else if (g.weapon === 'nova') {
+    ctx.beginPath();
+    ctx.arc(x, y, WEAPONS.nova.spread, 0, TAU);
+    ctx.strokeStyle = 'rgba(57,255,20,0.55)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    circ(ctx, x, y, 3, '#39ff14');
+  }
+  if (g.weapon !== 'ak') {
+    if (gun.reload > 0) {
+      const p = 1 - gun.reload / g.wdef.reload;
+      ctx.beginPath();
+      ctx.arc(x, y, 24, -Math.PI / 2, -Math.PI / 2 + p * TAU);
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    } else if (gun.cd > 0) {
+      ctx.beginPath();
+      ctx.arc(x, y, 36, -Math.PI / 2, -Math.PI / 2 + (1 - gun.cd / g.wdef.interval) * TAU);
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    return;
+  }
   const gap = 5 + gun.heat * 22, len = 9;
   const segs = [[x - gap - len, y, x - gap, y], [x + gap, y, x + gap + len, y], [x, y - gap - len, x, y - gap], [x, y + gap, x, y + gap + len]];
   for (const s of segs) line(ctx, s[0], s[1], s[2], s[3], 'rgba(0,0,0,0.7)', 4);
   for (const s of segs) line(ctx, s[0], s[1], s[2], s[3], '#39ff14', 2);
   if (gun.reload > 0) {
-    const p = 1 - gun.reload / CFG.reloadTime;
+    const p = 1 - gun.reload / g.wdef.reload;
     ctx.beginPath();
     ctx.arc(x, y, 24, -Math.PI / 2, -Math.PI / 2 + p * TAU);
     ctx.strokeStyle = 'rgba(255,255,255,0.85)';
@@ -656,29 +740,32 @@ function toggleFullscreen() {
 }
 
 const CONTROLS = [
-  ['ЛКМ', 'стрелять из АК-47'],
+  ['ЛКМ', 'стрелять'],
   ['ПКМ', 'удочка: открыть клетку, подобрать, посадить'],
   ['F / Пробел', 'поставить или снять флажок'],
   ['R', 'перезарядка'],
+  ['Колесо / X', 'сменить оружие'],
+  ['B', 'меню закупки CS'],
+  ['G', 'бросить HE-гранату'],
   ['1–9, E', 'предметы хотбара'],
-  ['Q', 'выбрать фигуру для посадки'],
+  ['Q', 'выбрать растение или фигуру для посадки'],
   ['Shift', 'замедление времени (буст)'],
   ['Esc', 'пауза,  M — звук'],
 ];
 
 function drawControls(ctx, x, y) {
   CONTROLS.forEach(([k, v], i) => {
-    const yy = y + i * 27;
-    ctx.font = `bold 15px ${FONT.ui}`;
-    const w = ctx.measureText(k).width + 16;
-    rr(ctx, x, yy - 17, w, 23, 5);
+    const yy = y + i * 22;
+    ctx.font = `bold 14px ${FONT.ui}`;
+    const w = ctx.measureText(k).width + 14;
+    rr(ctx, x, yy - 15, w, 20, 5);
     ctx.fillStyle = '#e8e8e8';
     ctx.fill();
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#555';
     ctx.stroke();
-    text(ctx, k, x + 8, yy, { font: `bold 15px ${FONT.ui}`, color: '#111' });
-    text(ctx, v, x + w + 10, yy, { font: `15px ${FONT.ui}`, color: '#eef3e6' });
+    text(ctx, k, x + 7, yy, { font: `bold 14px ${FONT.ui}`, color: '#111' });
+    text(ctx, v, x + w + 9, yy, { font: `14px ${FONT.ui}`, color: '#eef3e6' });
   });
 }
 
@@ -695,7 +782,7 @@ function drawTitle(ctx, g, now) {
   text(ctx, 'ХАОС-ДОСКА', 6, 8, { font: `104px ${FONT.title}`, color: '#7a1010', align: 'center' });
   text(ctx, 'ХАОС-ДОСКА', 0, 0, { font: `104px ${FONT.title}`, color: tg, stroke: '#1a0b00', lw: 14, align: 'center' });
   ctx.restore();
-  text(ctx, 'шахматы × сапёр × CS × Minecraft × GTA × PvZ × FNAF × Clash Royale × Pac-Man × PUBG × змейка', 640, 198, { font: `bold 16px ${FONT.ui}`, color: '#d7e8c4', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 4 });
+  text(ctx, 'шахматы × сапёр × CS × Minecraft × GTA × PvZ × FNAF × Clash Royale × Pac-Man × PUBG × змейка × Mario × Duck Hunt × Among Us × скибиди', 640, 198, { font: `bold 15px ${FONT.ui}`, color: '#d7e8c4', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 4 });
   mcButton(ctx, g, 'ИГРАТЬ', 640 - 150, 226, 300, 56, () => g.start(), { size: 22 });
 
   rr(ctx, 210, 306, 860, 296, 14);
@@ -716,8 +803,10 @@ function drawTitle(ctx, g, now) {
     'Не пускай врагов к белым фигурам.',
     'Сбивай ядра короля, пока не прилетели.',
     'В полночь приходит Золотой Фредди...',
+    'Деньги тратятся в меню закупки (B).',
+    'Говорят, тут работают читы из GTA SA...',
   ];
-  goals.forEach((s, i) => text(ctx, s, 690, 370 + i * 27, { font: `15px ${FONT.ui}`, color: '#eef3e6' }));
+  goals.forEach((s, i) => text(ctx, s, 690, 370 + i * 22, { font: `14px ${FONT.ui}`, color: '#eef3e6' }));
 
   text(ctx, `Рекорд: $${pad(g.best, 8)}`, 640, 636, { font: `30px ${FONT.gta}`, color: '#3fbf4a', stroke: '#000', lw: 6, align: 'center' });
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', 1020, 662, 240, 40, toggleFullscreen, { size: 11 });
@@ -729,29 +818,30 @@ function drawTitle(ctx, g, now) {
 function drawPause(ctx, g) {
   ctx.fillStyle = 'rgba(0,0,0,0.62)';
   ctx.fillRect(0, 0, W, H);
-  text(ctx, 'ПАУЗА', 640, 140, { font: `72px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 10, align: 'center' });
+  text(ctx, 'ПАУЗА', 640, 118, { font: `64px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 10, align: 'center' });
   const bx = 640 - 160;
-  mcButton(ctx, g, 'ПРОДОЛЖИТЬ', bx, 190, 320, 46, () => g.resume());
-  mcButton(ctx, g, 'НАЧАТЬ ЗАНОВО', bx, 248, 320, 46, () => g.start());
-  mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', bx, 306, 320, 46, () => Sound.toggleMute());
-  mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', bx, 364, 320, 46, toggleFullscreen);
-  mcButton(ctx, g, 'В ГЛАВНОЕ МЕНЮ', bx, 422, 320, 46, () => g.toTitle());
-  rr(ctx, 380, 486, 520, 226, 12);
+  mcButton(ctx, g, 'ПРОДОЛЖИТЬ', bx, 150, 320, 42, () => g.resume());
+  mcButton(ctx, g, 'НАЧАТЬ ЗАНОВО', bx, 200, 320, 42, () => g.start());
+  mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', bx, 250, 320, 42, () => Sound.toggleMute());
+  mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', bx, 300, 320, 42, toggleFullscreen);
+  mcButton(ctx, g, 'В ГЛАВНОЕ МЕНЮ', bx, 350, 320, 42, () => g.toTitle());
+  rr(ctx, 380, 410, 520, 282, 12);
   ctx.fillStyle = 'rgba(10,16,8,0.8)';
   ctx.fill();
-  drawControls(ctx, 404, 516);
+  drawControls(ctx, 404, 440);
+  text(ctx, 'Псс... попробуй набрать HESOYAM', 640, 684, { font: `13px ${FONT.ui}`, color: 'rgba(255,255,255,0.45)', align: 'center' });
 }
 
 function statsLines(g) {
   const p = g.player;
   const mins = Math.floor(g.t / 60), secs = Math.floor(g.t % 60);
   return [
-    ['Деньги', `$${p.money}`],
+    ['Заработано', `$${p.earned}`],
     ['Врагов повержено', String(g.kills)],
     ['Клеток открыто', String(g.tilesOpened)],
     ['Полей сапёра пройдено', String(g.fieldsCleared)],
     ['Уровень', String(p.level)],
-    ['Время', `${mins}:${pad(secs, 2)}`],
+    ['Утки / Время', `${g.ducksShot} / ${mins}:${pad(secs, 2)}`],
   ];
 }
 
@@ -763,7 +853,8 @@ function drawStats(ctx, g, y) {
     text(ctx, k, 464, y + 32 + i * 27, { font: `16px ${FONT.ui}`, color: '#ddd' });
     text(ctx, v, 816, y + 32 + i * 27, { font: `bold 17px ${FONT.ui}`, color: '#fff', align: 'right' });
   });
-  if (g.newRecord) text(ctx, 'НОВЫЙ РЕКОРД!', 640, y + 222, { font: `24px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 6, align: 'center' });
+  if (g.cheated) text(ctx, 'ЧИТЕР! Рекорд не засчитан', 640, y + 222, { font: `22px ${FONT.title}`, color: '#ff8a80', stroke: '#000', lw: 6, align: 'center' });
+  else if (g.newRecord) text(ctx, 'НОВЫЙ РЕКОРД!', 640, y + 222, { font: `24px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 6, align: 'center' });
 }
 
 function drawDead(ctx, g) {
@@ -791,8 +882,8 @@ function drawDead(ctx, g) {
   if (g.deadT > 1.5) {
     text(ctx, `Причина: ${g.deathCause}`, 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#ffcdd2', stroke: '#000', lw: 4, align: 'center' });
     drawStats(ctx, g, 318);
-    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord ? 20 : 0), 240, 46, () => g.start());
-    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord ? 20 : 0), 240, 46, () => g.toTitle());
+    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.start());
+    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
   }
 }
 
@@ -811,10 +902,10 @@ function drawWin(ctx, g, now) {
   }
   ctx.globalAlpha = 1;
   if (g.winT > 1.5) {
-    text(ctx, 'Башня короля разрушена. +$10000', 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#c8f7a0', stroke: '#000', lw: 4, align: 'center' });
+    text(ctx, 'Башня короля разрушена. +$10000 · #1 VICTORY ROYALE', 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#c8f7a0', stroke: '#000', lw: 4, align: 'center' });
     drawStats(ctx, g, 318);
-    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord ? 20 : 0), 240, 46, () => g.start());
-    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord ? 20 : 0), 240, 46, () => g.toTitle());
+    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.start());
+    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
   }
 }
 
@@ -838,4 +929,86 @@ function drawJumpscare(ctx, g, now) {
     ctx.fillRect(0, rand(0, H), W, rand(1, 3));
   }
   ctx.globalAlpha = 1;
+}
+
+// ---------- меню закупки в стиле CS 1.6 ----------
+function drawBuyIcon(ctx, key, x, y) {
+  if (key === 'awp' || key === 'nova') drawWeaponIcon(ctx, key, x, y);
+  else if (key === 'he') drawGrenade(ctx, x, y, 1.3);
+  else if (key === 'kevlar') drawVest(ctx, x, y, 34);
+  else if (key === 'ammo') drawAmmoBox(ctx, x, y, 36);
+  else if (key === 'detector') {
+    drawMine(ctx, x - 6, y + 4, 9);
+    drawFlag(ctx, x + 8, y - 2, 0.9);
+  }
+}
+
+function drawBuy(ctx, g) {
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(0, 0, W, H);
+  rr(ctx, 40, 90, 580, 566, 8);
+  ctx.fillStyle = 'rgba(22,20,10,0.9)';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255,176,32,0.6)';
+  ctx.stroke();
+  text(ctx, 'МЕНЮ ЗАКУПКИ', 70, 136, { font: `30px ${FONT.gta}`, color: '#ffb020' });
+  text(ctx, `$${g.player.money}`, 590, 136, { font: `28px ${FONT.gta}`, color: '#7ee05a', align: 'right' });
+  BUY_ITEMS.forEach((it, i) => {
+    const r = buyRect(i);
+    const hov = inRect(Input.x, Input.y, r);
+    const owned = (it.key === 'awp' || it.key === 'nova') && g.arsenal[it.key].owned;
+    const can = g.player.money >= it.price && !owned;
+    rr(ctx, r.x, r.y, r.w, r.h, 5);
+    ctx.fillStyle = hov ? 'rgba(255,176,32,0.22)' : 'rgba(255,255,255,0.05)';
+    ctx.fill();
+    drawBuyIcon(ctx, it.key, r.x + 44, r.y + r.h / 2);
+    text(ctx, `${i + 1}. ${it.name}`, r.x + 92, r.y + 24, { font: `bold 19px ${FONT.ui}`, color: can ? '#ffb020' : '#7a6a4a' });
+    text(ctx, it.desc, r.x + 92, r.y + 44, { font: `14px ${FONT.ui}`, color: can ? '#d9cfae' : '#7d7562' });
+    text(ctx, owned ? 'есть' : `$${it.price}`, r.x + r.w - 14, r.y + 36, { font: `24px ${FONT.gta}`, color: can ? '#ffd54a' : '#8a6a3a', align: 'right' });
+    g.buttons.push({ x: r.x, y: r.y, w: r.w, h: r.h, action: () => g.buy(i) });
+  });
+  if (g.buyMsg) text(ctx, g.buyMsg.text, 330, 562, { font: `bold 17px ${FONT.ui}`, color: g.buyMsg.bad ? '#ff8a80' : '#a5f07a', align: 'center' });
+  mcButton(ctx, g, 'ЗАКРЫТЬ (B)', 240, 584, 180, 36, () => g.closeBuy(), { size: 11 });
+  text(ctx, '1–6 или клик — купить. Пока меню открыто, игра на паузе.', 330, 642, { font: `13px ${FONT.ui}`, color: '#a8a08a', align: 'center' });
+}
+
+// ---------- экстренное собрание (Among Us) ----------
+function drawMeeting(ctx, g, now) {
+  const m = g.meeting;
+  if (m.t < 2.2) {
+    const k = Math.min(1, m.t * 4);
+    ctx.fillStyle = `rgba(70,0,0,${0.8 * k})`;
+    ctx.fillRect(0, 0, W, H);
+    ['#e53935', '#1e88e5', '#43a047', '#fdd835', '#f5f5f5'].forEach((c, i) => {
+      drawCrewmate(ctx, 340 + i * 150, 480 + Math.sin(now * 4 + i) * 5, 1.3, c);
+    });
+    const sc = 1 + Math.max(0, 0.3 - m.t) * 2;
+    ctx.save();
+    ctx.translate(640, 230);
+    ctx.scale(sc, sc);
+    text(ctx, 'ЭКСТРЕННОЕ', 0, -40, { font: `78px ${FONT.title}`, color: '#ff1744', stroke: '#fff', lw: 10, align: 'center' });
+    text(ctx, 'СОБРАНИЕ', 0, 46, { font: `78px ${FONT.title}`, color: '#ff1744', stroke: '#fff', lw: 10, align: 'center' });
+    ctx.restore();
+    text(ctx, 'Среди врагов кто-то очень подозрительный...', 640, 352, { font: `bold 22px ${FONT.ui}`, color: '#fff', stroke: '#000', lw: 5, align: 'center' });
+    return;
+  }
+  ctx.fillStyle = '#05050f';
+  ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 140; i++) {
+    const sx = (((i * 137.5) % W) - (m.t - 2.2) * (20 + (i % 5) * 15) + W) % W;
+    const sy = (i * 71.3) % H;
+    ctx.fillStyle = `rgba(255,255,255,${0.3 + (i % 4) * 0.18})`;
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+  const k = (m.t - 2.2) / 3;
+  ctx.save();
+  ctx.translate(lerp(-90, W + 90, k), 320 + Math.sin(k * 6) * 30);
+  ctx.rotate(k * 12);
+  drawCrewmate(ctx, 0, 0, 1.2, m.color);
+  ctx.restore();
+  const full = `${m.name} был предателем.`;
+  const n = Math.floor(clamp((m.t - 2.6) * 22, 0, full.length));
+  text(ctx, full.slice(0, n), 640, 470, { font: `bold 34px ${FONT.ui}`, color: '#fff', align: 'center' });
+  if (m.t > 4) text(ctx, 'Осталось предателей: 0', 640, 515, { font: `22px ${FONT.ui}`, color: '#bdbdbd', align: 'center' });
 }

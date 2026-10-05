@@ -884,7 +884,7 @@ function drawAirdrop(ctx, x, y, t, landed) {
 // ---------- руки игрока: АК-47 и удочка ----------
 const AK_MUZZLE = { x: -396, y: -10 };
 
-function drawAK(ctx, flash) {
+function drawAK(ctx, flash, hands = true) {
   // Локальные координаты: ствол смотрит влево (−x), рукоять в (0,0).
   // приклад
   const wood = ctx.createLinearGradient(0, -30, 0, 40);
@@ -893,7 +893,7 @@ function drawAK(ctx, flash) {
   poly(ctx, [30, -18, 160, -6, 175, 40, 150, 44, 30, 12], wood, '#2b0f05', 3);
   poly(ctx, [30, -18, 160, -6, 175, 40, 150, 44, 30, 12], wood);
   // правая рука в рукаве (под оружием)
-  poly(ctx, [-10, 30, 40, 20, 200, 160, 120, 230], '#3f4a2c');
+  if (hands) poly(ctx, [-10, 30, 40, 20, 200, 160, 120, 230], '#3f4a2c');
   // ствольная коробка
   const metal = ctx.createLinearGradient(0, -26, 0, 8);
   metal.addColorStop(0, '#55565c');
@@ -950,27 +950,30 @@ function drawAK(ctx, flash) {
   ctx.strokeStyle = '#1a1a1d';
   ctx.lineWidth = 3;
   ctx.stroke();
-  // перчатки
-  rr(ctx, -36, 14, 50, 46, 18);
-  ctx.fillStyle = '#1f1f22';
-  ctx.fill();
-  for (let i = 0; i < 3; i++) line(ctx, -30 + i * 13, 20, -30 + i * 13, 32, 'rgba(255,255,255,0.08)', 2);
-  // вспышка
-  if (flash > 0) {
-    ctx.save();
-    ctx.translate(AK_MUZZLE.x, AK_MUZZLE.y);
-    const sc = 0.8 + Math.random() * 0.6;
-    ctx.scale(sc, sc);
-    const g = ctx.createRadialGradient(0, 0, 2, 0, 0, 60);
-    g.addColorStop(0, 'rgba(255,255,220,1)');
-    g.addColorStop(0.3, 'rgba(255,200,60,0.9)');
-    g.addColorStop(1, 'rgba(255,120,0,0)');
-    circ(ctx, -10, 0, 60, g);
-    poly(ctx, [0, -10, -70, 0, 0, 10, -20, 0], '#fff7c0');
-    poly(ctx, [-8, -4, -30, -34, -16, -2], '#ffd54a');
-    poly(ctx, [-8, 4, -30, 34, -16, 2], '#ffd54a');
-    ctx.restore();
+  // перчатка
+  if (hands) {
+    rr(ctx, -36, 14, 50, 46, 18);
+    ctx.fillStyle = '#1f1f22';
+    ctx.fill();
+    for (let i = 0; i < 3; i++) line(ctx, -30 + i * 13, 20, -30 + i * 13, 32, 'rgba(255,255,255,0.08)', 2);
   }
+  if (flash > 0) drawMuzzleFlash(ctx, AK_MUZZLE.x, AK_MUZZLE.y, 1);
+}
+
+function drawMuzzleFlash(ctx, x, y, size) {
+  ctx.save();
+  ctx.translate(x, y);
+  const sc = (0.8 + Math.random() * 0.6) * size;
+  ctx.scale(sc, sc);
+  const g = ctx.createRadialGradient(0, 0, 2, 0, 0, 60);
+  g.addColorStop(0, 'rgba(255,255,220,1)');
+  g.addColorStop(0.3, 'rgba(255,200,60,0.9)');
+  g.addColorStop(1, 'rgba(255,120,0,0)');
+  circ(ctx, -10, 0, 60, g);
+  poly(ctx, [0, -10, -70, 0, 0, 10, -20, 0], '#fff7c0');
+  poly(ctx, [-8, -4, -30, -34, -16, -2], '#ffd54a');
+  poly(ctx, [-8, 4, -30, 34, -16, 2], '#ffd54a');
+  ctx.restore();
 }
 
 function drawFist(ctx, x, y, s, fill = '#2a2a2a') {

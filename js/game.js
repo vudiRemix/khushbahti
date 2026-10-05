@@ -10,18 +10,31 @@ const HINTS = [
   [17, 'Открой все безопасные клетки — оставшиеся мины полетят в башню короля.'],
   [24, 'Лови солнце удочкой. ПКМ по пустой клетке в ряду белых — посадить фигуру (Q — выбор).'],
   [31, 'Цифры 1–9 — предметы из хотбара. Shift — замедление времени.'],
+  [40, 'B — меню закупки как в CS: AWP, дробовик, гранаты, кевлар.'],
+  [48, 'Колесо мыши или X — смена оружия, G — бросить HE-гранату.'],
+  [56, 'Стреляй по «?»-блокам и уткам — внутри награды!'],
 ];
+
+// Чит-коды из GTA San Andreas (и один местный).
+const CHEATS = {
+  HESOYAM: 'здоровье, броня и $250 000',
+  AEZAKMI: 'розыск сброшен',
+  FULLCLIP: 'бесконечные патроны',
+  LXGIWYL: 'набор оружия',
+  OSRBLHH: 'розыск +2 звезды',
+  SKIBIDI: 'скибиди доп-доп ес-ес',
+};
 
 const TILE_LOOT = [['sun', 16], ['steak', 22], ['ammo', 14], ['tnt', 9], ['dice', 11], ['potion', 8], ['gapple', 5], ['ice', 7], ['pellet', 5]];
 const DROP_LOOT = [['gapple', 20], ['potion', 15], ['totem', 6], ['ammo', 20], ['tnt', 15], ['pellet', 8], ['ice', 8], ['vest', 18], ['dice', 10], ['steak', 12]];
 
 const LAYOUT = {
   hotbar: { x: 433, y: 674, slot: 46 },
-  bank: { x: 996, y: 6, w: 278, h: 82 },
-  led: { x: 996, y: 94, w: 278, h: 48 },
+  bank: { x: 950, y: 6, w: 324, h: 82 },
+  led: { x: 950, y: 94, w: 324, h: 48 },
 };
 const hotbarSlotRect = (i) => ({ x: LAYOUT.hotbar.x + i * LAYOUT.hotbar.slot, y: LAYOUT.hotbar.y, w: LAYOUT.hotbar.slot, h: LAYOUT.hotbar.slot });
-const packetRect = (i) => ({ x: 1066 + i * 68, y: 12, w: 62, h: 70 });
+const packetRect = (i) => ({ x: 1018 + i * 51, y: 12, w: 46, h: 70 });
 const TOWER_BOX = { x: 640 - 130, y: 10, w: 260, h: 156 };
 
 class Game {
@@ -37,8 +50,33 @@ class Game {
     this.t = 0;
     this.clock = 8 * 60;
     this.nights = 0;
-    this.player = { hp: CFG.playerHp, maxHp: CFG.playerHp, armor: CFG.startArmor, hunger: 20, boost: 100, xp: 0, level: 0, money: 0, regenT: 0, hungerT: 0, starveT: 0 };
-    this.gun = { mag: CFG.magSize, reserve: CFG.startReserve, cd: 0, reload: 0, heat: 0, kick: 0, flash: 0, punch: 0 };
+    this.player = { hp: CFG.playerHp, maxHp: CFG.playerHp, armor: CFG.startArmor, hunger: 20, boost: 100, xp: 0, level: 0, money: 0, earned: 0, regenT: 0, hungerT: 0, starveT: 0 };
+    this.gun = { cd: 0, reload: 0, heat: 0, kick: 0, flash: 0, punch: 0, switchT: 0 };
+    this.arsenal = {
+      ak: { owned: true, mag: CFG.magSize, reserve: CFG.startReserve },
+      nova: { owned: false, mag: 0, reserve: 0 },
+      awp: { owned: false, mag: 0, reserve: 0 },
+    };
+    this.weapon = 'ak';
+    this.weaponNameT = 0;
+    this.grenades = 1;
+    this.infAmmo = false;
+    this.cheated = false;
+    this.typed = '';
+    this.cheatMsg = null;
+    this.buyMsg = null;
+    this.peas = [];
+    this.qblocks = [];
+    this.ducks = [];
+    this.popups = [];
+    this.qT = 18;
+    this.duckT = rand(25, 35);
+    this.meetingT = rand(120, 170);
+    this.meeting = null;
+    this.dogT = 0;
+    this.starT = 0;
+    this.starOffset = 0;
+    this.ducksShot = 0;
     this.rod = { state: 'idle', t: 0, tx: 0, ty: 0, cd: 0, carry: null };
     this.inv = { steak: 3, gapple: 1, potion: 1, tnt: 2, dice: 2, ammo: 1, ice: 1, pellet: 1, totem: 0 };
     this.sel = 0;
@@ -133,8 +171,9 @@ class Game {
     return this.state === 'dead' ? this.deadT : this.winT;
   }
   saveBest() {
-    if (this.player.money > this.best) {
-      this.best = this.player.money;
+    if (this.cheated) return;
+    if (this.player.earned > this.best) {
+      this.best = this.player.earned;
       Store.set('kd_best', this.best);
       this.newRecord = true;
     }
@@ -149,7 +188,7 @@ class Game {
       this.pac.mouth += realDt * 10;
       return;
     }
-    if (this.state === 'pause') return;
+    if (this.state === 'pause' || this.state === 'buy') return;
     if (this.state === 'dead') {
       this.deadT += realDt;
       this.updateFx(realDt * 0.3, realDt);
@@ -185,9 +224,15 @@ class Game {
       this.updateFx(realDt * 0.2, realDt);
       return;
     }
+    if (this.meeting) {
+      this.updateMeeting(realDt);
+      this.updateFx(realDt * 0.2, realDt);
+      return;
+    }
 
     const dt = realDt * this.timeScale;
     this.t += dt;
+    if (this.starT > 0) this.starT -= dt;
     while (this.hintIdx < HINTS.length && this.t >= HINTS[this.hintIdx][0]) {
       this.say('[Подсказка] ' + HINTS[this.hintIdx][1], '#9be7ff');
       this.hintIdx++;
@@ -218,7 +263,12 @@ class Game {
     this.updateCannonballs(dt);
     this.updateMissiles(dt);
     this.updateTNT(dt);
+    this.updatePeas(dt);
+    for (const q of this.qblocks) q.update(dt);
+    for (const d of this.ducks) d.update(dt, this);
     this.updateFx(dt, realDt);
+    this.qblocks = this.qblocks.filter((q) => !q.gone);
+    this.ducks = this.ducks.filter((d) => !d.gone);
 
     this.enemies = this.enemies.filter((e) => !e.remove);
     this.items = this.items.filter((i) => !i.gone);
@@ -267,6 +317,13 @@ class Game {
     this.frostFx = Math.max(0, this.frostFx - realDt * 0.6);
     this.totemFx = Math.max(0, this.totemFx - realDt);
     this.starFlash = Math.max(0, this.starFlash - realDt);
+    for (const p of this.popups) p.t += realDt;
+    this.popups = this.popups.filter((p) => p.t < 1.2);
+    if (this.dogT > 0) this.dogT -= realDt;
+    if (this.cheatMsg) {
+      this.cheatMsg.t += realDt;
+      if (this.cheatMsg.t > 4) this.cheatMsg = null;
+    }
     const tw = this.tower;
     if (tw.hit > 0) tw.hit -= realDt;
   }
@@ -279,14 +336,13 @@ class Game {
       if (ev.type === 'key') this.onKey(ev.code);
       else if (ev.type === 'down') this.onMouseDown(ev.button, ev.x, ev.y);
       else if (ev.type === 'up' && ev.button === 0) this.suppressFire = false;
-      else if (ev.type === 'wheel' && this.state === 'play') {
-        this.sel = (this.sel + ev.dy + 9) % 9;
-        Sound.click();
-      }
+      else if (ev.type === 'wheel' && this.state === 'play') this.switchWeapon(ev.dy);
     }
   }
 
   onKey(code) {
+    // чит-коды проверяются первыми, иначе буква M в HESOYAM выключила бы звук
+    if (this.state === 'play' && !this.jumpscare && !this.meeting && this.handleCheatKey(code)) return;
     if (code === 'KeyM') {
       Sound.toggleMute();
       this.say(Sound.muted ? 'Звук выключен (M)' : 'Звук включён (M)', '#e0e0e0');
@@ -306,12 +362,23 @@ class Game {
       else if (code === 'Escape') this.toTitle();
       return;
     }
+    if (this.state === 'buy') {
+      if (code === 'KeyB' || code === 'Escape') this.closeBuy();
+      else {
+        const m = /^(Digit|Numpad)([1-9])$/.exec(code);
+        if (m) this.buy(Number(m[2]) - 1);
+      }
+      return;
+    }
     if (code === 'Escape' || code === 'KeyP') {
       this.pause();
       return;
     }
-    if (this.jumpscare) return;
+    if (this.jumpscare || this.meeting) return;
     if (code === 'KeyR') this.reload();
+    else if (code === 'KeyB') this.openBuy();
+    else if (code === 'KeyG') this.throwGrenade();
+    else if (code === 'KeyX') this.switchWeapon(1);
     else if (code === 'KeyF' || code === 'Space') this.flagAt(Input.x, Input.y);
     else if (code === 'KeyQ') this.cyclePacket();
     else if (code === 'KeyE') this.useItem(this.sel);
@@ -326,7 +393,7 @@ class Game {
       if (btn === 0) this.clickButtons(x, y);
       return;
     }
-    if (this.jumpscare) return;
+    if (this.jumpscare || this.meeting) return;
     if (btn === 0) {
       if (this.uiClick(x, y)) {
         this.suppressFire = true;
@@ -382,58 +449,97 @@ class Game {
     return 1 + Math.min(0.6, this.player.level * 0.03);
   }
 
+  get cur() {
+    return this.arsenal[this.weapon];
+  }
+  get wdef() {
+    return WEAPONS[this.weapon];
+  }
+
   updateGun(dt) {
-    const gun = this.gun;
+    const gun = this.gun, wd = this.wdef, a = this.cur;
     gun.cd = Math.max(0, gun.cd - dt);
     gun.flash = Math.max(0, gun.flash - dt);
     gun.kick = Math.max(0, gun.kick - dt * 8);
     gun.punch = Math.max(0, gun.punch - dt);
+    gun.switchT = Math.max(0, gun.switchT - dt);
     gun.heat = Math.max(0, gun.heat - dt * (Input.lmb ? 0.7 : 2.4));
+    if (this.weaponNameT > 0) this.weaponNameT -= dt;
     if (gun.reload > 0) {
       gun.reload -= dt;
       if (gun.reload <= 0) {
-        const take = Math.min(CFG.magSize - gun.mag, gun.reserve);
-        gun.mag += take;
-        gun.reserve -= take;
+        const take = Math.min(wd.mag - a.mag, a.reserve);
+        a.mag += take;
+        a.reserve -= take;
         gun.reload = 0;
       }
     }
-    if (Input.lmb && !this.suppressFire && !this.jumpscare) this.tryFire();
+    if (Input.lmb && !this.suppressFire && !this.jumpscare && !this.meeting) this.tryFire();
     // оружие становится прозрачным, если прицел под ним
     const under = Input.x > 900 && Input.y > 430;
     this.gunAlpha = lerp(this.gunAlpha, under ? 0.3 : 1, Math.min(1, dt * 10));
   }
 
   reload() {
-    const gun = this.gun;
-    if (gun.reload > 0 || gun.mag >= CFG.magSize || gun.reserve <= 0) return;
-    gun.reload = CFG.reloadTime;
+    const gun = this.gun, a = this.cur;
+    if (this.infAmmo || gun.reload > 0 || a.mag >= this.wdef.mag || a.reserve <= 0) return;
+    gun.reload = this.wdef.reload;
     Sound.reload();
   }
 
+  setWeapon(key) {
+    if (!this.arsenal[key].owned || key === this.weapon) return;
+    this.weapon = key;
+    this.gun.reload = 0;
+    this.gun.switchT = 0.35;
+    this.gun.heat = 0;
+    this.weaponNameT = 1.5;
+    Sound.weapon();
+  }
+
+  switchWeapon(dir) {
+    const owned = WEAPON_ORDER.filter((k) => this.arsenal[k].owned);
+    if (owned.length < 2) {
+      if (this.weaponNameT <= 0) {
+        FX.text(this, 1100, 600, 'Купи оружие в меню B', { color: '#ffd54a', font: `bold 15px ${FONT.ui}` });
+        this.weaponNameT = 1.2;
+      }
+      return;
+    }
+    const i = owned.indexOf(this.weapon);
+    this.setWeapon(owned[(i + dir + owned.length * 2) % owned.length]);
+  }
+
   tryFire() {
-    const gun = this.gun;
-    if (gun.reload > 0 || gun.cd > 0) return;
-    if (gun.mag <= 0) {
-      if (gun.reserve > 0) this.reload();
+    const gun = this.gun, wd = this.wdef, a = this.cur;
+    if (gun.reload > 0 || gun.cd > 0 || gun.switchT > 0) return;
+    if (a.mag <= 0 && !this.infAmmo) {
+      if (a.reserve > 0) this.reload();
+      else if (this.weapon !== 'ak' && this.arsenal.ak.mag + this.arsenal.ak.reserve > 0) this.setWeapon('ak');
       else this.punch();
       return;
     }
-    gun.mag--;
-    gun.cd = CFG.fireInterval / this.fireRate;
-    const spread = 2 + gun.heat * 30;
-    const a = rand(0, TAU), d = Math.sqrt(Math.random()) * spread;
-    const hx = Input.x + Math.cos(a) * d, hy = Input.y + Math.sin(a) * d;
-    gun.heat = Math.min(1, gun.heat + 0.09);
+    if (!this.infAmmo) a.mag--;
+    gun.cd = wd.interval / (this.weapon === 'ak' ? this.fireRate : 1);
+    if (!wd.auto) this.suppressFire = true;
     gun.kick = 1;
     gun.flash = 0.05;
-    this.shake = Math.max(this.shake, 1.5);
-    Sound.shot();
+    this.shake = Math.max(this.shake, wd.shake);
+    if (this.weapon === 'awp') Sound.awp();
+    else if (this.weapon === 'nova') Sound.shotgun();
+    else Sound.shot();
     const pose = this.gunPose();
-    this.tracers.push({ x1: pose.mx, y1: pose.my, x2: hx, y2: hy, t: 0 });
-    FX.burst(this, pose.ex, pose.ey, 1, { colors: ['#d4a017'], size: 5, speed: 260, angle: pose.rot - Math.PI / 2 + 0.6, spread: 0.3, grav: 900, life: 0.6 });
-    this.hitAt(hx, hy, 1);
-    if (gun.mag === 0 && gun.reserve > 0) this.reload();
+    const dmg = wd.dmg * (this.starT > 0 ? 2 : 1);
+    const spread = wd.spread + gun.heat * wd.heatSpread;
+    for (let i = 0; i < wd.pellets; i++) {
+      const ang = rand(0, TAU), d = Math.sqrt(Math.random()) * spread;
+      const hx = Input.x + Math.cos(ang) * d, hy = Input.y + Math.sin(ang) * d;
+      if (i < 4) this.tracers.push({ x1: pose.mx, y1: pose.my, x2: hx, y2: hy, t: 0, w: wd.pierce ? 5 : 2 });
+      this.hitAt(hx, hy, dmg, wd.pierce);
+    }
+    gun.heat = Math.min(1, gun.heat + wd.heatAdd);
+    FX.burst(this, pose.ex, pose.ey, 1, { colors: [this.weapon === 'nova' ? '#c62828' : '#d4a017'], size: 5, speed: 260, angle: pose.rot - Math.PI / 2 + 0.6, spread: 0.3, grav: 900, life: 0.6 });
+    if (a.mag === 0 && a.reserve > 0 && !this.infAmmo) this.reload();
   }
 
   punch() {
@@ -445,39 +551,56 @@ class Game {
     let best = null;
     for (const e of this.enemies) if (e.alive && e.distTo(Input.x, Input.y) < 50 && (!best || e.y > best.y)) best = e;
     if (best) {
-      best.damage(1, this, 'fist');
+      best.damage(this.starT > 0 ? 3 : 1, this, 'fist');
       FX.text(this, Input.x, Input.y - 30, 'БАЦ!', { color: '#fff', font: `bold 22px ${FONT.gta}` });
     } else if (Math.random() < 0.3) {
-      FX.text(this, Input.x, Input.y - 30, 'Нет патронов — бей кулаком!', { color: '#ffd54a', font: `bold 14px ${FONT.ui}` });
+      FX.text(this, Input.x, Input.y - 30, 'Нет патронов — бей кулаком или купи (B)!', { color: '#ffd54a', font: `bold 14px ${FONT.ui}` });
     }
   }
 
   // Положение оружия в кадре (общая функция для логики и отрисовки).
   gunPose() {
-    const gun = this.gun;
+    const gun = this.gun, wd = this.wdef;
     let px = 1178, py = 655;
     let dir = Math.atan2(Input.y - py, Input.x - px);
     if (dir > 0) dir -= TAU;
     dir = clamp(dir, -3.5, -1.7);
     const base = -2.6;
     let rot = base + (dir - base) * 0.65 + Math.PI;
-    const s = 0.86;
+    const s = wd.scale;
     if (gun.reload > 0) {
-      const p = 1 - gun.reload / CFG.reloadTime;
+      const p = 1 - gun.reload / wd.reload;
       const k = Math.sin(p * Math.PI);
       rot += k * 0.55;
       py += k * 120;
     }
-    rot -= gun.kick * 0.05;
-    px += Math.cos(rot) * gun.kick * 14;
-    py += Math.sin(rot) * gun.kick * 14;
+    if (gun.switchT > 0) py += (gun.switchT / 0.35) * 200;
+    rot -= gun.kick * (this.weapon === 'ak' ? 0.05 : 0.14);
+    px += Math.cos(rot) * gun.kick * wd.kick;
+    py += Math.sin(rot) * gun.kick * wd.kick;
     const cr = Math.cos(rot), sr = Math.sin(rot);
-    const lx = AK_MUZZLE.x * s, ly = AK_MUZZLE.y * s;
+    const lx = wd.muzzle.x * s, ly = wd.muzzle.y * s;
     const ex = -60 * s, ey = -26 * s;
     return { px, py, rot, s, mx: px + lx * cr - ly * sr, my: py + lx * sr + ly * cr, ex: px + ex * cr - ey * sr, ey: py + ex * sr + ey * cr };
   }
 
-  hitAt(x, y, dmg) {
+  hitFx(e, x, y) {
+    const colors = {
+      zombie: ['#7fa35c', '#4e6b2f'],
+      cone: ['#7fa35c', '#f08a24'],
+      freddy: ['#ffd54a', '#c9a92c'],
+      snake: ['#4a7cf0', '#9bb8ff'],
+      creeper: ['#5cb84a', '#86d672'],
+      skibidi: ['#ffffff', '#9fd4ff'],
+      mega: ['#c0c4cf', '#7b4fb0'],
+    }[e.type] || ['#222', '#555', '#8a8a8a'];
+    FX.burst(this, x, y, 5, { colors, size: 5, speed: 200, grav: 600, life: 0.4 });
+    Sound.hit();
+  }
+
+  // pierce — пуля AWP: задевает всё, что оказалось в точке попадания.
+  hitAt(x, y, dmg, pierce = false) {
+    let any = false;
     for (const cb of this.cannonballs) {
       if (!cb.gone && cb.hit(x, y)) {
         cb.gone = true;
@@ -486,32 +609,140 @@ class Game {
         FX.text(this, p.x, p.y - 30, 'СБИТО!', { color: '#ffd54a', font: `bold 22px ${FONT.gta}` });
         this.addMoney(25);
         Sound.stone();
+        if (!pierce) return;
+        any = true;
+      }
+    }
+    for (const d of this.ducks) {
+      if (d.hit(x, y)) {
+        this.shootDuck(d);
+        if (!pierce) return;
+        any = true;
+      }
+    }
+    for (const q of this.qblocks) {
+      if (q.hit(x, y)) {
+        this.hitQBlock(q);
+        if (!pierce) return;
+        any = true;
+      }
+    }
+    if (pierce) {
+      for (const e of this.enemies) {
+        if (e.alive && e.hit(x, y)) {
+          e.damage(dmg, this, 'gun');
+          this.hitFx(e, x, y);
+          any = true;
+        }
+      }
+    } else {
+      let best = null;
+      for (const e of this.enemies) if (e.alive && e.hit(x, y) && (!best || e.y > best.y)) best = e;
+      if (best) {
+        best.damage(dmg, this, 'gun');
+        this.hitFx(best, x, y);
         return;
       }
     }
-    let best = null;
-    for (const e of this.enemies) if (e.alive && e.hit(x, y) && (!best || e.y > best.y)) best = e;
-    if (best) {
-      best.damage(dmg, this, 'gun');
-      const colors = {
-        zombie: ['#7fa35c', '#4e6b2f'],
-        cone: ['#7fa35c', '#f08a24'],
-        freddy: ['#ffd54a', '#c9a92c'],
-        snake: ['#4a7cf0', '#9bb8ff'],
-      }[best.type] || ['#222', '#555', '#8a8a8a'];
-      FX.burst(this, x, y, 5, { colors, size: 5, speed: 200, grav: 600, life: 0.4 });
-      Sound.hit();
-      return;
-    }
     if (!this.tower.dead && inRect(x, y, TOWER_BOX)) {
-      this.damageTower(dmg, false);
+      // башня бронированная: одна пуля снимает не больше 3 HP
+      this.damageTower(Math.min(dmg, 3), false);
       FX.burst(this, x, y, 4, { colors: ['#9a9dab', '#6f7282', '#ddd'], size: 5, speed: 180, grav: 600, life: 0.4 });
       Sound.stone();
       return;
     }
+    if (any) return;
     this.decals.push({ x, y, life: 4 });
     if (this.decals.length > 60) this.decals.shift();
     FX.burst(this, x, y, 2, { colors: ['rgba(120,100,70,0.8)'], size: 4, speed: 80, grav: 300, life: 0.3 });
+  }
+
+  throwGrenade() {
+    if (this.grenades <= 0) {
+      FX.text(this, Input.x, Input.y - 30, 'Нет гранат — купи в меню B', { color: '#ffd54a', font: `bold 15px ${FONT.ui}` });
+      Sound.empty();
+      return;
+    }
+    this.grenades--;
+    this.tnts.push({ kind: 'he', x0: 640, y0: 760, x1: Input.x, y1: Input.y, t: 0, dur: 0.5, fuse: 0.5, state: 'fly', gone: false });
+    Sound.whoosh();
+    this.say('<Ты> Fire in the hole!', '#ffcc80');
+  }
+
+  // ---------- меню закупки CS ----------
+  openBuy() {
+    this.state = 'buy';
+    this.buyMsg = null;
+    Input.lmb = false;
+    Sound.weapon();
+  }
+  closeBuy() {
+    if (this.state !== 'buy') return;
+    this.state = 'play';
+    this.suppressFire = true;
+  }
+  buy(i) {
+    const it = BUY_ITEMS[i];
+    if (!it) return;
+    const p = this.player;
+    const fail = (msg) => {
+      this.buyMsg = { text: msg, bad: true };
+      Sound.empty();
+    };
+    if (p.money < it.price) return fail(`Не хватает денег: нужно $${it.price}`);
+    switch (it.key) {
+      case 'awp':
+      case 'nova': {
+        const a = this.arsenal[it.key];
+        if (a.owned) return fail(`${it.name} уже есть. Патроны — пункт 5`);
+        a.owned = true;
+        a.mag = WEAPONS[it.key].mag;
+        a.reserve = WEAPONS[it.key].refill * 2;
+        this.setWeapon(it.key);
+        break;
+      }
+      case 'he':
+        if (this.grenades >= 5) return fail('Больше 5 гранат не унести');
+        this.grenades++;
+        break;
+      case 'kevlar':
+        if (p.armor >= 100) return fail('Броня и так полная');
+        p.armor = 100;
+        break;
+      case 'ammo': {
+        const a = this.cur, wd = this.wdef;
+        if (a.reserve >= wd.reserveMax) return fail(`Запас ${wd.name} и так полный`);
+        a.reserve = Math.min(wd.reserveMax, a.reserve + wd.refill);
+        break;
+      }
+      case 'detector':
+        if (!this.useDetector()) return fail('Сначала открой поле сапёра');
+        break;
+    }
+    p.money -= it.price;
+    Sound.buy();
+    this.buyMsg = { text: `Куплено: ${it.name}`, bad: false };
+  }
+
+  useDetector() {
+    const mf = this.mf;
+    if (!mf.generated || mf.done) return false;
+    const cand = [];
+    for (let r = 0; r < MF.rows; r++) {
+      for (let c = 0; c < MF.cols; c++) {
+        const cell = mf.cell(c, r);
+        if (!cell.mine || cell.s !== HIDDEN) continue;
+        cand.push({ c, r, near: mf.neighbors(c, r).some(([nc, nr]) => mf.cell(nc, nr).s === OPEN) });
+      }
+    }
+    if (!cand.length) return false;
+    const near = cand.filter((x) => x.near);
+    const pick = choice(near.length ? near : cand);
+    mf.cell(pick.c, pick.r).s = FLAG;
+    const p = mf.center(pick.c, pick.r);
+    FX.burst(this, p.x, p.y, 14, { colors: ['#40c4ff', '#fff'], size: 5, speed: 160, life: 0.6 });
+    this.say('Миноискатель нашёл мину и поставил флажок.', '#40c4ff');
+    return true;
   }
 
   // ---------- удочка ----------
@@ -640,8 +871,10 @@ class Game {
     const n = list.length;
     this.tilesOpened += n;
     this.player.money += 10 * n;
-    const ammo = Math.min(CFG.maxReserve - this.gun.reserve, CFG.ammoPerTile * n);
-    this.gun.reserve += Math.max(0, ammo);
+    this.player.earned += 10 * n;
+    const ak = this.arsenal.ak;
+    const ammo = Math.min(WEAPONS.ak.reserveMax - ak.reserve, CFG.ammoPerTile * n);
+    ak.reserve += Math.max(0, ammo);
     this.addXp(n * 0.5);
     Sound.reveal(n);
     let drops = 0;
@@ -780,12 +1013,12 @@ class Game {
         this.rollDice();
         break;
       case 'ammo':
-        if (this.gun.reserve >= CFG.maxReserve) {
-          FX.text(this, 640, 640, 'Патронов и так полно', { color: '#ffe0b2', font: `bold 15px ${FONT.ui}` });
+        if (this.arsenal.ak.reserve >= WEAPONS.ak.reserveMax) {
+          FX.text(this, 640, 640, 'Патронов к АК и так полно', { color: '#ffe0b2', font: `bold 15px ${FONT.ui}` });
           used = false;
           break;
         }
-        this.gun.reserve = Math.min(CFG.maxReserve, this.gun.reserve + 90);
+        this.arsenal.ak.reserve = Math.min(WEAPONS.ak.reserveMax, this.arsenal.ak.reserve + 90);
         Sound.reload();
         break;
       case 'ice':
@@ -872,7 +1105,7 @@ class Game {
         this.banner('1 — НЕУДАЧА!', 'Розыск повышен, враги прибыли', '#ff5252');
         break;
       case 2:
-        this.gun.reserve = Math.min(CFG.maxReserve, this.gun.reserve + 90);
+        this.arsenal.ak.reserve = Math.min(WEAPONS.ak.reserveMax, this.arsenal.ak.reserve + 90);
         this.banner('2 — ПАТРОНЫ', '+90 патронов к АК-47', '#ffd54a');
         break;
       case 3:
@@ -913,7 +1146,8 @@ class Game {
         tn.fuse -= dt;
         if (tn.fuse <= 0) {
           tn.gone = true;
-          this.explodeTNT(tn.x1, tn.y1);
+          if (tn.kind === 'he') this.explode(tn.x1, tn.y1, T * 1.9, 20, 'he');
+          else this.explodeTNT(tn.x1, tn.y1);
         }
       }
     }
@@ -921,6 +1155,11 @@ class Game {
 
   explodeTNT(x, y) {
     this.explode(x, y, T * 1.6, 15, 'tnt');
+    this.blastField(x, y);
+  }
+
+  // Взрыв вскрывает клетки 3×3: мины сгорают, безопасные клетки открываются.
+  blastField(x, y) {
     if (this.mf.done) return;
     const cc = toCol(x) - MF.c0, cr = toRow(y) - MF.r0;
     if (!this.mf.inside(cc, cr)) return;
@@ -1030,6 +1269,10 @@ class Game {
 
   takeDamage(d, src) {
     if (this.state !== 'play') return;
+    if (this.starT > 0) {
+      FX.text(this, 640, 600, 'НЕУЯЗВИМ!', { color: '#ffd23f', font: `22px ${FONT.gta}` });
+      return;
+    }
     const p = this.player;
     const absorb = Math.min(d * 0.5, p.armor / 5);
     p.armor -= absorb * 5;
@@ -1068,6 +1311,7 @@ class Game {
     this.state = 'win';
     this.winT = 0;
     this.player.money += 10000;
+    this.player.earned += 10000;
     Input.lmb = false;
     Sound.win();
     this.saveBest();
@@ -1075,6 +1319,7 @@ class Game {
 
   addMoney(n, x, y, color = '#7ee05a') {
     this.player.money += n;
+    this.player.earned += n;
     if (x !== undefined) FX.text(this, x, y, `+$${n}`, { color, font: `22px ${FONT.gta}` });
     Sound.coin();
   }
@@ -1108,9 +1353,17 @@ class Game {
       Sound.staticNoise();
       this.say('Золотой Фредди растворился в помехах...', '#ffd54a');
     } else {
-      const colors = e.type === 'zombie' || e.type === 'cone' ? ['#7fa35c', '#6d4c2f', '#b9c9a5'] : ['#222', '#444', '#777'];
-      FX.burst(this, e.x, e.y, 12, { colors, size: 7, speed: 240, up: 100 });
+      const colors = {
+        zombie: ['#7fa35c', '#6d4c2f', '#b9c9a5'],
+        cone: ['#7fa35c', '#6d4c2f', '#f08a24'],
+        creeper: ['#5cb84a', '#86d672', '#0b0b0b'],
+        skibidi: ['#f2f2f2', '#9fd4ff', '#f0c49a'],
+        mega: ['#3b3f4a', '#7b4fb0', '#c0c4cf'],
+      }[e.type] || ['#222', '#444', '#777'];
+      FX.burst(this, e.x, e.y, e.type === 'mega' ? 40 : 12, { colors, size: 7, speed: 240, up: 100 });
     }
+    if (e.type === 'mega') this.banner('МЕГАРЫЦАРЬ ПОВЕРЖЕН!', `+$${e.def.bounty}`, '#b388ff');
+    if (e.type === 'creeper' && Math.random() < 0.35) this.items.push(new Loot('item', 'tnt', e.x, e.y - 30, e.y, 120));
     if ((e.type === 'zombie' || e.type === 'cone') && Math.random() < 0.3) this.items.push(new Loot('sun', null, e.x, e.y - 30, e.y, 120));
     else if (Math.random() < 0.06) this.items.push(new Loot('item', weighted(TILE_LOOT.filter(([k]) => k !== 'sun')), e.x, e.y - 30, e.y, 120));
   }
@@ -1135,7 +1388,7 @@ class Game {
     this.def[c] = null;
     FX.burst(this, colX(c), rowY(PAWN_ROW), 14, { colors: ['#fff', '#ddd', '#999'], size: 7, speed: 240, up: 120 });
     Sound.capture();
-    if (Math.random() < 0.35) this.say(`Белая ${DEF_STATS[d.type].name.toLowerCase()} потеряна. ПКМ по пустой клетке — посадить новую.`, '#e0e0e0');
+    if (Math.random() < 0.35) this.say(`Потеряна фигура «${DEF_STATS[d.type].name}». ПКМ по пустой клетке — посадить новую.`, '#e0e0e0');
   }
 
   updateDefenders(dt) {
@@ -1145,6 +1398,8 @@ class Game {
       d.pop = Math.min(1, d.pop + dt * 3);
       d.lunge = Math.max(0, d.lunge - dt * 4);
       if (d.hurt > 0) d.hurt -= dt;
+      if (d.glow > 0) d.glow -= dt;
+      if (d.shoot > 0) d.shoot = Math.max(0, d.shoot - dt * 5);
       if (d.type === 'rook') continue;
       d.cd -= dt;
       if (d.cd > 0) continue;
@@ -1175,6 +1430,18 @@ class Game {
           this.beams.push({ x1: colX(c), y1: rowY(PAWN_ROW) - 30, x2: best.x, y2: best.y, t: 0 });
           Sound.zap();
         } else d.cd = 0.15;
+      } else if (d.type === 'sunflower') {
+        d.cd = DEF_STATS.sunflower.cd;
+        d.glow = 1;
+        this.items.push(new Loot('sun', null, colX(c) + rand(-24, 24), rowY(PAWN_ROW) - 74, rowY(PAWN_ROW) - 36, 90));
+      } else if (d.type === 'peashooter') {
+        const inCol = this.enemies.some((e) => e.alive && Math.abs(e.x - colX(c)) < 34 && e.y < rowY(PAWN_ROW) - 10 && e.y > 0);
+        if (inCol) {
+          d.cd = DEF_STATS.peashooter.cd;
+          d.shoot = 1;
+          this.peas.push({ x: colX(c), y: rowY(PAWN_ROW) - 52, gone: false });
+          Sound.pea();
+        } else d.cd = 0.2;
       }
     }
   }
@@ -1197,7 +1464,7 @@ class Game {
 
   // ---------- волны врагов ----------
   updateDirector(dt) {
-    const target = clamp(1 + Math.floor(this.t / CFG.starEvery) + this.bonusStars, 1, 6);
+    const target = clamp(1 + Math.floor((this.t - this.starOffset) / CFG.starEvery) + this.bonusStars, 1, 6);
     if (target > this.stars) {
       this.stars = target;
       this.starFlash = 2.5;
@@ -1233,12 +1500,29 @@ class Game {
       Sound.plane();
       this.say('Сброс груза! Подцепи ящик удочкой (ПКМ).', '#9ccc65');
     }
+    this.qT -= dt;
+    if (this.qT <= 0) {
+      this.qT = rand(30, 45);
+      this.spawnQBlock();
+    }
+    this.duckT -= dt;
+    if (this.duckT <= 0) {
+      this.duckT = rand(35, 55);
+      this.ducks.push(new Duck());
+      this.say('Утка! Подстрели её, пока не улетела.', '#a5d6a7');
+    }
+    this.meetingT -= dt;
+    if (this.meetingT <= 0) {
+      this.meetingT = rand(130, 190);
+      if (this.enemies.filter((e) => e.alive && e.type !== 'mega').length >= 3) this.startMeeting();
+    }
   }
 
   pickEnemy() {
     const s = this.stars;
     const list = [['pawn', 5], ['zombie', 4]];
-    if (s >= 2) list.push(['cone', 3], ['knight', 2]);
+    if (s >= 2) list.push(['cone', 3], ['knight', 2], ['creeper', 1.5]);
+    if (s >= 3) list.push(['skibidi', 1.2]);
     if (s >= 3 && !this.enemies.some((e) => e.alive && e.type === 'snake')) list.push(['snake', 0.8]);
     if (s >= 4) list.push(['rook', 1.6]);
     if (s >= 5) list.push(['bishop', 1.6]);
@@ -1261,6 +1545,16 @@ class Game {
         break;
       case 'freddy':
         e = new Freddy(randi(1, COLS - 2), randi(MF.r0, MF.r0 + 1));
+        break;
+      case 'creeper':
+        e = new Creeper(c);
+        break;
+      case 'skibidi':
+        e = new Skibidi(c);
+        break;
+      case 'mega':
+        e = new MegaKnight();
+        Sound.megaLand();
         break;
       case 'snake':
         e = new Snake(Math.random() < 0.5);
@@ -1330,9 +1624,10 @@ class Game {
   }
 
   towerRage() {
-    this.banner('КОРОЛЬ В ЯРОСТИ!', 'Из башни лезут подкрепления', '#ff5252');
+    this.banner('КОРОЛЬ В ЯРОСТИ!', 'Из башни вышел Мегарыцарь!', '#ff5252');
     this.kingEmote('Ррраааа!');
     this.bonusStars++;
+    this.spawnEnemy('mega');
     for (let i = 0; i < 4; i++) this.spawnEnemy(choice(['pawn', 'zombie', 'cone', 'knight']));
     if (!this.enemies.some((e) => e.alive && e.type === 'snake')) this.spawnEnemy('snake');
   }
@@ -1398,6 +1693,184 @@ class Game {
       for (const e of this.enemies) if (e.alive && e.type === 'freddy') e.remove = true;
     }
     if (prev < 21 && h >= 21) this.say('Темнеет. В полночь просыпается кое-кто золотой...', '#b39ddb');
+  }
+
+  // ---------- чит-коды GTA ----------
+  // Буквы копятся в буфер. Пока набирается чит, игровые действия этих клавиш не срабатывают.
+  handleCheatKey(code) {
+    const m = /^Key([A-Z])$/.exec(code);
+    if (!m) {
+      if (!/^Shift/.test(code)) this.typed = '';
+      return false;
+    }
+    this.typed = (this.typed + m[1]).slice(-12);
+    for (const name in CHEATS) {
+      if (this.typed.endsWith(name)) {
+        this.typed = '';
+        this.activateCheat(name);
+        return true;
+      }
+    }
+    for (const name in CHEATS) {
+      for (let k = Math.min(name.length - 1, this.typed.length); k >= 2; k--) {
+        if (this.typed.endsWith(name.slice(0, k))) return true;
+      }
+    }
+    return false;
+  }
+
+  activateCheat(name) {
+    const p = this.player;
+    this.cheated = true;
+    switch (name) {
+      case 'HESOYAM':
+        p.hp = p.maxHp;
+        p.armor = 100;
+        p.hunger = 20;
+        p.money += 250000;
+        break;
+      case 'AEZAKMI':
+        this.starOffset = this.t;
+        this.bonusStars = 0;
+        this.stars = 1;
+        break;
+      case 'FULLCLIP':
+        this.infAmmo = true;
+        this.gun.reload = 0;
+        break;
+      case 'LXGIWYL':
+        for (const k of WEAPON_ORDER) {
+          const a = this.arsenal[k];
+          a.owned = true;
+          a.mag = WEAPONS[k].mag;
+          a.reserve = WEAPONS[k].reserveMax;
+        }
+        this.grenades = Math.min(5, this.grenades + 3);
+        break;
+      case 'OSRBLHH':
+        this.bonusStars += 2;
+        break;
+      case 'SKIBIDI':
+        for (let i = 0; i < 3; i++) this.spawnEnemy('skibidi');
+        break;
+    }
+    Sound.cheat();
+    this.cheatMsg = { name, text: CHEATS[name], t: 0 };
+    this.say(`Чит ${name}: ${CHEATS[name]}. Рекорд в этой игре не засчитается.`, '#ffffff');
+  }
+
+  // ---------- Крипер ----------
+  creeperBoom(e) {
+    this.explode(e.x, e.y, T * 1.7, 14, 'creeper');
+    this.blastField(e.x, e.y);
+    for (let c = 1; c < COLS; c++) {
+      if (this.def[c] && Math.abs(colX(c) - e.x) <= T * 1.3 && Math.abs(rowY(PAWN_ROW) - e.y) <= T * 1.7) this.killDefender(c, e);
+    }
+    this.say('Крипер взорвался. Ссссс... БУМ.', '#86d672');
+    this.takeDamage(2, 'Крипер');
+  }
+
+  // ---------- Марио ----------
+  spawnQBlock() {
+    const c = randi(MF.c0, MF.c0 + MF.cols - 1), r = randi(MF.r0, MF.r0 + MF.rows - 2);
+    this.qblocks.push(new QBlock(colX(c), rowY(r) - 6));
+    Sound.bump();
+    this.say('Появился «?»-блок. Стрельни по нему!', '#ffd23f');
+  }
+
+  hitQBlock(q) {
+    q.state = 'empty';
+    q.bumpT = 0.25;
+    q.life = 1.4;
+    Sound.bump();
+    const kind = weighted([['coins', 40], ['mushroom', 25], ['star', 20], ['oneup', 12]]);
+    const x = q.x, y = q.y - 44;
+    if (kind === 'coins') {
+      for (let i = 0; i < 5; i++) this.popups.push({ kind: 'coin', x: x + (i - 2) * 16, y, t: -i * 0.08 });
+      this.addMoney(500, x, y - 40, '#ffd23f');
+      Sound.marioCoin();
+    } else if (kind === 'mushroom') {
+      this.popups.push({ kind: 'mushroom', x, y, t: 0 });
+      this.player.hp = this.player.maxHp;
+      this.player.armor = Math.min(100, this.player.armor + 25);
+      Sound.powerUp();
+      FX.text(this, x, y - 40, 'СУПЕРГРИБ! Здоровье полное', { color: '#ff8a80', font: `bold 18px ${FONT.ui}` });
+    } else if (kind === 'star') {
+      this.popups.push({ kind: 'star', x, y, t: 0 });
+      this.starT = 9;
+      Sound.starMusic(9);
+      this.banner('ЗВЕЗДА!', 'Неуязвимость и двойной урон на 9 секунд', '#ffd23f');
+    } else {
+      this.popups.push({ kind: 'oneup', x, y, t: 0 });
+      this.inv.totem++;
+      Sound.oneUp();
+      FX.text(this, x, y - 40, '1-UP! +1 тотем', { color: '#7ee03c', font: `bold 20px ${FONT.ui}` });
+    }
+  }
+
+  // ---------- Duck Hunt ----------
+  shootDuck(d) {
+    d.state = 'hit';
+    d.hitT = 0;
+    this.ducksShot++;
+    this.addMoney(500, d.x, d.y - 36, '#a5d6a7');
+    Sound.quack();
+    FX.burst(this, d.x, d.y, 10, { colors: ['#8d5a2b', '#1b6b2a', '#fff'], size: 5, speed: 160, life: 0.6 });
+  }
+
+  dogLaugh() {
+    this.dogT = 2.4;
+    Sound.dogLaugh();
+  }
+
+  // ---------- PvZ: горох ----------
+  updatePeas(dt) {
+    for (const p of this.peas) {
+      p.y -= 540 * dt;
+      for (const e of this.enemies) {
+        if (e.alive && e.hit(p.x, p.y)) {
+          e.damage(this.starT > 0 ? 2 : 1, this, 'pea');
+          p.gone = true;
+          break;
+        }
+      }
+      // горох разбивается о каменную кладку башни, не нанося урона
+      if (!p.gone && p.y < 170) p.gone = true;
+      if (p.gone) {
+        FX.burst(this, p.x, p.y, 5, { colors: ['#7ee03c', '#2e7d32'], size: 4, speed: 120, life: 0.3 });
+        Sound.splat();
+      } else if (p.y < -20) p.gone = true;
+    }
+    this.peas = this.peas.filter((p) => !p.gone);
+  }
+
+  // ---------- Among Us ----------
+  startMeeting() {
+    const alive = this.enemies.filter((e) => e.alive && e.type !== 'mega');
+    if (!alive.length || this.jumpscare) return;
+    const target = alive.reduce((a, b) => (b.hp > a.hp ? b : a));
+    const colors = ['#e53935', '#1e88e5', '#43a047', '#fdd835', '#8e24aa', '#fb8c00', '#ec407a', '#00acc1'];
+    this.meeting = { t: 0, target, name: target.def.name, color: choice(colors), ejected: false };
+    Input.lmb = false;
+    Sound.meeting();
+  }
+
+  updateMeeting(dt) {
+    const m = this.meeting;
+    m.t += dt;
+    if (!m.ejected && m.t >= 2.2) {
+      m.ejected = true;
+      Sound.eject();
+      if (m.target.alive) {
+        m.target.damage(9999, this, 'meeting');
+        m.target.remove = true;
+      }
+    }
+    if (m.t >= 5.2) {
+      this.meeting = null;
+      this.suppressFire = true;
+      this.say(`${m.name} был предателем. Голосование окончено.`, '#ff8a80');
+    }
   }
 
   // ---------- сообщения ----------

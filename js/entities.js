@@ -469,7 +469,8 @@ const PACKETS = ['pawn', 'bishop', 'rook'];
 
 function makeDefender(type) {
   const s = DEF_STATS[type];
-  return { type, hp: s.hp, maxHp: s.hp, cd: rand(0, s.cd), lunge: 0, lungeDir: 0, pop: 0, hurt: 0 };
+  const cd = type === 'sunflower' ? 5 : rand(0, s.cd);
+  return { type, hp: s.hp, maxHp: s.hp, cd, lunge: 0, lungeDir: 0, pop: 0, hurt: 0, glow: 0, shoot: 0 };
 }
 
 function drawDefender(ctx, d, c, t) {
@@ -481,7 +482,8 @@ function drawDefender(ctx, d, c, t) {
   ctx.scale(k, k);
   ctx.translate(-x, -(y + 30));
   if (d.hurt > 0) ctx.filter = 'brightness(0.7) sepia(1) hue-rotate(-50deg) saturate(4)';
-  drawPiece(ctx, DEF_STATS[d.type].piece, true, x, y, d.type === 'rook' ? 70 : 66);
+  if (DEF_STATS[d.type].plant) drawPlant(ctx, d.type, x, y, t, { glow: d.glow, shoot: d.shoot });
+  else drawPiece(ctx, DEF_STATS[d.type].piece, true, x, y, d.type === 'rook' ? 70 : 66);
   ctx.restore();
   if (d.hp < d.maxHp) {
     const w = 36, bx = colX(c) - w / 2, by = rowY(PAWN_ROW) - 42;

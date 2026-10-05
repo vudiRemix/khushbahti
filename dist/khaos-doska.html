@@ -464,6 +464,118 @@ const Sound = (() => {
       if (!ok('click', 0.04)) return;
       tone({ type: 'square', f0: 1000, dur: 0.03, vol: 0.08 });
     },
+
+    // --- новые механики ---
+    awp() {
+      if (!ok('awp')) return;
+      noise({ dur: 0.5, vol: 0.8, filter: 'lowpass', f0: 3000, f1: 120 });
+      noise({ dur: 0.08, vol: 0.5, filter: 'highpass', f0: 2500 });
+      tone({ type: 'sine', f0: 140, f1: 35, dur: 0.45, vol: 0.7 });
+      tone({ type: 'square', f0: 900, dur: 0.03, vol: 0.06, delay: 0.7 });
+      noise({ dur: 0.1, vol: 0.15, filter: 'bandpass', f0: 2000, delay: 0.8 });
+    },
+    shotgun() {
+      if (!ok('shotgun')) return;
+      noise({ dur: 0.35, vol: 0.75, filter: 'lowpass', f0: 2200, f1: 150 });
+      tone({ type: 'sine', f0: 110, f1: 40, dur: 0.3, vol: 0.6 });
+      noise({ dur: 0.06, vol: 0.2, filter: 'bandpass', f0: 1500, delay: 0.45 });
+      noise({ dur: 0.06, vol: 0.2, filter: 'bandpass', f0: 1200, delay: 0.6 });
+    },
+    weapon() {
+      if (!ok('weapon', 0.1)) return;
+      noise({ dur: 0.06, vol: 0.18, filter: 'bandpass', f0: 2500, q: 2 });
+      tone({ type: 'square', f0: 600, dur: 0.03, vol: 0.06, delay: 0.08 });
+    },
+    buy() {
+      if (!ok('buy', 0.05)) return;
+      noise({ dur: 0.05, vol: 0.2, filter: 'bandpass', f0: 3000, q: 3 });
+      tone({ type: 'square', f0: 1400, dur: 0.05, vol: 0.06, delay: 0.05 });
+    },
+    creeperHiss() {
+      if (!ok('creeper', 0.3)) return;
+      noise({ dur: 1.4, vol: 0.28, filter: 'highpass', f0: 3500, attack: 0.3 });
+    },
+    skibidi() {
+      if (!ok('skibidi', 0.5)) return;
+      // «скибиди доп-доп-доп, ес-ес» — чиптюн-версия
+      const notes = [[659, 0.0], [659, 0.12], [784, 0.24], [659, 0.36], [523, 0.6], [523, 0.72], [523, 0.84], [587, 1.08], [659, 1.22]];
+      for (const [f, d] of notes) tone({ type: 'square', f0: f, dur: 0.1, vol: 0.07, delay: d });
+      for (const d of [0.6, 0.72, 0.84]) noise({ dur: 0.05, vol: 0.12, filter: 'lowpass', f0: 400, delay: d });
+    },
+    flush() {
+      if (!ok('flush', 0.2)) return;
+      noise({ dur: 0.9, vol: 0.3, filter: 'bandpass', f0: 600, f1: 200, q: 0.8, attack: 0.05 });
+    },
+    megaLand() {
+      if (!ok('mega', 0.1)) return;
+      noise({ dur: 0.7, vol: 0.7, filter: 'lowpass', f0: 500, f1: 50 });
+      tone({ type: 'sine', f0: 70, f1: 25, dur: 0.6, vol: 0.8 });
+    },
+    marioCoin() {
+      if (!ok('mcoin', 0.05)) return;
+      tone({ type: 'square', f0: 988, dur: 0.08, vol: 0.08 });
+      tone({ type: 'square', f0: 1319, dur: 0.35, vol: 0.08, delay: 0.08 });
+    },
+    bump() {
+      if (!ok('bump', 0.05)) return;
+      tone({ type: 'triangle', f0: 180, f1: 120, dur: 0.1, vol: 0.3 });
+    },
+    powerUp() {
+      if (!ok('powerup')) return;
+      [392, 494, 587, 784, 523, 659, 784, 1046].forEach((f, i) => tone({ type: 'square', f0: f, dur: 0.07, vol: 0.07, delay: i * 0.06 }));
+    },
+    oneUp() {
+      if (!ok('oneup')) return;
+      [1319, 1568, 2637, 2093, 2349, 3136].forEach((f, i) => tone({ type: 'square', f0: f, dur: 0.11, vol: 0.06, delay: i * 0.11 }));
+    },
+    starMusic(dur) {
+      if (!ok('starmusic', 1)) return;
+      // узнаваемый ритм «звезды»: та-та-та, та-та-та...
+      const bar = [[523, 0], [523, 0.15], [523, 0.3], [440, 0.52], [523, 0.67], [523, 0.82], [587, 0.97], [523, 1.12]];
+      for (let b = 0; b * 1.3 < dur; b++) {
+        for (const [f, d] of bar) {
+          tone({ type: 'square', f0: f * (b % 2 ? 1.122 : 1), dur: 0.1, vol: 0.05, delay: b * 1.3 + d });
+          tone({ type: 'triangle', f0: f / 2, dur: 0.1, vol: 0.06, delay: b * 1.3 + d });
+        }
+      }
+    },
+    quack() {
+      if (!ok('quack', 0.4)) return;
+      tone({ type: 'sawtooth', f0: 520, f1: 380, dur: 0.12, vol: 0.06 });
+      tone({ type: 'sawtooth', f0: 500, f1: 360, dur: 0.12, vol: 0.06, delay: 0.16 });
+    },
+    dogLaugh() {
+      if (!ok('dog', 1)) return;
+      for (let i = 0; i < 6; i++) {
+        tone({ type: 'square', f0: i % 2 ? 620 : 700, dur: 0.09, vol: 0.07, delay: i * 0.16 });
+        noise({ dur: 0.06, vol: 0.08, filter: 'bandpass', f0: 1200, delay: i * 0.16 });
+      }
+    },
+    meeting() {
+      if (!ok('meeting', 1)) return;
+      for (let i = 0; i < 4; i++) {
+        tone({ type: 'sawtooth', f0: 520, f1: 780, dur: 0.25, vol: 0.08, delay: i * 0.5 });
+        tone({ type: 'sawtooth', f0: 780, f1: 520, dur: 0.25, vol: 0.08, delay: i * 0.5 + 0.25 });
+      }
+      tone({ type: 'sine', f0: 90, f1: 60, dur: 0.6, vol: 0.4 });
+    },
+    eject() {
+      if (!ok('eject', 0.5)) return;
+      noise({ dur: 1.2, vol: 0.2, filter: 'bandpass', f0: 2500, f1: 300, q: 2 });
+    },
+    cheat() {
+      if (!ok('cheat', 0.2)) return;
+      tone({ type: 'sine', f0: 1046, dur: 0.15, vol: 0.12 });
+      tone({ type: 'sine', f0: 1568, dur: 0.3, vol: 0.12, delay: 0.12 });
+    },
+    pea() {
+      if (!ok('pea', 0.05)) return;
+      tone({ type: 'sine', f0: 420, f1: 220, dur: 0.07, vol: 0.12 });
+    },
+    splat() {
+      if (!ok('splat', 0.04)) return;
+      noise({ dur: 0.05, vol: 0.12, filter: 'lowpass', f0: 1200 });
+    },
   };
   return S;
 })();
@@ -1355,7 +1467,7 @@ function drawAirdrop(ctx, x, y, t, landed) {
 // ---------- руки игрока: АК-47 и удочка ----------
 const AK_MUZZLE = { x: -396, y: -10 };
 
-function drawAK(ctx, flash) {
+function drawAK(ctx, flash, hands = true) {
   // Локальные координаты: ствол смотрит влево (−x), рукоять в (0,0).
   // приклад
   const wood = ctx.createLinearGradient(0, -30, 0, 40);
@@ -1364,7 +1476,7 @@ function drawAK(ctx, flash) {
   poly(ctx, [30, -18, 160, -6, 175, 40, 150, 44, 30, 12], wood, '#2b0f05', 3);
   poly(ctx, [30, -18, 160, -6, 175, 40, 150, 44, 30, 12], wood);
   // правая рука в рукаве (под оружием)
-  poly(ctx, [-10, 30, 40, 20, 200, 160, 120, 230], '#3f4a2c');
+  if (hands) poly(ctx, [-10, 30, 40, 20, 200, 160, 120, 230], '#3f4a2c');
   // ствольная коробка
   const metal = ctx.createLinearGradient(0, -26, 0, 8);
   metal.addColorStop(0, '#55565c');
@@ -1421,27 +1533,30 @@ function drawAK(ctx, flash) {
   ctx.strokeStyle = '#1a1a1d';
   ctx.lineWidth = 3;
   ctx.stroke();
-  // перчатки
-  rr(ctx, -36, 14, 50, 46, 18);
-  ctx.fillStyle = '#1f1f22';
-  ctx.fill();
-  for (let i = 0; i < 3; i++) line(ctx, -30 + i * 13, 20, -30 + i * 13, 32, 'rgba(255,255,255,0.08)', 2);
-  // вспышка
-  if (flash > 0) {
-    ctx.save();
-    ctx.translate(AK_MUZZLE.x, AK_MUZZLE.y);
-    const sc = 0.8 + Math.random() * 0.6;
-    ctx.scale(sc, sc);
-    const g = ctx.createRadialGradient(0, 0, 2, 0, 0, 60);
-    g.addColorStop(0, 'rgba(255,255,220,1)');
-    g.addColorStop(0.3, 'rgba(255,200,60,0.9)');
-    g.addColorStop(1, 'rgba(255,120,0,0)');
-    circ(ctx, -10, 0, 60, g);
-    poly(ctx, [0, -10, -70, 0, 0, 10, -20, 0], '#fff7c0');
-    poly(ctx, [-8, -4, -30, -34, -16, -2], '#ffd54a');
-    poly(ctx, [-8, 4, -30, 34, -16, 2], '#ffd54a');
-    ctx.restore();
+  // перчатка
+  if (hands) {
+    rr(ctx, -36, 14, 50, 46, 18);
+    ctx.fillStyle = '#1f1f22';
+    ctx.fill();
+    for (let i = 0; i < 3; i++) line(ctx, -30 + i * 13, 20, -30 + i * 13, 32, 'rgba(255,255,255,0.08)', 2);
   }
+  if (flash > 0) drawMuzzleFlash(ctx, AK_MUZZLE.x, AK_MUZZLE.y, 1);
+}
+
+function drawMuzzleFlash(ctx, x, y, size) {
+  ctx.save();
+  ctx.translate(x, y);
+  const sc = (0.8 + Math.random() * 0.6) * size;
+  ctx.scale(sc, sc);
+  const g = ctx.createRadialGradient(0, 0, 2, 0, 0, 60);
+  g.addColorStop(0, 'rgba(255,255,220,1)');
+  g.addColorStop(0.3, 'rgba(255,200,60,0.9)');
+  g.addColorStop(1, 'rgba(255,120,0,0)');
+  circ(ctx, -10, 0, 60, g);
+  poly(ctx, [0, -10, -70, 0, 0, 10, -20, 0], '#fff7c0');
+  poly(ctx, [-8, -4, -30, -34, -16, -2], '#ffd54a');
+  poly(ctx, [-8, 4, -30, 34, -16, 2], '#ffd54a');
+  ctx.restore();
 }
 
 function drawFist(ctx, x, y, s, fill = '#2a2a2a') {
@@ -2341,7 +2456,8 @@ const PACKETS = ['pawn', 'bishop', 'rook'];
 
 function makeDefender(type) {
   const s = DEF_STATS[type];
-  return { type, hp: s.hp, maxHp: s.hp, cd: rand(0, s.cd), lunge: 0, lungeDir: 0, pop: 0, hurt: 0 };
+  const cd = type === 'sunflower' ? 5 : rand(0, s.cd);
+  return { type, hp: s.hp, maxHp: s.hp, cd, lunge: 0, lungeDir: 0, pop: 0, hurt: 0, glow: 0, shoot: 0 };
 }
 
 function drawDefender(ctx, d, c, t) {
@@ -2353,7 +2469,8 @@ function drawDefender(ctx, d, c, t) {
   ctx.scale(k, k);
   ctx.translate(-x, -(y + 30));
   if (d.hurt > 0) ctx.filter = 'brightness(0.7) sepia(1) hue-rotate(-50deg) saturate(4)';
-  drawPiece(ctx, DEF_STATS[d.type].piece, true, x, y, d.type === 'rook' ? 70 : 66);
+  if (DEF_STATS[d.type].plant) drawPlant(ctx, d.type, x, y, t, { glow: d.glow, shoot: d.shoot });
+  else drawPiece(ctx, DEF_STATS[d.type].piece, true, x, y, d.type === 'rook' ? 70 : 66);
   ctx.restore();
   if (d.hp < d.maxHp) {
     const w = 36, bx = colX(c) - w / 2, by = rowY(PAWN_ROW) - 42;
@@ -2578,6 +2695,789 @@ class Cannonball {
   }
 }
 
+// ---- js/weapons.js ----
+'use strict';
+/* Оружие в стиле CS: характеристики, отрисовка от первого лица и меню закупки (B). */
+
+const WEAPONS = {
+  ak: {
+    name: 'АК-47', dmg: 1, interval: CFG.fireInterval, mag: CFG.magSize, reserveMax: CFG.maxReserve, reload: CFG.reloadTime,
+    spread: 2, heatSpread: 30, heatAdd: 0.09, auto: true, pellets: 1, pierce: false,
+    kick: 14, shake: 1.5, muzzle: { x: -396, y: -10 }, scale: 0.86, refill: 90, iconCx: -110, iconScale: 0.115,
+  },
+  nova: {
+    name: 'Nova', dmg: 1, interval: 0.85, mag: 8, reserveMax: 40, reload: 2.4,
+    spread: 48, heatSpread: 0, heatAdd: 0, auto: false, pellets: 9, pierce: false,
+    kick: 26, shake: 5, muzzle: { x: -380, y: -15 }, scale: 0.86, refill: 16, iconCx: -105, iconScale: 0.12,
+  },
+  awp: {
+    name: 'AWP', dmg: 12, interval: 1.45, mag: 5, reserveMax: 30, reload: 3.0,
+    spread: 0, heatSpread: 0, heatAdd: 0, auto: false, pellets: 1, pierce: true,
+    kick: 34, shake: 7, muzzle: { x: -512, y: -10 }, scale: 0.8, refill: 10, iconCx: -165, iconScale: 0.095,
+  },
+};
+const WEAPON_ORDER = ['ak', 'nova', 'awp'];
+
+// Цены как в CS (почти).
+const BUY_ITEMS = [
+  { key: 'awp', name: 'AWP', price: 4750, desc: '12 урона, прошивает врагов насквозь' },
+  { key: 'nova', name: 'Дробовик Nova', price: 1050, desc: '9 дробин веером, против толпы' },
+  { key: 'he', name: 'HE-граната', price: 300, desc: 'бросок на G, большой взрыв' },
+  { key: 'kevlar', name: 'Кевлар + шлем', price: 1000, desc: 'броня до 100' },
+  { key: 'ammo', name: 'Патроны', price: 200, desc: 'пачка к текущему стволу: АК +90, Nova +16, AWP +10' },
+  { key: 'detector', name: 'Миноискатель', price: 800, desc: 'ставит флажок на одну мину' },
+];
+const buyRect = (i) => ({ x: 70, y: 168 + i * 62, w: 520, h: 54 });
+
+function drawSleeve(ctx) {
+  poly(ctx, [-10, 30, 40, 20, 200, 160, 120, 230], '#3f4a2c');
+}
+function drawGlove(ctx) {
+  rr(ctx, -36, 14, 50, 46, 18);
+  ctx.fillStyle = '#1f1f22';
+  ctx.fill();
+  for (let i = 0; i < 3; i++) line(ctx, -30 + i * 13, 20, -30 + i * 13, 32, 'rgba(255,255,255,0.08)', 2);
+}
+
+function drawNova(ctx, flash, hands = true) {
+  const poly1 = [30, -18, 150, -8, 162, 34, 140, 38, 30, 12];
+  poly(ctx, poly1, '#262628', '#0b0b0c', 3);
+  poly(ctx, poly1, '#262628');
+  if (hands) drawSleeve(ctx);
+  rr(ctx, -124, -26, 158, 32, 6);
+  ctx.fillStyle = '#2d2e32';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#0b0b0d';
+  ctx.stroke();
+  line(ctx, -116, -18, 24, -18, 'rgba(255,255,255,0.12)', 2);
+  rr(ctx, -378, -24, 258, 10, 3);
+  ctx.fillStyle = '#1b1b1d';
+  ctx.fill();
+  rr(ctx, -350, -13, 230, 11, 5);
+  ctx.fillStyle = '#232326';
+  ctx.fill();
+  rr(ctx, -290, -18, 104, 26, 9);
+  ctx.fillStyle = '#3c3d42';
+  ctx.fill();
+  for (let i = 0; i < 6; i++) line(ctx, -280 + i * 16, -14, -280 + i * 16, 4, 'rgba(0,0,0,0.45)', 3);
+  circ(ctx, -370, -27, 3, '#e0e0e0');
+  poly(ctx, [-24, 6, 6, 6, 18, 58, -8, 62], '#1e1e20', '#050505', 2);
+  ctx.beginPath();
+  ctx.arc(-36, 12, 11, 0, Math.PI);
+  ctx.strokeStyle = '#1a1a1d';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  if (hands) drawGlove(ctx);
+  if (flash > 0) drawMuzzleFlash(ctx, WEAPONS.nova.muzzle.x, WEAPONS.nova.muzzle.y, 1.3);
+}
+
+function drawAWP(ctx, flash, hands = true) {
+  const olive = '#4b5a32', dark = '#2c351c';
+  const stock = [20, -22, 172, -14, 184, 38, 152, 42, 124, 18, 70, 14, 40, 20, 20, 10];
+  poly(ctx, stock, olive, dark, 3);
+  poly(ctx, stock, olive);
+  ell(ctx, 92, 6, 22, 9, dark);
+  if (hands) drawSleeve(ctx);
+  // ствол и цевьё
+  rr(ctx, -506, -15, 370, 10, 3);
+  ctx.fillStyle = '#202022';
+  ctx.fill();
+  rr(ctx, -520, -19, 24, 18, 3);
+  ctx.fillStyle = '#18181a';
+  ctx.fill();
+  rr(ctx, -310, -22, 176, 26, 9);
+  ctx.fillStyle = olive;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = dark;
+  ctx.stroke();
+  // ствольная коробка
+  rr(ctx, -142, -26, 176, 32, 5);
+  ctx.fillStyle = olive;
+  ctx.fill();
+  ctx.stroke();
+  // магазин и рукоять
+  rr(ctx, -96, 6, 34, 30, 4);
+  ctx.fillStyle = '#1d1d1f';
+  ctx.fill();
+  poly(ctx, [-22, 6, 6, 6, 18, 58, -8, 62], dark, '#111', 2);
+  // затвор
+  line(ctx, 8, -10, 22, 8, '#1d1d1f', 5);
+  circ(ctx, 24, 10, 6, '#1d1d1f');
+  // прицел
+  rr(ctx, -124, -38, 14, 14, 2);
+  ctx.fillStyle = '#111';
+  ctx.fill();
+  rr(ctx, -18, -38, 14, 14, 2);
+  ctx.fill();
+  rr(ctx, -176, -62, 196, 26, 12);
+  const sg = ctx.createLinearGradient(0, -62, 0, -36);
+  sg.addColorStop(0, '#3a3a3e');
+  sg.addColorStop(1, '#0d0d0f');
+  ctx.fillStyle = sg;
+  ctx.fill();
+  ell(ctx, -176, -49, 7, 15, '#0d0d0f');
+  ell(ctx, -176, -49, 4, 11, '#2a7fd0');
+  ell(ctx, -178, -54, 1.5, 4, 'rgba(255,255,255,0.8)');
+  rr(ctx, 14, -60, 26, 22, 6);
+  ctx.fillStyle = '#111';
+  ctx.fill();
+  if (hands) drawGlove(ctx);
+  if (flash > 0) drawMuzzleFlash(ctx, WEAPONS.awp.muzzle.x, WEAPONS.awp.muzzle.y, 1.6);
+}
+
+function drawWeapon(ctx, key, flash, hands = true) {
+  if (key === 'awp') drawAWP(ctx, flash, hands);
+  else if (key === 'nova') drawNova(ctx, flash, hands);
+  else drawAK(ctx, flash, hands);
+}
+
+function drawWeaponIcon(ctx, key, x, y) {
+  const w = WEAPONS[key];
+  ctx.save();
+  ctx.translate(x - w.iconCx * w.iconScale, y);
+  ctx.scale(w.iconScale, w.iconScale);
+  drawWeapon(ctx, key, 0, false);
+  ctx.restore();
+}
+
+function drawGrenade(ctx, x, y, s = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  ell(ctx, 0, 3, 10, 13, '#4f5b2e');
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#262d12';
+  ctx.stroke();
+  line(ctx, -8, 0, 8, 0, 'rgba(0,0,0,0.3)', 2);
+  line(ctx, -8, 7, 8, 7, 'rgba(0,0,0,0.3)', 2);
+  ctx.fillStyle = '#9e9e9e';
+  ctx.fillRect(-4, -14, 8, 6);
+  line(ctx, 3, -12, 11, 4, '#bdbdbd', 2.5);
+  ctx.beginPath();
+  ctx.arc(-6, -15, 4, 0, TAU);
+  ctx.strokeStyle = '#d0d0d0';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ---- js/extras.js ----
+'use strict';
+/* Новые механики: Крипер, Скибиди-туалет, Мегарыцарь, «?»-блоки Марио,
+   утки из Duck Hunt, подсолнух и горохострел из PvZ, амогус. */
+
+Object.assign(ENEMY_DEF, {
+  creeper: { hp: 6, dmg: 3, bounty: 180, xp: 6, hw: 22, top: 50, bot: 36, name: 'Крипер' },
+  skibidi: { hp: 7, dmg: 3, bounty: 250, xp: 8, hw: 28, top: 40, bot: 36, name: 'Скибиди-туалет' },
+  mega: { hp: 50, dmg: 6, bounty: 1000, xp: 25, hw: 38, top: 66, bot: 40, name: 'Мегарыцарь' },
+});
+
+Object.assign(DEF_STATS, {
+  sunflower: { hp: 4, cost: 50, cd: 12, name: 'Подсолнух', plant: true, info: 'раз в 12 сек даёт солнце' },
+  peashooter: { hp: 4, cost: 100, cd: 1.4, name: 'Горохострел', plant: true, info: 'стреляет горохом вверх по столбцу' },
+});
+PACKETS.splice(0, PACKETS.length, 'pawn', 'sunflower', 'peashooter', 'bishop', 'rook');
+
+// ---------- Крипер: подходит к твоим фигурам, шипит и взрывается ----------
+const CREEPER_HEAD = compilePixel([
+  'GgGGgGGG',
+  'GGgGGGgG',
+  'GKKGGKKG',
+  'GKKGgKKG',
+  'gGGKKGGg',
+  'GGKKKKGG',
+  'GgKKKKGG',
+  'GGKGgKGG',
+], { G: '#5cb84a', g: '#86d672', K: '#0b0b0b' });
+const CREEPER_BODY = compilePixel([
+  'GgGGGg',
+  'GGGgGG',
+  'gGGGGG',
+  'GGgGGg',
+  'GGGGgG',
+  'gGGGGG',
+  'GGgGGG',
+  'GGGGgG',
+], { G: '#4ea83e', g: '#7fd06a' });
+
+function drawCreeper(ctx, x, y, t, o = {}) {
+  const sw = o.swell || 0;
+  const k = 1 + sw * 0.28 + (sw > 0 ? Math.sin(t * 40) * 0.03 : 0);
+  ctx.save();
+  ctx.translate(x, y + 34);
+  ctx.scale(k, k);
+  ctx.translate(-x, -(y + 34));
+  ell(ctx, x, y + 38, 22, 6, 'rgba(0,0,0,0.25)');
+  const step = o.walking ? Math.sin(t * 9) * 3 : 0;
+  ctx.fillStyle = '#3f8f31';
+  ctx.fillRect(x - 15, y + 20 + step, 13, 16);
+  ctx.fillRect(x + 2, y + 20 - step, 13, 16);
+  drawPixel(ctx, CREEPER_BODY, x - 12, y - 18, 4.5);
+  drawPixel(ctx, CREEPER_HEAD, x - 18, y - 54, 4.5);
+  if (o.white) {
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillRect(x - 18, y - 54, 36, 36);
+    ctx.fillRect(x - 15, y - 18, 30, 54);
+  }
+  ctx.restore();
+}
+
+class Creeper extends Enemy {
+  constructor(c) {
+    super('creeper', colX(c) + rand(-4, 4), rowY(MF.r0) - 10);
+    this.speed = 21;
+    this.fuse = -1;
+    this.phase = rand(0, 10);
+  }
+  update(dt, g) {
+    if (this.baseUpdate(dt)) return;
+    if (this.fuse >= 0) {
+      this.fuse += dt;
+      if (this.fuse >= 1.5) {
+        this.dead = true;
+        this.remove = true;
+        g.creeperBoom(this);
+      }
+      return;
+    }
+    if (this.y >= PAWN_ROW * T - 44) {
+      this.fuse = 0;
+      Sound.creeperHiss();
+      FX.text(g, this.x, this.y - 66, 'ссссс...', { color: '#86d672', font: `bold 18px ${FONT.ui}` });
+      return;
+    }
+    this.y += this.speed * dt;
+    this.gy = this.y;
+    g.checkTrapAt(this.x, this.y, this);
+  }
+  draw(ctx, t) {
+    this.beginDraw(ctx);
+    const sw = this.fuse >= 0 ? this.fuse / 1.5 : 0;
+    if (this.dead) {
+      ctx.translate(this.x, this.y + 34);
+      ctx.rotate(Math.min(1, this.deathT / 0.4) * 1.4);
+      ctx.translate(-this.x, -(this.y + 34));
+    }
+    drawCreeper(ctx, this.x, this.y, t + this.phase, {
+      swell: sw,
+      white: sw > 0 && Math.floor(this.fuse * (5 + sw * 12)) % 2 === 0,
+      walking: this.fuse < 0 && this.frozen <= 0 && !this.dead,
+    });
+    this.endDraw(ctx);
+  }
+}
+
+// ---------- Скибиди-туалет: быстрые рывки, поёт, смывает фигуры ----------
+function drawSkibidi(ctx, x, y, t, o = {}) {
+  const sway = Math.sin(t * 8) * 4;
+  ctx.save();
+  ctx.translate(x, y);
+  ell(ctx, 0, 38, 26, 7, 'rgba(0,0,0,0.25)');
+  // бачок
+  rr(ctx, -22, -34, 44, 26, 5);
+  ctx.fillStyle = '#f2f2f2';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#9e9e9e';
+  ctx.stroke();
+  rr(ctx, -6, -40, 12, 7, 2);
+  ctx.fillStyle = '#cfd8dc';
+  ctx.fill();
+  // голова из унитаза
+  const hx = sway, hy = -6 - Math.abs(Math.sin(t * 8)) * 4;
+  circ(ctx, hx, hy, 16, '#f0c49a');
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#a5754e';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(hx, hy - 3, 16, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = '#4e342e';
+  ctx.stroke();
+  circ(ctx, hx - 6, hy - 2, 4, '#fff');
+  circ(ctx, hx + 6, hy - 2, 4, '#fff');
+  circ(ctx, hx - 5 + Math.sin(t * 5), hy - 2, 2, '#111');
+  circ(ctx, hx + 7 + Math.sin(t * 5), hy - 2, 2, '#111');
+  if (o.singing) ell(ctx, hx, hy + 8, 6, 3 + Math.abs(Math.sin(t * 16)) * 4, '#5a1010');
+  else {
+    ctx.beginPath();
+    ctx.arc(hx, hy + 4, 7, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.strokeStyle = '#5a1010';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  // чаша
+  ell(ctx, 0, 14, 28, 15, '#f7f7f7');
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#9e9e9e';
+  ctx.stroke();
+  ell(ctx, 0, 8, 24, 8, '#e3e3e3');
+  ell(ctx, 0, 8, 17, 5, '#9fd4ff');
+  poly(ctx, [-13, 24, 13, 24, 9, 38, -9, 38], '#f2f2f2', '#9e9e9e', 2);
+  poly(ctx, [-13, 24, 13, 24, 9, 38, -9, 38], '#f2f2f2');
+  ctx.restore();
+}
+
+class Skibidi extends Enemy {
+  constructor(c) {
+    super('skibidi', colX(c), rowY(MF.r0));
+    this.dashT = rand(0.6, 1.2);
+    this.mv = null;
+    this.sing = 1.6;
+    this.singT = rand(6, 10);
+    this.phase = rand(0, 10);
+    Sound.skibidi();
+  }
+  update(dt, g) {
+    if (this.baseUpdate(dt)) return;
+    if (this.sing > 0) this.sing -= dt;
+    this.singT -= dt;
+    if (this.singT <= 0) {
+      this.singT = rand(6, 10);
+      this.sing = 1.6;
+      Sound.skibidi();
+    }
+    if (this.mv) {
+      const m = this.mv;
+      m.t += dt / m.dur;
+      const k = Math.min(1, m.t), e = easeInOut(k);
+      this.x = lerp(m.fx, m.tx, e);
+      this.y = this.gy = lerp(m.fy, m.ty, e);
+      if (k >= 1) {
+        this.mv = null;
+        g.checkTrapAt(this.x, this.y, this);
+        this.afterMove(g);
+      }
+      return;
+    }
+    this.dashT -= dt;
+    if (this.dashT <= 0) {
+      this.dashT = rand(0.7, 1.1);
+      const tx = clamp(this.x + rand(-0.6, 0.6) * T, T / 2, W - T / 2);
+      this.mv = { fx: this.x, fy: this.y, tx, ty: this.y + T * 0.8, t: 0, dur: 0.28 };
+    }
+  }
+  afterMove(g) {
+    const c = this.col;
+    if (this.y >= PAWN_ROW * T - 30 && this.y < PAWN_ROW * T + 40 && g.def[c]) {
+      g.killDefender(c, this);
+      FX.text(g, this.x, this.y - 50, 'СМЫТО!', { color: '#9be7ff', font: `bold 22px ${FONT.gta}` });
+      Sound.flush();
+    }
+    if (this.y >= ROWS * T - 60) g.enemyReached(this);
+  }
+  draw(ctx, t) {
+    this.beginDraw(ctx);
+    if (this.dead) {
+      ctx.translate(this.x, this.y + 30);
+      ctx.rotate(Math.min(1, this.deathT / 0.4) * 1.6);
+      ctx.translate(-this.x, -(this.y + 30));
+    }
+    drawSkibidi(ctx, this.x, this.y, t + this.phase, { singing: this.sing > 0 });
+    this.endDraw(ctx);
+  }
+}
+
+// ---------- Мегарыцарь из Clash Royale: прыгает и давит фигуры ----------
+function drawMegaKnight(ctx, x, y, t, o = {}) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(1.15, 1.15);
+  if (!o.air) ell(ctx, 0, 40, 34, 8, 'rgba(0,0,0,0.3)');
+  // плащ
+  poly(ctx, [-26, -20, 26, -20, 34, 30, -34, 30], '#5b2d8a');
+  // ноги
+  ctx.fillStyle = '#2c2f38';
+  rr(ctx, -20, 12, 16, 26, 4);
+  ctx.fill();
+  rr(ctx, 4, 12, 16, 26, 4);
+  ctx.fill();
+  ell(ctx, -12, 38, 11, 5, '#15161b');
+  ell(ctx, 12, 38, 11, 5, '#15161b');
+  // корпус
+  ell(ctx, 0, -2, 28, 24, '#3b3f4a');
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#15161b';
+  ctx.stroke();
+  ell(ctx, 0, -6, 18, 14, '#5a5f6e');
+  ctx.fillStyle = '#7b4fb0';
+  ctx.fillRect(-26, 10, 52, 6);
+  // наплечники с шипами
+  for (const sx of [-1, 1]) {
+    ell(ctx, sx * 30, -16, 15, 11, '#2c2f38');
+    poly(ctx, [sx * 24, -24, sx * 30, -40, sx * 36, -24], '#c0c4cf');
+    poly(ctx, [sx * 34, -20, sx * 46, -30, sx * 42, -14], '#c0c4cf');
+  }
+  // булавы
+  const swing = Math.sin(t * 3) * 4;
+  for (const sx of [-1, 1]) {
+    line(ctx, sx * 34, -2, sx * 44, 22 + swing * sx, '#4e342e', 5);
+    const bx = sx * 46, by = 30 + swing * sx;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU;
+      poly(ctx, [bx + Math.cos(a) * 9, by + Math.sin(a) * 9, bx + Math.cos(a + 0.2) * 17, by + Math.sin(a + 0.2) * 17, bx + Math.cos(a + 0.4) * 9, by + Math.sin(a + 0.4) * 9], '#9ea3ae');
+    }
+    circ(ctx, bx, by, 11, '#4a4d57');
+  }
+  // шлем
+  rr(ctx, -18, -56, 36, 36, 12);
+  ctx.fillStyle = '#2c2f38';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#111';
+  ctx.stroke();
+  ctx.fillStyle = '#ffb300';
+  ctx.fillRect(-12, -42, 24, 5);
+  poly(ctx, [-6, -56, 0, -70, 6, -56], '#c0c4cf');
+  ctx.restore();
+}
+
+class MegaKnight extends Enemy {
+  constructor() {
+    super('mega', 640, rowY(MF.r0));
+    this.jumpT = 2.5;
+    this.mv = null;
+    this.spawnFx = 0.6;
+  }
+  update(dt, g) {
+    if (this.baseUpdate(dt)) return;
+    if (this.mv) {
+      const m = this.mv;
+      m.t += dt / m.dur;
+      const k = Math.min(1, m.t), e = easeInOut(k);
+      this.x = lerp(m.fx, m.tx, e);
+      this.gy = lerp(m.fy, m.ty, e);
+      this.y = this.gy - Math.sin(k * Math.PI) * 150;
+      this.air = k < 0.9;
+      if (k >= 1) {
+        this.mv = null;
+        this.air = false;
+        this.y = this.gy;
+        this.land(g);
+      }
+      return;
+    }
+    this.y += 6 * dt;
+    this.gy = this.y;
+    this.jumpT -= dt;
+    if (this.jumpT <= 0) {
+      this.jumpT = 3.2;
+      const row = toRow(this.gy);
+      let tc = this.col;
+      let best = 99;
+      for (let c = 1; c < COLS; c++) {
+        if (g.def[c] && Math.abs(c - this.col) < best) {
+          best = Math.abs(c - this.col);
+          tc = c;
+        }
+      }
+      tc = clamp(tc, this.col - 2, this.col + 2);
+      const tr = row >= PAWN_ROW ? ROWS - 1 : Math.min(PAWN_ROW, row + 2);
+      this.mv = { fx: this.x, fy: this.gy, tx: colX(tc), ty: rowY(tr), t: 0, dur: 0.85 };
+      Sound.whoosh();
+    }
+  }
+  land(g) {
+    Sound.megaLand();
+    g.shake = Math.max(g.shake, 14);
+    g.explosions.push({ x: this.x, y: this.y + 30, r: 90, t: 0 });
+    FX.burst(g, this.x, this.y + 30, 18, { colors: ['#8d6e63', '#bcaaa4', '#7b4fb0'], size: 8, speed: 300, up: 120 });
+    FX.text(g, this.x, this.y - 70, 'МЕГАРЫЦАРЬ!', { color: '#b388ff', font: `22px ${FONT.title}` });
+    for (let c = 1; c < COLS; c++) {
+      if (g.def[c] && Math.abs(colX(c) - this.x) <= T * 1.3 && Math.abs(rowY(PAWN_ROW) - this.y) <= T * 1.2) g.killDefender(c, this);
+    }
+    g.checkTrapAt(this.x, this.y, this);
+    if (toRow(this.y) >= ROWS - 1) g.enemyReached(this);
+  }
+  draw(ctx, t) {
+    if (this.air) ell(ctx, this.x, this.gy + 44, 34, 8, 'rgba(0,0,0,0.25)');
+    this.beginDraw(ctx);
+    drawMegaKnight(ctx, this.x, this.y, t, { air: this.air });
+    this.endDraw(ctx);
+  }
+}
+
+// ---------- Марио: «?»-блоки ----------
+class QBlock {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.t = 0;
+    this.state = 'active';
+    this.bumpT = 0;
+    this.life = 22;
+    this.pop = 0;
+    this.gone = false;
+  }
+  get oy() {
+    return this.y + Math.sin(this.t * 2) * 4 - Math.sin(Math.max(0, this.bumpT) / 0.25 * Math.PI) * 14;
+  }
+  hit(px, py) {
+    return this.state === 'active' && this.pop >= 1 && Math.abs(px - this.x) < 30 && Math.abs(py - this.oy) < 30;
+  }
+  update(dt) {
+    this.t += dt;
+    this.pop = Math.min(1, this.pop + dt * 3);
+    if (this.bumpT > 0) this.bumpT -= dt;
+    this.life -= dt;
+    if (this.life <= 0) this.gone = true;
+  }
+  draw(ctx) {
+    if (this.state === 'active' && this.life < 3 && Math.floor(this.t * 8) % 2 === 0) return;
+    const s = 52 * easeOutCubic(this.pop);
+    const x = this.x - s / 2, y = this.oy - s / 2;
+    ell(ctx, this.x, this.y + 40, 22, 6, 'rgba(0,0,0,0.25)');
+    ctx.save();
+    if (this.state === 'empty') ctx.globalAlpha = Math.min(1, this.life);
+    ctx.fillStyle = '#5a2a00';
+    ctx.fillRect(x - 2, y - 2, s + 4, s + 4);
+    ctx.fillStyle = this.state === 'active' ? '#f8b800' : '#9a5a24';
+    ctx.fillRect(x, y, s, s);
+    ctx.fillStyle = this.state === 'active' ? '#ffe28a' : '#b8743a';
+    ctx.fillRect(x, y, s, s * 0.08);
+    ctx.fillRect(x, y, s * 0.08, s);
+    ctx.fillStyle = '#5a2a00';
+    for (const [dx, dy] of [[0.15, 0.15], [0.85, 0.15], [0.15, 0.85], [0.85, 0.85]]) ctx.fillRect(x + s * dx - 2, y + s * dy - 2, 4, 4);
+    if (this.state === 'active' && s > 20) {
+      text(ctx, '?', this.x + 3, this.oy + s * 0.27 + 3, { font: `bold ${Math.round(s * 0.75)}px ${FONT.title}`, color: '#5a2a00', align: 'center' });
+      text(ctx, '?', this.x, this.oy + s * 0.27, { font: `bold ${Math.round(s * 0.75)}px ${FONT.title}`, color: '#fff', align: 'center' });
+    }
+    ctx.restore();
+  }
+}
+
+function drawMarioItem(ctx, kind, x, y, s, t) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  if (kind === 'coin') {
+    const w = Math.abs(Math.cos(t * 10)) * 10 + 2;
+    ell(ctx, 0, 0, w, 14, '#f8b800');
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#a86a00';
+    ctx.stroke();
+  } else if (kind === 'star') {
+    drawStar(ctx, 0, 0, 18, '#ffd23f', '#b07800');
+    circ(ctx, -4, -2, 2, '#111');
+    circ(ctx, 4, -2, 2, '#111');
+  } else {
+    // гриб: красный — супергриб, зелёный — 1-UP
+    const cap = kind === 'oneup' ? '#2fa84f' : '#e53935';
+    ctx.beginPath();
+    ctx.arc(0, 0, 17, Math.PI, 0);
+    ctx.closePath();
+    ctx.fillStyle = cap;
+    ctx.fill();
+    circ(ctx, -8, -8, 4.5, '#fff');
+    circ(ctx, 7, -9, 4, '#fff');
+    circ(ctx, 0, -14, 3, '#fff');
+    rr(ctx, -10, 0, 20, 14, 5);
+    ctx.fillStyle = '#ffe0b2';
+    ctx.fill();
+    circ(ctx, -4, 6, 1.8, '#111');
+    circ(ctx, 4, 6, 1.8, '#111');
+  }
+  ctx.restore();
+}
+
+// ---------- Duck Hunt ----------
+class Duck {
+  constructor() {
+    this.dir = Math.random() < 0.5 ? 1 : -1;
+    this.x = this.dir > 0 ? -40 : W + 40;
+    this.y = rand(200, 420);
+    this.vx = this.dir * rand(200, 260);
+    this.vy = rand(-160, 160);
+    this.t = 0;
+    this.state = 'fly';
+    this.life = 6.5;
+    this.hitT = 0;
+    this.gone = false;
+  }
+  hit(px, py) {
+    return this.state === 'fly' && dist2(px, py, this.x, this.y) < 32 * 32;
+  }
+  update(dt, g) {
+    this.t += dt;
+    if (this.state === 'fly') {
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      if ((this.x < 40 && this.vx < 0) || (this.x > W - 40 && this.vx > 0)) {
+        if (this.t > 1) this.vx *= -1;
+      }
+      if (this.y < 170 || this.y > 470) {
+        this.vy *= -1;
+        this.y = clamp(this.y, 170, 470);
+      }
+      if (Math.random() < dt * 0.8) this.vy = rand(-180, 180);
+      if (this.t % 1.2 < dt) Sound.quack();
+      this.life -= dt;
+      if (this.life <= 0) {
+        this.state = 'escape';
+        g.say('Утка улетела... собака над тобой ржёт.', '#d7ccc8');
+      }
+    } else if (this.state === 'escape') {
+      this.y -= 320 * dt;
+      this.x += this.vx * 0.3 * dt;
+      if (this.y < -60) {
+        this.gone = true;
+        g.dogLaugh();
+      }
+    } else if (this.state === 'hit') {
+      this.hitT += dt;
+      if (this.hitT > 0.45) this.state = 'fall';
+    } else if (this.state === 'fall') {
+      this.y += 420 * dt;
+      if (this.y >= 540) {
+        this.gone = true;
+        const key = weighted(TILE_LOOT.filter(([k]) => k !== 'sun'));
+        g.items.push(new Loot('item', key, this.x, 500, 540, 120));
+        Sound.thud();
+      }
+    }
+  }
+  draw(ctx) {
+    const flap = this.state === 'fly' || this.state === 'escape' ? Math.sin(this.t * 18) : 0;
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    if (this.state === 'fall') ctx.rotate(Math.PI / 2);
+    ctx.scale(this.vx < 0 ? -1 : 1, 1);
+    // тело
+    ell(ctx, 0, 4, 22, 12, '#8d5a2b');
+    ell(ctx, 6, 8, 12, 6, '#e8d8b0');
+    // крыло
+    poly(ctx, [-8, 0, 8, 0, -4, -22 * flap - 4], '#5a3a1a');
+    // хвост
+    poly(ctx, [-20, 0, -30, -6, -26, 8], '#3e2a14');
+    // шея и голова
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(12, -6, 7, 4);
+    circ(ctx, 18, -12, 9, '#1b6b2a');
+    poly(ctx, [25, -14, 36, -11, 25, -8], '#ff9800');
+    if (this.state === 'hit' || this.state === 'fall') {
+      line(ctx, 15, -16, 21, -10, '#fff', 2);
+      line(ctx, 21, -16, 15, -10, '#fff', 2);
+    } else {
+      circ(ctx, 20, -14, 2.5, '#fff');
+      circ(ctx, 20.5, -14, 1.2, '#111');
+    }
+    ctx.restore();
+  }
+}
+
+function drawDog(ctx, x, y, t) {
+  ctx.save();
+  ctx.translate(x, y + Math.abs(Math.sin(t * 14)) * -6);
+  // туловище
+  ell(ctx, 0, 70, 40, 46, '#a0682a');
+  ell(ctx, 0, 70, 24, 34, '#f2e6d0');
+  // лапы
+  ell(ctx, -30, 36, 10, 14, '#a0682a');
+  ell(ctx, 30, 36, 10, 14, '#a0682a');
+  // голова
+  ell(ctx, 0, 0, 30, 32, '#a0682a');
+  ell(ctx, -30, 10, 12, 26, '#5a3510');
+  ell(ctx, 30, 10, 12, 26, '#5a3510');
+  ell(ctx, 0, 14, 20, 16, '#f2e6d0');
+  ell(ctx, 0, 2, 7, 5, '#111');
+  // глаза зажмурены от смеха
+  ctx.strokeStyle = '#111';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(-11, -12, 6, Math.PI * 1.1, Math.PI * 1.9);
+  ctx.moveTo(17, -12);
+  ctx.arc(11, -12, 6, Math.PI * 1.1, Math.PI * 1.9);
+  ctx.stroke();
+  // пасть
+  ell(ctx, 0, 22, 12, 8 + Math.abs(Math.sin(t * 14)) * 4, '#5a1010');
+  ell(ctx, 0, 28, 7, 4, '#ff7a8a');
+  ctx.restore();
+}
+
+// ---------- PvZ: подсолнух и горохострел ----------
+function drawPlant(ctx, type, x, y, t, o = {}) {
+  const sway = Math.sin(t * 2 + x) * 0.08;
+  ctx.save();
+  ctx.translate(x, y + 34);
+  ctx.rotate(sway);
+  ctx.translate(-x, -(y + 34));
+  ell(ctx, x, y + 34, 22, 6, 'rgba(0,0,0,0.25)');
+  line(ctx, x, y + 34, x, y - 2, '#2e7d32', 5);
+  ell(ctx, x - 12, y + 22, 13, 6, '#43a047');
+  ell(ctx, x + 12, y + 18, 13, 6, '#43a047');
+  if (type === 'sunflower') {
+    const hy = y - 10;
+    if (o.glow > 0) circ(ctx, x, hy, 34, `rgba(255,230,80,${o.glow * 0.6})`);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU + t * 0.3;
+      ctx.save();
+      ctx.translate(x + Math.cos(a) * 17, hy + Math.sin(a) * 17);
+      ctx.rotate(a);
+      ell(ctx, 0, 0, 9, 5, '#ffd21f');
+      ctx.restore();
+    }
+    circ(ctx, x, hy, 14, '#7a4a18');
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#4e2c0a';
+    ctx.stroke();
+    ell(ctx, x - 5, hy - 3, 2, 3, '#111');
+    ell(ctx, x + 5, hy - 3, 2, 3, '#111');
+    ctx.beginPath();
+    ctx.arc(x, hy + 2, 6, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  } else {
+    const rec = (o.shoot || 0) * 6;
+    const hy = y - 8 + rec;
+    poly(ctx, [x + 10, hy + 4, x + 26, hy - 2, x + 18, hy + 12], '#2e7d32');
+    circ(ctx, x, hy, 18, '#66bb6a');
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#2e7d32';
+    ctx.stroke();
+    rr(ctx, x - 8, hy - 36, 16, 26, 4);
+    ctx.fillStyle = '#66bb6a';
+    ctx.fill();
+    ctx.stroke();
+    ell(ctx, x, hy - 36, 10, 5, '#1b5e20');
+    circ(ctx, x - 7, hy - 2, 4, '#111');
+    circ(ctx, x - 8, hy - 3, 1.3, '#fff');
+  }
+  ctx.restore();
+}
+
+// ---------- Among Us ----------
+function drawCrewmate(ctx, x, y, s, color, t = 0) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#111';
+  rr(ctx, -30, -10, 14, 36, 6);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.stroke();
+  rr(ctx, -20, -40, 44, 74, 22);
+  ctx.fill();
+  ctx.stroke();
+  rr(ctx, -18, 22, 16, 22, 5);
+  ctx.fill();
+  ctx.stroke();
+  rr(ctx, 6, 22, 16, 22, 5);
+  ctx.fill();
+  ctx.stroke();
+  rr(ctx, -4, -28, 34, 20, 10);
+  ctx.fillStyle = '#8fd3ff';
+  ctx.fill();
+  ctx.stroke();
+  rr(ctx, 6, -24, 14, 6, 3);
+  ctx.fillStyle = '#e8f7ff';
+  ctx.fill();
+  ctx.restore();
+}
+
 // ---- js/game.js ----
 'use strict';
 /* Логика игры: состояние, правила, ввод. Отрисовка — в render.js. */
@@ -2591,18 +3491,31 @@ const HINTS = [
   [17, 'Открой все безопасные клетки — оставшиеся мины полетят в башню короля.'],
   [24, 'Лови солнце удочкой. ПКМ по пустой клетке в ряду белых — посадить фигуру (Q — выбор).'],
   [31, 'Цифры 1–9 — предметы из хотбара. Shift — замедление времени.'],
+  [40, 'B — меню закупки как в CS: AWP, дробовик, гранаты, кевлар.'],
+  [48, 'Колесо мыши или X — смена оружия, G — бросить HE-гранату.'],
+  [56, 'Стреляй по «?»-блокам и уткам — внутри награды!'],
 ];
+
+// Чит-коды из GTA San Andreas (и один местный).
+const CHEATS = {
+  HESOYAM: 'здоровье, броня и $250 000',
+  AEZAKMI: 'розыск сброшен',
+  FULLCLIP: 'бесконечные патроны',
+  LXGIWYL: 'набор оружия',
+  OSRBLHH: 'розыск +2 звезды',
+  SKIBIDI: 'скибиди доп-доп ес-ес',
+};
 
 const TILE_LOOT = [['sun', 16], ['steak', 22], ['ammo', 14], ['tnt', 9], ['dice', 11], ['potion', 8], ['gapple', 5], ['ice', 7], ['pellet', 5]];
 const DROP_LOOT = [['gapple', 20], ['potion', 15], ['totem', 6], ['ammo', 20], ['tnt', 15], ['pellet', 8], ['ice', 8], ['vest', 18], ['dice', 10], ['steak', 12]];
 
 const LAYOUT = {
   hotbar: { x: 433, y: 674, slot: 46 },
-  bank: { x: 996, y: 6, w: 278, h: 82 },
-  led: { x: 996, y: 94, w: 278, h: 48 },
+  bank: { x: 950, y: 6, w: 324, h: 82 },
+  led: { x: 950, y: 94, w: 324, h: 48 },
 };
 const hotbarSlotRect = (i) => ({ x: LAYOUT.hotbar.x + i * LAYOUT.hotbar.slot, y: LAYOUT.hotbar.y, w: LAYOUT.hotbar.slot, h: LAYOUT.hotbar.slot });
-const packetRect = (i) => ({ x: 1066 + i * 68, y: 12, w: 62, h: 70 });
+const packetRect = (i) => ({ x: 1018 + i * 51, y: 12, w: 46, h: 70 });
 const TOWER_BOX = { x: 640 - 130, y: 10, w: 260, h: 156 };
 
 class Game {
@@ -2618,8 +3531,33 @@ class Game {
     this.t = 0;
     this.clock = 8 * 60;
     this.nights = 0;
-    this.player = { hp: CFG.playerHp, maxHp: CFG.playerHp, armor: CFG.startArmor, hunger: 20, boost: 100, xp: 0, level: 0, money: 0, regenT: 0, hungerT: 0, starveT: 0 };
-    this.gun = { mag: CFG.magSize, reserve: CFG.startReserve, cd: 0, reload: 0, heat: 0, kick: 0, flash: 0, punch: 0 };
+    this.player = { hp: CFG.playerHp, maxHp: CFG.playerHp, armor: CFG.startArmor, hunger: 20, boost: 100, xp: 0, level: 0, money: 0, earned: 0, regenT: 0, hungerT: 0, starveT: 0 };
+    this.gun = { cd: 0, reload: 0, heat: 0, kick: 0, flash: 0, punch: 0, switchT: 0 };
+    this.arsenal = {
+      ak: { owned: true, mag: CFG.magSize, reserve: CFG.startReserve },
+      nova: { owned: false, mag: 0, reserve: 0 },
+      awp: { owned: false, mag: 0, reserve: 0 },
+    };
+    this.weapon = 'ak';
+    this.weaponNameT = 0;
+    this.grenades = 1;
+    this.infAmmo = false;
+    this.cheated = false;
+    this.typed = '';
+    this.cheatMsg = null;
+    this.buyMsg = null;
+    this.peas = [];
+    this.qblocks = [];
+    this.ducks = [];
+    this.popups = [];
+    this.qT = 18;
+    this.duckT = rand(25, 35);
+    this.meetingT = rand(120, 170);
+    this.meeting = null;
+    this.dogT = 0;
+    this.starT = 0;
+    this.starOffset = 0;
+    this.ducksShot = 0;
     this.rod = { state: 'idle', t: 0, tx: 0, ty: 0, cd: 0, carry: null };
     this.inv = { steak: 3, gapple: 1, potion: 1, tnt: 2, dice: 2, ammo: 1, ice: 1, pellet: 1, totem: 0 };
     this.sel = 0;
@@ -2714,8 +3652,9 @@ class Game {
     return this.state === 'dead' ? this.deadT : this.winT;
   }
   saveBest() {
-    if (this.player.money > this.best) {
-      this.best = this.player.money;
+    if (this.cheated) return;
+    if (this.player.earned > this.best) {
+      this.best = this.player.earned;
       Store.set('kd_best', this.best);
       this.newRecord = true;
     }
@@ -2730,7 +3669,7 @@ class Game {
       this.pac.mouth += realDt * 10;
       return;
     }
-    if (this.state === 'pause') return;
+    if (this.state === 'pause' || this.state === 'buy') return;
     if (this.state === 'dead') {
       this.deadT += realDt;
       this.updateFx(realDt * 0.3, realDt);
@@ -2766,9 +3705,15 @@ class Game {
       this.updateFx(realDt * 0.2, realDt);
       return;
     }
+    if (this.meeting) {
+      this.updateMeeting(realDt);
+      this.updateFx(realDt * 0.2, realDt);
+      return;
+    }
 
     const dt = realDt * this.timeScale;
     this.t += dt;
+    if (this.starT > 0) this.starT -= dt;
     while (this.hintIdx < HINTS.length && this.t >= HINTS[this.hintIdx][0]) {
       this.say('[Подсказка] ' + HINTS[this.hintIdx][1], '#9be7ff');
       this.hintIdx++;
@@ -2799,7 +3744,12 @@ class Game {
     this.updateCannonballs(dt);
     this.updateMissiles(dt);
     this.updateTNT(dt);
+    this.updatePeas(dt);
+    for (const q of this.qblocks) q.update(dt);
+    for (const d of this.ducks) d.update(dt, this);
     this.updateFx(dt, realDt);
+    this.qblocks = this.qblocks.filter((q) => !q.gone);
+    this.ducks = this.ducks.filter((d) => !d.gone);
 
     this.enemies = this.enemies.filter((e) => !e.remove);
     this.items = this.items.filter((i) => !i.gone);
@@ -2848,6 +3798,13 @@ class Game {
     this.frostFx = Math.max(0, this.frostFx - realDt * 0.6);
     this.totemFx = Math.max(0, this.totemFx - realDt);
     this.starFlash = Math.max(0, this.starFlash - realDt);
+    for (const p of this.popups) p.t += realDt;
+    this.popups = this.popups.filter((p) => p.t < 1.2);
+    if (this.dogT > 0) this.dogT -= realDt;
+    if (this.cheatMsg) {
+      this.cheatMsg.t += realDt;
+      if (this.cheatMsg.t > 4) this.cheatMsg = null;
+    }
     const tw = this.tower;
     if (tw.hit > 0) tw.hit -= realDt;
   }
@@ -2860,14 +3817,13 @@ class Game {
       if (ev.type === 'key') this.onKey(ev.code);
       else if (ev.type === 'down') this.onMouseDown(ev.button, ev.x, ev.y);
       else if (ev.type === 'up' && ev.button === 0) this.suppressFire = false;
-      else if (ev.type === 'wheel' && this.state === 'play') {
-        this.sel = (this.sel + ev.dy + 9) % 9;
-        Sound.click();
-      }
+      else if (ev.type === 'wheel' && this.state === 'play') this.switchWeapon(ev.dy);
     }
   }
 
   onKey(code) {
+    // чит-коды проверяются первыми, иначе буква M в HESOYAM выключила бы звук
+    if (this.state === 'play' && !this.jumpscare && !this.meeting && this.handleCheatKey(code)) return;
     if (code === 'KeyM') {
       Sound.toggleMute();
       this.say(Sound.muted ? 'Звук выключен (M)' : 'Звук включён (M)', '#e0e0e0');
@@ -2887,12 +3843,23 @@ class Game {
       else if (code === 'Escape') this.toTitle();
       return;
     }
+    if (this.state === 'buy') {
+      if (code === 'KeyB' || code === 'Escape') this.closeBuy();
+      else {
+        const m = /^(Digit|Numpad)([1-9])$/.exec(code);
+        if (m) this.buy(Number(m[2]) - 1);
+      }
+      return;
+    }
     if (code === 'Escape' || code === 'KeyP') {
       this.pause();
       return;
     }
-    if (this.jumpscare) return;
+    if (this.jumpscare || this.meeting) return;
     if (code === 'KeyR') this.reload();
+    else if (code === 'KeyB') this.openBuy();
+    else if (code === 'KeyG') this.throwGrenade();
+    else if (code === 'KeyX') this.switchWeapon(1);
     else if (code === 'KeyF' || code === 'Space') this.flagAt(Input.x, Input.y);
     else if (code === 'KeyQ') this.cyclePacket();
     else if (code === 'KeyE') this.useItem(this.sel);
@@ -2907,7 +3874,7 @@ class Game {
       if (btn === 0) this.clickButtons(x, y);
       return;
     }
-    if (this.jumpscare) return;
+    if (this.jumpscare || this.meeting) return;
     if (btn === 0) {
       if (this.uiClick(x, y)) {
         this.suppressFire = true;
@@ -2963,58 +3930,97 @@ class Game {
     return 1 + Math.min(0.6, this.player.level * 0.03);
   }
 
+  get cur() {
+    return this.arsenal[this.weapon];
+  }
+  get wdef() {
+    return WEAPONS[this.weapon];
+  }
+
   updateGun(dt) {
-    const gun = this.gun;
+    const gun = this.gun, wd = this.wdef, a = this.cur;
     gun.cd = Math.max(0, gun.cd - dt);
     gun.flash = Math.max(0, gun.flash - dt);
     gun.kick = Math.max(0, gun.kick - dt * 8);
     gun.punch = Math.max(0, gun.punch - dt);
+    gun.switchT = Math.max(0, gun.switchT - dt);
     gun.heat = Math.max(0, gun.heat - dt * (Input.lmb ? 0.7 : 2.4));
+    if (this.weaponNameT > 0) this.weaponNameT -= dt;
     if (gun.reload > 0) {
       gun.reload -= dt;
       if (gun.reload <= 0) {
-        const take = Math.min(CFG.magSize - gun.mag, gun.reserve);
-        gun.mag += take;
-        gun.reserve -= take;
+        const take = Math.min(wd.mag - a.mag, a.reserve);
+        a.mag += take;
+        a.reserve -= take;
         gun.reload = 0;
       }
     }
-    if (Input.lmb && !this.suppressFire && !this.jumpscare) this.tryFire();
+    if (Input.lmb && !this.suppressFire && !this.jumpscare && !this.meeting) this.tryFire();
     // оружие становится прозрачным, если прицел под ним
     const under = Input.x > 900 && Input.y > 430;
     this.gunAlpha = lerp(this.gunAlpha, under ? 0.3 : 1, Math.min(1, dt * 10));
   }
 
   reload() {
-    const gun = this.gun;
-    if (gun.reload > 0 || gun.mag >= CFG.magSize || gun.reserve <= 0) return;
-    gun.reload = CFG.reloadTime;
+    const gun = this.gun, a = this.cur;
+    if (this.infAmmo || gun.reload > 0 || a.mag >= this.wdef.mag || a.reserve <= 0) return;
+    gun.reload = this.wdef.reload;
     Sound.reload();
   }
 
+  setWeapon(key) {
+    if (!this.arsenal[key].owned || key === this.weapon) return;
+    this.weapon = key;
+    this.gun.reload = 0;
+    this.gun.switchT = 0.35;
+    this.gun.heat = 0;
+    this.weaponNameT = 1.5;
+    Sound.weapon();
+  }
+
+  switchWeapon(dir) {
+    const owned = WEAPON_ORDER.filter((k) => this.arsenal[k].owned);
+    if (owned.length < 2) {
+      if (this.weaponNameT <= 0) {
+        FX.text(this, 1100, 600, 'Купи оружие в меню B', { color: '#ffd54a', font: `bold 15px ${FONT.ui}` });
+        this.weaponNameT = 1.2;
+      }
+      return;
+    }
+    const i = owned.indexOf(this.weapon);
+    this.setWeapon(owned[(i + dir + owned.length * 2) % owned.length]);
+  }
+
   tryFire() {
-    const gun = this.gun;
-    if (gun.reload > 0 || gun.cd > 0) return;
-    if (gun.mag <= 0) {
-      if (gun.reserve > 0) this.reload();
+    const gun = this.gun, wd = this.wdef, a = this.cur;
+    if (gun.reload > 0 || gun.cd > 0 || gun.switchT > 0) return;
+    if (a.mag <= 0 && !this.infAmmo) {
+      if (a.reserve > 0) this.reload();
+      else if (this.weapon !== 'ak' && this.arsenal.ak.mag + this.arsenal.ak.reserve > 0) this.setWeapon('ak');
       else this.punch();
       return;
     }
-    gun.mag--;
-    gun.cd = CFG.fireInterval / this.fireRate;
-    const spread = 2 + gun.heat * 30;
-    const a = rand(0, TAU), d = Math.sqrt(Math.random()) * spread;
-    const hx = Input.x + Math.cos(a) * d, hy = Input.y + Math.sin(a) * d;
-    gun.heat = Math.min(1, gun.heat + 0.09);
+    if (!this.infAmmo) a.mag--;
+    gun.cd = wd.interval / (this.weapon === 'ak' ? this.fireRate : 1);
+    if (!wd.auto) this.suppressFire = true;
     gun.kick = 1;
     gun.flash = 0.05;
-    this.shake = Math.max(this.shake, 1.5);
-    Sound.shot();
+    this.shake = Math.max(this.shake, wd.shake);
+    if (this.weapon === 'awp') Sound.awp();
+    else if (this.weapon === 'nova') Sound.shotgun();
+    else Sound.shot();
     const pose = this.gunPose();
-    this.tracers.push({ x1: pose.mx, y1: pose.my, x2: hx, y2: hy, t: 0 });
-    FX.burst(this, pose.ex, pose.ey, 1, { colors: ['#d4a017'], size: 5, speed: 260, angle: pose.rot - Math.PI / 2 + 0.6, spread: 0.3, grav: 900, life: 0.6 });
-    this.hitAt(hx, hy, 1);
-    if (gun.mag === 0 && gun.reserve > 0) this.reload();
+    const dmg = wd.dmg * (this.starT > 0 ? 2 : 1);
+    const spread = wd.spread + gun.heat * wd.heatSpread;
+    for (let i = 0; i < wd.pellets; i++) {
+      const ang = rand(0, TAU), d = Math.sqrt(Math.random()) * spread;
+      const hx = Input.x + Math.cos(ang) * d, hy = Input.y + Math.sin(ang) * d;
+      if (i < 4) this.tracers.push({ x1: pose.mx, y1: pose.my, x2: hx, y2: hy, t: 0, w: wd.pierce ? 5 : 2 });
+      this.hitAt(hx, hy, dmg, wd.pierce);
+    }
+    gun.heat = Math.min(1, gun.heat + wd.heatAdd);
+    FX.burst(this, pose.ex, pose.ey, 1, { colors: [this.weapon === 'nova' ? '#c62828' : '#d4a017'], size: 5, speed: 260, angle: pose.rot - Math.PI / 2 + 0.6, spread: 0.3, grav: 900, life: 0.6 });
+    if (a.mag === 0 && a.reserve > 0 && !this.infAmmo) this.reload();
   }
 
   punch() {
@@ -3026,39 +4032,56 @@ class Game {
     let best = null;
     for (const e of this.enemies) if (e.alive && e.distTo(Input.x, Input.y) < 50 && (!best || e.y > best.y)) best = e;
     if (best) {
-      best.damage(1, this, 'fist');
+      best.damage(this.starT > 0 ? 3 : 1, this, 'fist');
       FX.text(this, Input.x, Input.y - 30, 'БАЦ!', { color: '#fff', font: `bold 22px ${FONT.gta}` });
     } else if (Math.random() < 0.3) {
-      FX.text(this, Input.x, Input.y - 30, 'Нет патронов — бей кулаком!', { color: '#ffd54a', font: `bold 14px ${FONT.ui}` });
+      FX.text(this, Input.x, Input.y - 30, 'Нет патронов — бей кулаком или купи (B)!', { color: '#ffd54a', font: `bold 14px ${FONT.ui}` });
     }
   }
 
   // Положение оружия в кадре (общая функция для логики и отрисовки).
   gunPose() {
-    const gun = this.gun;
+    const gun = this.gun, wd = this.wdef;
     let px = 1178, py = 655;
     let dir = Math.atan2(Input.y - py, Input.x - px);
     if (dir > 0) dir -= TAU;
     dir = clamp(dir, -3.5, -1.7);
     const base = -2.6;
     let rot = base + (dir - base) * 0.65 + Math.PI;
-    const s = 0.86;
+    const s = wd.scale;
     if (gun.reload > 0) {
-      const p = 1 - gun.reload / CFG.reloadTime;
+      const p = 1 - gun.reload / wd.reload;
       const k = Math.sin(p * Math.PI);
       rot += k * 0.55;
       py += k * 120;
     }
-    rot -= gun.kick * 0.05;
-    px += Math.cos(rot) * gun.kick * 14;
-    py += Math.sin(rot) * gun.kick * 14;
+    if (gun.switchT > 0) py += (gun.switchT / 0.35) * 200;
+    rot -= gun.kick * (this.weapon === 'ak' ? 0.05 : 0.14);
+    px += Math.cos(rot) * gun.kick * wd.kick;
+    py += Math.sin(rot) * gun.kick * wd.kick;
     const cr = Math.cos(rot), sr = Math.sin(rot);
-    const lx = AK_MUZZLE.x * s, ly = AK_MUZZLE.y * s;
+    const lx = wd.muzzle.x * s, ly = wd.muzzle.y * s;
     const ex = -60 * s, ey = -26 * s;
     return { px, py, rot, s, mx: px + lx * cr - ly * sr, my: py + lx * sr + ly * cr, ex: px + ex * cr - ey * sr, ey: py + ex * sr + ey * cr };
   }
 
-  hitAt(x, y, dmg) {
+  hitFx(e, x, y) {
+    const colors = {
+      zombie: ['#7fa35c', '#4e6b2f'],
+      cone: ['#7fa35c', '#f08a24'],
+      freddy: ['#ffd54a', '#c9a92c'],
+      snake: ['#4a7cf0', '#9bb8ff'],
+      creeper: ['#5cb84a', '#86d672'],
+      skibidi: ['#ffffff', '#9fd4ff'],
+      mega: ['#c0c4cf', '#7b4fb0'],
+    }[e.type] || ['#222', '#555', '#8a8a8a'];
+    FX.burst(this, x, y, 5, { colors, size: 5, speed: 200, grav: 600, life: 0.4 });
+    Sound.hit();
+  }
+
+  // pierce — пуля AWP: задевает всё, что оказалось в точке попадания.
+  hitAt(x, y, dmg, pierce = false) {
+    let any = false;
     for (const cb of this.cannonballs) {
       if (!cb.gone && cb.hit(x, y)) {
         cb.gone = true;
@@ -3067,32 +4090,140 @@ class Game {
         FX.text(this, p.x, p.y - 30, 'СБИТО!', { color: '#ffd54a', font: `bold 22px ${FONT.gta}` });
         this.addMoney(25);
         Sound.stone();
+        if (!pierce) return;
+        any = true;
+      }
+    }
+    for (const d of this.ducks) {
+      if (d.hit(x, y)) {
+        this.shootDuck(d);
+        if (!pierce) return;
+        any = true;
+      }
+    }
+    for (const q of this.qblocks) {
+      if (q.hit(x, y)) {
+        this.hitQBlock(q);
+        if (!pierce) return;
+        any = true;
+      }
+    }
+    if (pierce) {
+      for (const e of this.enemies) {
+        if (e.alive && e.hit(x, y)) {
+          e.damage(dmg, this, 'gun');
+          this.hitFx(e, x, y);
+          any = true;
+        }
+      }
+    } else {
+      let best = null;
+      for (const e of this.enemies) if (e.alive && e.hit(x, y) && (!best || e.y > best.y)) best = e;
+      if (best) {
+        best.damage(dmg, this, 'gun');
+        this.hitFx(best, x, y);
         return;
       }
     }
-    let best = null;
-    for (const e of this.enemies) if (e.alive && e.hit(x, y) && (!best || e.y > best.y)) best = e;
-    if (best) {
-      best.damage(dmg, this, 'gun');
-      const colors = {
-        zombie: ['#7fa35c', '#4e6b2f'],
-        cone: ['#7fa35c', '#f08a24'],
-        freddy: ['#ffd54a', '#c9a92c'],
-        snake: ['#4a7cf0', '#9bb8ff'],
-      }[best.type] || ['#222', '#555', '#8a8a8a'];
-      FX.burst(this, x, y, 5, { colors, size: 5, speed: 200, grav: 600, life: 0.4 });
-      Sound.hit();
-      return;
-    }
     if (!this.tower.dead && inRect(x, y, TOWER_BOX)) {
-      this.damageTower(dmg, false);
+      // башня бронированная: одна пуля снимает не больше 3 HP
+      this.damageTower(Math.min(dmg, 3), false);
       FX.burst(this, x, y, 4, { colors: ['#9a9dab', '#6f7282', '#ddd'], size: 5, speed: 180, grav: 600, life: 0.4 });
       Sound.stone();
       return;
     }
+    if (any) return;
     this.decals.push({ x, y, life: 4 });
     if (this.decals.length > 60) this.decals.shift();
     FX.burst(this, x, y, 2, { colors: ['rgba(120,100,70,0.8)'], size: 4, speed: 80, grav: 300, life: 0.3 });
+  }
+
+  throwGrenade() {
+    if (this.grenades <= 0) {
+      FX.text(this, Input.x, Input.y - 30, 'Нет гранат — купи в меню B', { color: '#ffd54a', font: `bold 15px ${FONT.ui}` });
+      Sound.empty();
+      return;
+    }
+    this.grenades--;
+    this.tnts.push({ kind: 'he', x0: 640, y0: 760, x1: Input.x, y1: Input.y, t: 0, dur: 0.5, fuse: 0.5, state: 'fly', gone: false });
+    Sound.whoosh();
+    this.say('<Ты> Fire in the hole!', '#ffcc80');
+  }
+
+  // ---------- меню закупки CS ----------
+  openBuy() {
+    this.state = 'buy';
+    this.buyMsg = null;
+    Input.lmb = false;
+    Sound.weapon();
+  }
+  closeBuy() {
+    if (this.state !== 'buy') return;
+    this.state = 'play';
+    this.suppressFire = true;
+  }
+  buy(i) {
+    const it = BUY_ITEMS[i];
+    if (!it) return;
+    const p = this.player;
+    const fail = (msg) => {
+      this.buyMsg = { text: msg, bad: true };
+      Sound.empty();
+    };
+    if (p.money < it.price) return fail(`Не хватает денег: нужно $${it.price}`);
+    switch (it.key) {
+      case 'awp':
+      case 'nova': {
+        const a = this.arsenal[it.key];
+        if (a.owned) return fail(`${it.name} уже есть. Патроны — пункт 5`);
+        a.owned = true;
+        a.mag = WEAPONS[it.key].mag;
+        a.reserve = WEAPONS[it.key].refill * 2;
+        this.setWeapon(it.key);
+        break;
+      }
+      case 'he':
+        if (this.grenades >= 5) return fail('Больше 5 гранат не унести');
+        this.grenades++;
+        break;
+      case 'kevlar':
+        if (p.armor >= 100) return fail('Броня и так полная');
+        p.armor = 100;
+        break;
+      case 'ammo': {
+        const a = this.cur, wd = this.wdef;
+        if (a.reserve >= wd.reserveMax) return fail(`Запас ${wd.name} и так полный`);
+        a.reserve = Math.min(wd.reserveMax, a.reserve + wd.refill);
+        break;
+      }
+      case 'detector':
+        if (!this.useDetector()) return fail('Сначала открой поле сапёра');
+        break;
+    }
+    p.money -= it.price;
+    Sound.buy();
+    this.buyMsg = { text: `Куплено: ${it.name}`, bad: false };
+  }
+
+  useDetector() {
+    const mf = this.mf;
+    if (!mf.generated || mf.done) return false;
+    const cand = [];
+    for (let r = 0; r < MF.rows; r++) {
+      for (let c = 0; c < MF.cols; c++) {
+        const cell = mf.cell(c, r);
+        if (!cell.mine || cell.s !== HIDDEN) continue;
+        cand.push({ c, r, near: mf.neighbors(c, r).some(([nc, nr]) => mf.cell(nc, nr).s === OPEN) });
+      }
+    }
+    if (!cand.length) return false;
+    const near = cand.filter((x) => x.near);
+    const pick = choice(near.length ? near : cand);
+    mf.cell(pick.c, pick.r).s = FLAG;
+    const p = mf.center(pick.c, pick.r);
+    FX.burst(this, p.x, p.y, 14, { colors: ['#40c4ff', '#fff'], size: 5, speed: 160, life: 0.6 });
+    this.say('Миноискатель нашёл мину и поставил флажок.', '#40c4ff');
+    return true;
   }
 
   // ---------- удочка ----------
@@ -3221,8 +4352,10 @@ class Game {
     const n = list.length;
     this.tilesOpened += n;
     this.player.money += 10 * n;
-    const ammo = Math.min(CFG.maxReserve - this.gun.reserve, CFG.ammoPerTile * n);
-    this.gun.reserve += Math.max(0, ammo);
+    this.player.earned += 10 * n;
+    const ak = this.arsenal.ak;
+    const ammo = Math.min(WEAPONS.ak.reserveMax - ak.reserve, CFG.ammoPerTile * n);
+    ak.reserve += Math.max(0, ammo);
     this.addXp(n * 0.5);
     Sound.reveal(n);
     let drops = 0;
@@ -3361,12 +4494,12 @@ class Game {
         this.rollDice();
         break;
       case 'ammo':
-        if (this.gun.reserve >= CFG.maxReserve) {
-          FX.text(this, 640, 640, 'Патронов и так полно', { color: '#ffe0b2', font: `bold 15px ${FONT.ui}` });
+        if (this.arsenal.ak.reserve >= WEAPONS.ak.reserveMax) {
+          FX.text(this, 640, 640, 'Патронов к АК и так полно', { color: '#ffe0b2', font: `bold 15px ${FONT.ui}` });
           used = false;
           break;
         }
-        this.gun.reserve = Math.min(CFG.maxReserve, this.gun.reserve + 90);
+        this.arsenal.ak.reserve = Math.min(WEAPONS.ak.reserveMax, this.arsenal.ak.reserve + 90);
         Sound.reload();
         break;
       case 'ice':
@@ -3453,7 +4586,7 @@ class Game {
         this.banner('1 — НЕУДАЧА!', 'Розыск повышен, враги прибыли', '#ff5252');
         break;
       case 2:
-        this.gun.reserve = Math.min(CFG.maxReserve, this.gun.reserve + 90);
+        this.arsenal.ak.reserve = Math.min(WEAPONS.ak.reserveMax, this.arsenal.ak.reserve + 90);
         this.banner('2 — ПАТРОНЫ', '+90 патронов к АК-47', '#ffd54a');
         break;
       case 3:
@@ -3494,7 +4627,8 @@ class Game {
         tn.fuse -= dt;
         if (tn.fuse <= 0) {
           tn.gone = true;
-          this.explodeTNT(tn.x1, tn.y1);
+          if (tn.kind === 'he') this.explode(tn.x1, tn.y1, T * 1.9, 20, 'he');
+          else this.explodeTNT(tn.x1, tn.y1);
         }
       }
     }
@@ -3502,6 +4636,11 @@ class Game {
 
   explodeTNT(x, y) {
     this.explode(x, y, T * 1.6, 15, 'tnt');
+    this.blastField(x, y);
+  }
+
+  // Взрыв вскрывает клетки 3×3: мины сгорают, безопасные клетки открываются.
+  blastField(x, y) {
     if (this.mf.done) return;
     const cc = toCol(x) - MF.c0, cr = toRow(y) - MF.r0;
     if (!this.mf.inside(cc, cr)) return;
@@ -3611,6 +4750,10 @@ class Game {
 
   takeDamage(d, src) {
     if (this.state !== 'play') return;
+    if (this.starT > 0) {
+      FX.text(this, 640, 600, 'НЕУЯЗВИМ!', { color: '#ffd23f', font: `22px ${FONT.gta}` });
+      return;
+    }
     const p = this.player;
     const absorb = Math.min(d * 0.5, p.armor / 5);
     p.armor -= absorb * 5;
@@ -3649,6 +4792,7 @@ class Game {
     this.state = 'win';
     this.winT = 0;
     this.player.money += 10000;
+    this.player.earned += 10000;
     Input.lmb = false;
     Sound.win();
     this.saveBest();
@@ -3656,6 +4800,7 @@ class Game {
 
   addMoney(n, x, y, color = '#7ee05a') {
     this.player.money += n;
+    this.player.earned += n;
     if (x !== undefined) FX.text(this, x, y, `+$${n}`, { color, font: `22px ${FONT.gta}` });
     Sound.coin();
   }
@@ -3689,9 +4834,17 @@ class Game {
       Sound.staticNoise();
       this.say('Золотой Фредди растворился в помехах...', '#ffd54a');
     } else {
-      const colors = e.type === 'zombie' || e.type === 'cone' ? ['#7fa35c', '#6d4c2f', '#b9c9a5'] : ['#222', '#444', '#777'];
-      FX.burst(this, e.x, e.y, 12, { colors, size: 7, speed: 240, up: 100 });
+      const colors = {
+        zombie: ['#7fa35c', '#6d4c2f', '#b9c9a5'],
+        cone: ['#7fa35c', '#6d4c2f', '#f08a24'],
+        creeper: ['#5cb84a', '#86d672', '#0b0b0b'],
+        skibidi: ['#f2f2f2', '#9fd4ff', '#f0c49a'],
+        mega: ['#3b3f4a', '#7b4fb0', '#c0c4cf'],
+      }[e.type] || ['#222', '#444', '#777'];
+      FX.burst(this, e.x, e.y, e.type === 'mega' ? 40 : 12, { colors, size: 7, speed: 240, up: 100 });
     }
+    if (e.type === 'mega') this.banner('МЕГАРЫЦАРЬ ПОВЕРЖЕН!', `+$${e.def.bounty}`, '#b388ff');
+    if (e.type === 'creeper' && Math.random() < 0.35) this.items.push(new Loot('item', 'tnt', e.x, e.y - 30, e.y, 120));
     if ((e.type === 'zombie' || e.type === 'cone') && Math.random() < 0.3) this.items.push(new Loot('sun', null, e.x, e.y - 30, e.y, 120));
     else if (Math.random() < 0.06) this.items.push(new Loot('item', weighted(TILE_LOOT.filter(([k]) => k !== 'sun')), e.x, e.y - 30, e.y, 120));
   }
@@ -3716,7 +4869,7 @@ class Game {
     this.def[c] = null;
     FX.burst(this, colX(c), rowY(PAWN_ROW), 14, { colors: ['#fff', '#ddd', '#999'], size: 7, speed: 240, up: 120 });
     Sound.capture();
-    if (Math.random() < 0.35) this.say(`Белая ${DEF_STATS[d.type].name.toLowerCase()} потеряна. ПКМ по пустой клетке — посадить новую.`, '#e0e0e0');
+    if (Math.random() < 0.35) this.say(`Потеряна фигура «${DEF_STATS[d.type].name}». ПКМ по пустой клетке — посадить новую.`, '#e0e0e0');
   }
 
   updateDefenders(dt) {
@@ -3726,6 +4879,8 @@ class Game {
       d.pop = Math.min(1, d.pop + dt * 3);
       d.lunge = Math.max(0, d.lunge - dt * 4);
       if (d.hurt > 0) d.hurt -= dt;
+      if (d.glow > 0) d.glow -= dt;
+      if (d.shoot > 0) d.shoot = Math.max(0, d.shoot - dt * 5);
       if (d.type === 'rook') continue;
       d.cd -= dt;
       if (d.cd > 0) continue;
@@ -3756,6 +4911,18 @@ class Game {
           this.beams.push({ x1: colX(c), y1: rowY(PAWN_ROW) - 30, x2: best.x, y2: best.y, t: 0 });
           Sound.zap();
         } else d.cd = 0.15;
+      } else if (d.type === 'sunflower') {
+        d.cd = DEF_STATS.sunflower.cd;
+        d.glow = 1;
+        this.items.push(new Loot('sun', null, colX(c) + rand(-24, 24), rowY(PAWN_ROW) - 74, rowY(PAWN_ROW) - 36, 90));
+      } else if (d.type === 'peashooter') {
+        const inCol = this.enemies.some((e) => e.alive && Math.abs(e.x - colX(c)) < 34 && e.y < rowY(PAWN_ROW) - 10 && e.y > 0);
+        if (inCol) {
+          d.cd = DEF_STATS.peashooter.cd;
+          d.shoot = 1;
+          this.peas.push({ x: colX(c), y: rowY(PAWN_ROW) - 52, gone: false });
+          Sound.pea();
+        } else d.cd = 0.2;
       }
     }
   }
@@ -3778,7 +4945,7 @@ class Game {
 
   // ---------- волны врагов ----------
   updateDirector(dt) {
-    const target = clamp(1 + Math.floor(this.t / CFG.starEvery) + this.bonusStars, 1, 6);
+    const target = clamp(1 + Math.floor((this.t - this.starOffset) / CFG.starEvery) + this.bonusStars, 1, 6);
     if (target > this.stars) {
       this.stars = target;
       this.starFlash = 2.5;
@@ -3814,12 +4981,29 @@ class Game {
       Sound.plane();
       this.say('Сброс груза! Подцепи ящик удочкой (ПКМ).', '#9ccc65');
     }
+    this.qT -= dt;
+    if (this.qT <= 0) {
+      this.qT = rand(30, 45);
+      this.spawnQBlock();
+    }
+    this.duckT -= dt;
+    if (this.duckT <= 0) {
+      this.duckT = rand(35, 55);
+      this.ducks.push(new Duck());
+      this.say('Утка! Подстрели её, пока не улетела.', '#a5d6a7');
+    }
+    this.meetingT -= dt;
+    if (this.meetingT <= 0) {
+      this.meetingT = rand(130, 190);
+      if (this.enemies.filter((e) => e.alive && e.type !== 'mega').length >= 3) this.startMeeting();
+    }
   }
 
   pickEnemy() {
     const s = this.stars;
     const list = [['pawn', 5], ['zombie', 4]];
-    if (s >= 2) list.push(['cone', 3], ['knight', 2]);
+    if (s >= 2) list.push(['cone', 3], ['knight', 2], ['creeper', 1.5]);
+    if (s >= 3) list.push(['skibidi', 1.2]);
     if (s >= 3 && !this.enemies.some((e) => e.alive && e.type === 'snake')) list.push(['snake', 0.8]);
     if (s >= 4) list.push(['rook', 1.6]);
     if (s >= 5) list.push(['bishop', 1.6]);
@@ -3842,6 +5026,16 @@ class Game {
         break;
       case 'freddy':
         e = new Freddy(randi(1, COLS - 2), randi(MF.r0, MF.r0 + 1));
+        break;
+      case 'creeper':
+        e = new Creeper(c);
+        break;
+      case 'skibidi':
+        e = new Skibidi(c);
+        break;
+      case 'mega':
+        e = new MegaKnight();
+        Sound.megaLand();
         break;
       case 'snake':
         e = new Snake(Math.random() < 0.5);
@@ -3911,9 +5105,10 @@ class Game {
   }
 
   towerRage() {
-    this.banner('КОРОЛЬ В ЯРОСТИ!', 'Из башни лезут подкрепления', '#ff5252');
+    this.banner('КОРОЛЬ В ЯРОСТИ!', 'Из башни вышел Мегарыцарь!', '#ff5252');
     this.kingEmote('Ррраааа!');
     this.bonusStars++;
+    this.spawnEnemy('mega');
     for (let i = 0; i < 4; i++) this.spawnEnemy(choice(['pawn', 'zombie', 'cone', 'knight']));
     if (!this.enemies.some((e) => e.alive && e.type === 'snake')) this.spawnEnemy('snake');
   }
@@ -3981,6 +5176,184 @@ class Game {
     if (prev < 21 && h >= 21) this.say('Темнеет. В полночь просыпается кое-кто золотой...', '#b39ddb');
   }
 
+  // ---------- чит-коды GTA ----------
+  // Буквы копятся в буфер. Пока набирается чит, игровые действия этих клавиш не срабатывают.
+  handleCheatKey(code) {
+    const m = /^Key([A-Z])$/.exec(code);
+    if (!m) {
+      if (!/^Shift/.test(code)) this.typed = '';
+      return false;
+    }
+    this.typed = (this.typed + m[1]).slice(-12);
+    for (const name in CHEATS) {
+      if (this.typed.endsWith(name)) {
+        this.typed = '';
+        this.activateCheat(name);
+        return true;
+      }
+    }
+    for (const name in CHEATS) {
+      for (let k = Math.min(name.length - 1, this.typed.length); k >= 2; k--) {
+        if (this.typed.endsWith(name.slice(0, k))) return true;
+      }
+    }
+    return false;
+  }
+
+  activateCheat(name) {
+    const p = this.player;
+    this.cheated = true;
+    switch (name) {
+      case 'HESOYAM':
+        p.hp = p.maxHp;
+        p.armor = 100;
+        p.hunger = 20;
+        p.money += 250000;
+        break;
+      case 'AEZAKMI':
+        this.starOffset = this.t;
+        this.bonusStars = 0;
+        this.stars = 1;
+        break;
+      case 'FULLCLIP':
+        this.infAmmo = true;
+        this.gun.reload = 0;
+        break;
+      case 'LXGIWYL':
+        for (const k of WEAPON_ORDER) {
+          const a = this.arsenal[k];
+          a.owned = true;
+          a.mag = WEAPONS[k].mag;
+          a.reserve = WEAPONS[k].reserveMax;
+        }
+        this.grenades = Math.min(5, this.grenades + 3);
+        break;
+      case 'OSRBLHH':
+        this.bonusStars += 2;
+        break;
+      case 'SKIBIDI':
+        for (let i = 0; i < 3; i++) this.spawnEnemy('skibidi');
+        break;
+    }
+    Sound.cheat();
+    this.cheatMsg = { name, text: CHEATS[name], t: 0 };
+    this.say(`Чит ${name}: ${CHEATS[name]}. Рекорд в этой игре не засчитается.`, '#ffffff');
+  }
+
+  // ---------- Крипер ----------
+  creeperBoom(e) {
+    this.explode(e.x, e.y, T * 1.7, 14, 'creeper');
+    this.blastField(e.x, e.y);
+    for (let c = 1; c < COLS; c++) {
+      if (this.def[c] && Math.abs(colX(c) - e.x) <= T * 1.3 && Math.abs(rowY(PAWN_ROW) - e.y) <= T * 1.7) this.killDefender(c, e);
+    }
+    this.say('Крипер взорвался. Ссссс... БУМ.', '#86d672');
+    this.takeDamage(2, 'Крипер');
+  }
+
+  // ---------- Марио ----------
+  spawnQBlock() {
+    const c = randi(MF.c0, MF.c0 + MF.cols - 1), r = randi(MF.r0, MF.r0 + MF.rows - 2);
+    this.qblocks.push(new QBlock(colX(c), rowY(r) - 6));
+    Sound.bump();
+    this.say('Появился «?»-блок. Стрельни по нему!', '#ffd23f');
+  }
+
+  hitQBlock(q) {
+    q.state = 'empty';
+    q.bumpT = 0.25;
+    q.life = 1.4;
+    Sound.bump();
+    const kind = weighted([['coins', 40], ['mushroom', 25], ['star', 20], ['oneup', 12]]);
+    const x = q.x, y = q.y - 44;
+    if (kind === 'coins') {
+      for (let i = 0; i < 5; i++) this.popups.push({ kind: 'coin', x: x + (i - 2) * 16, y, t: -i * 0.08 });
+      this.addMoney(500, x, y - 40, '#ffd23f');
+      Sound.marioCoin();
+    } else if (kind === 'mushroom') {
+      this.popups.push({ kind: 'mushroom', x, y, t: 0 });
+      this.player.hp = this.player.maxHp;
+      this.player.armor = Math.min(100, this.player.armor + 25);
+      Sound.powerUp();
+      FX.text(this, x, y - 40, 'СУПЕРГРИБ! Здоровье полное', { color: '#ff8a80', font: `bold 18px ${FONT.ui}` });
+    } else if (kind === 'star') {
+      this.popups.push({ kind: 'star', x, y, t: 0 });
+      this.starT = 9;
+      Sound.starMusic(9);
+      this.banner('ЗВЕЗДА!', 'Неуязвимость и двойной урон на 9 секунд', '#ffd23f');
+    } else {
+      this.popups.push({ kind: 'oneup', x, y, t: 0 });
+      this.inv.totem++;
+      Sound.oneUp();
+      FX.text(this, x, y - 40, '1-UP! +1 тотем', { color: '#7ee03c', font: `bold 20px ${FONT.ui}` });
+    }
+  }
+
+  // ---------- Duck Hunt ----------
+  shootDuck(d) {
+    d.state = 'hit';
+    d.hitT = 0;
+    this.ducksShot++;
+    this.addMoney(500, d.x, d.y - 36, '#a5d6a7');
+    Sound.quack();
+    FX.burst(this, d.x, d.y, 10, { colors: ['#8d5a2b', '#1b6b2a', '#fff'], size: 5, speed: 160, life: 0.6 });
+  }
+
+  dogLaugh() {
+    this.dogT = 2.4;
+    Sound.dogLaugh();
+  }
+
+  // ---------- PvZ: горох ----------
+  updatePeas(dt) {
+    for (const p of this.peas) {
+      p.y -= 540 * dt;
+      for (const e of this.enemies) {
+        if (e.alive && e.hit(p.x, p.y)) {
+          e.damage(this.starT > 0 ? 2 : 1, this, 'pea');
+          p.gone = true;
+          break;
+        }
+      }
+      // горох разбивается о каменную кладку башни, не нанося урона
+      if (!p.gone && p.y < 170) p.gone = true;
+      if (p.gone) {
+        FX.burst(this, p.x, p.y, 5, { colors: ['#7ee03c', '#2e7d32'], size: 4, speed: 120, life: 0.3 });
+        Sound.splat();
+      } else if (p.y < -20) p.gone = true;
+    }
+    this.peas = this.peas.filter((p) => !p.gone);
+  }
+
+  // ---------- Among Us ----------
+  startMeeting() {
+    const alive = this.enemies.filter((e) => e.alive && e.type !== 'mega');
+    if (!alive.length || this.jumpscare) return;
+    const target = alive.reduce((a, b) => (b.hp > a.hp ? b : a));
+    const colors = ['#e53935', '#1e88e5', '#43a047', '#fdd835', '#8e24aa', '#fb8c00', '#ec407a', '#00acc1'];
+    this.meeting = { t: 0, target, name: target.def.name, color: choice(colors), ejected: false };
+    Input.lmb = false;
+    Sound.meeting();
+  }
+
+  updateMeeting(dt) {
+    const m = this.meeting;
+    m.t += dt;
+    if (!m.ejected && m.t >= 2.2) {
+      m.ejected = true;
+      Sound.eject();
+      if (m.target.alive) {
+        m.target.damage(9999, this, 'meeting');
+        m.target.remove = true;
+      }
+    }
+    if (m.t >= 5.2) {
+      this.meeting = null;
+      this.suppressFire = true;
+      this.say(`${m.name} был предателем. Голосование окончено.`, '#ff8a80');
+    }
+  }
+
   // ---------- сообщения ----------
   say(str, color = '#fff') {
     this.chat.push({ text: str, color, t: 0 });
@@ -4042,11 +5415,13 @@ function render(ctx, g) {
   g.buttons = [];
   if (g.state === 'title') drawTitle(ctx, g, now);
   else if (g.state === 'pause') drawPause(ctx, g, now);
+  else if (g.state === 'buy') drawBuy(ctx, g, now);
   else if (g.state === 'dead') drawDead(ctx, g, now);
   else if (g.state === 'win') drawWin(ctx, g, now);
+  if (g.meeting) drawMeeting(ctx, g, now);
   if (g.jumpscare) drawJumpscare(ctx, g, now);
-  if (g.state === 'play' && !g.jumpscare) drawCrosshair(ctx, g, now);
-  else if (!g.jumpscare && !Input.touch) drawPointer(ctx);
+  if (g.state === 'play' && !g.jumpscare && !g.meeting) drawCrosshair(ctx, g, now);
+  else if (!g.jumpscare && !g.meeting && !Input.touch) drawPointer(ctx);
 }
 
 // ---------- мир ----------
@@ -4066,11 +5441,25 @@ function drawWorld(ctx, g, t, now) {
 
   for (const it of g.items) if (!it.falling) it.draw(ctx);
   for (let c = 1; c < COLS; c++) if (g.def[c]) drawDefender(ctx, g.def[c], c, t);
+  for (const p of g.peas) {
+    circ(ctx, p.x, p.y, 7, '#7ee03c');
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#2e7d32';
+    ctx.stroke();
+  }
   g.pac.draw(ctx, t);
   for (const a of g.airdrops) if (a.state === 'land') a.draw(ctx);
 
   const es = g.enemies.slice().sort((a, b) => a.y - b.y);
   for (const e of es) e.draw(ctx, t);
+
+  for (const q of g.qblocks) q.draw(ctx);
+  for (const p of g.popups) {
+    if (p.t < 0) continue;
+    ctx.globalAlpha = Math.min(1, (1.2 - p.t) * 3);
+    drawMarioItem(ctx, p.kind, p.x, p.y - Math.min(p.t, 0.5) * 90, 1.2, now);
+  }
+  ctx.globalAlpha = 1;
 
   drawTowerState(ctx, g, t);
 
@@ -4081,6 +5470,7 @@ function drawWorld(ctx, g, t, now) {
   }
   for (const it of g.items) if (it.falling) it.draw(ctx);
   for (const a of g.airdrops) if (a.state === 'fall') a.draw(ctx);
+  for (const d of g.ducks) d.draw(ctx);
 
   for (const tn of g.tnts) {
     const k = tn.state === 'fly' ? tn.t : 1;
@@ -4088,7 +5478,8 @@ function drawWorld(ctx, g, t, now) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(tn.state === 'fly' ? k * 9 : 0);
-    drawTNT(ctx, 0, 0, 36);
+    if (tn.kind === 'he') drawGrenade(ctx, 0, 0, 1.3);
+    else drawTNT(ctx, 0, 0, 36);
     if (tn.state === 'fuse' && Math.floor(tn.fuse * 12) % 2 === 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.fillRect(-18, -18, 36, 36);
@@ -4202,6 +5593,8 @@ function drawTitleCast(ctx, t) {
   drawAirdrop(ctx, 190, 300 + Math.sin(t) * 10, t, false);
   drawSun(ctx, 470, 470, 22, t);
   drawDice(ctx, 260, 470, 42, 5, -0.3);
+  drawCreeper(ctx, 90, 450, t, { walking: true });
+  drawSkibidi(ctx, 1170, 250, t, { singing: true });
 }
 
 function lightAt(n, x, y, r, a) {
@@ -4272,7 +5665,7 @@ function drawHands(ctx, g, now) {
   }
 
   for (const tr of g.tracers) {
-    line(ctx, tr.x1, tr.y1, tr.x2, tr.y2, `rgba(255,230,150,${0.8 * (1 - tr.t / 0.07)})`, 2);
+    line(ctx, tr.x1, tr.y1, tr.x2, tr.y2, `rgba(255,230,150,${0.8 * (1 - tr.t / 0.07)})`, tr.w || 2);
   }
   const pose = g.gunPose();
   ctx.save();
@@ -4280,7 +5673,7 @@ function drawHands(ctx, g, now) {
   ctx.translate(pose.px, pose.py);
   ctx.rotate(pose.rot);
   ctx.scale(pose.s, pose.s);
-  drawAK(ctx, g.gun.flash);
+  drawWeapon(ctx, g.weapon, g.gun.flash);
   ctx.restore();
   if (g.gun.punch > 0) {
     const k = g.gun.punch / 0.4;
@@ -4305,6 +5698,19 @@ function drawScreenFx(ctx, g, now) {
     vignette(ctx, 'rgba(10,20,70,A)', 0.55 * k);
   }
   if (g.frostFx > 0) vignette(ctx, 'rgba(200,240,255,A)', 0.8 * g.frostFx, 200);
+  if (g.starT > 0) {
+    const hue = (now * 600) % 360;
+    const a = Math.min(1, g.starT) * 0.5;
+    const gr = ctx.createRadialGradient(W / 2, H / 2, 300, W / 2, H / 2, 760);
+    gr.addColorStop(0, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, `hsla(${hue},100%,60%,${a})`);
+    ctx.fillStyle = gr;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (g.dogT > 0) {
+    const k = g.dogT > 2 ? (2.4 - g.dogT) / 0.4 : g.dogT < 0.4 ? g.dogT / 0.4 : 1;
+    drawDog(ctx, 640, 720 - easeOutCubic(clamp(k, 0, 1)) * 150, now);
+  }
   if (g.hurtFlash > 0) vignette(ctx, 'rgba(220,0,0,A)', Math.min(0.8, g.hurtFlash * 1.6), 160);
   for (const c of g.cracks) {
     const a = Math.min(1, (2.6 - c.t) / 0.8);
@@ -4355,6 +5761,22 @@ function drawHUD(ctx, g, now) {
   drawCsAmmo(ctx, g);
   drawChat(ctx, g);
   drawBanner(ctx, g);
+  if (g.cheatMsg) {
+    const a = Math.min(1, (4 - g.cheatMsg.t) * 2);
+    ctx.globalAlpha = a;
+    rr(ctx, 10, 166, 300, 46, 4);
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fill();
+    text(ctx, 'Чит-код активирован', 22, 186, { font: `bold 15px ${FONT.ui}`, color: '#fff' });
+    text(ctx, `${g.cheatMsg.name}: ${g.cheatMsg.text}`, 22, 204, { font: `13px ${FONT.ui}`, color: '#cfd8dc' });
+    ctx.globalAlpha = 1;
+  }
+  if (g.weaponNameT > 0 && g.arsenal[g.weapon]) {
+    ctx.globalAlpha = Math.min(1, g.weaponNameT * 2);
+    text(ctx, WEAPONS[g.weapon].name, 1270, 630, { font: `30px ${FONT.gta}`, color: '#ffd54a', align: 'right', stroke: '#000', lw: 5 });
+    ctx.globalAlpha = 1;
+  }
+  if (g.starT > 0) text(ctx, `★ ЗВЕЗДА ${Math.ceil(g.starT)}`, 640, 640, { font: `bold 16px ${FONT.ui}`, color: `hsl(${(now * 600) % 360},100%,70%)`, align: 'center', stroke: '#000', lw: 4 });
   if (g.dice) {
     const d = g.dice;
     const rot = d.t < d.dur ? d.t * 14 : 0;
@@ -4368,21 +5790,8 @@ function drawHUD(ctx, g, now) {
   }
 }
 
-function drawAkIcon(ctx, x, y, s) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(s, s);
-  ctx.fillStyle = '#1d1d1d';
-  ctx.fillRect(-60, -6, 40, 5); // ствол
-  ctx.fillRect(-24, -10, 46, 12); // коробка
-  poly(ctx, [22, -10, 52, -4, 54, 10, 22, 2], '#5a2a14');
-  poly(ctx, [-6, 2, 6, 2, 10, 18, 0, 19], '#1d1d1d');
-  poly(ctx, [-20, 2, -10, 2, -14, 22, -24, 20], '#7a3a16');
-  ctx.restore();
-}
-
 function drawGtaHud(ctx, g, now) {
-  const p = g.player, gun = g.gun;
+  const p = g.player;
   rr(ctx, 10, 10, 76, 76, 12);
   const wg = ctx.createRadialGradient(48, 44, 5, 48, 48, 50);
   wg.addColorStop(0, '#ffffff');
@@ -4392,10 +5801,11 @@ function drawGtaHud(ctx, g, now) {
   ctx.lineWidth = 3;
   ctx.strokeStyle = '#111';
   ctx.stroke();
-  if (gun.mag + gun.reserve === 0) drawFist(ctx, 48, 46, 1.2, '#1a1a1a');
+  const a = g.cur;
+  if (a.mag + a.reserve === 0 && !g.infAmmo) drawFist(ctx, 48, 46, 1.2, '#1a1a1a');
   else {
-    drawAkIcon(ctx, 50, 40, 0.62);
-    text(ctx, `${gun.mag}-${gun.reserve}`, 48, 78, { font: `bold 12px ${FONT.ui}`, color: '#111', align: 'center' });
+    drawWeaponIcon(ctx, g.weapon, 48, 42);
+    text(ctx, g.infAmmo ? '∞' : `${a.mag}-${a.reserve}`, 48, 78, { font: `bold 12px ${FONT.ui}`, color: '#111', align: 'center' });
   }
   const hh = Math.floor(g.hours), mm = Math.floor(g.clock % 60);
   text(ctx, `${pad(hh, 2)}:${pad(mm, 2)}`, 98, 40, { font: `32px ${FONT.gta}`, color: '#e8e8e8', stroke: '#000', lw: 6 });
@@ -4444,10 +5854,19 @@ function drawPvzBank(ctx, g, now) {
     ctx.lineWidth = sel ? 4 : 2;
     ctx.strokeStyle = sel ? '#ffeb3b' : '#7a6230';
     ctx.stroke();
-    rr(ctx, r.x + 5, r.y + 5, r.w - 10, 42, 4);
+    rr(ctx, r.x + 4, r.y + 4, r.w - 8, 44, 4);
     ctx.fillStyle = '#9ccc65';
     ctx.fill();
-    drawPiece(ctx, st.piece, true, r.x + r.w / 2, r.y + 26, 38, { shadow: false });
+    if (st.plant) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(r.x + 4, r.y + 4, r.w - 8, 44);
+      ctx.clip();
+      ctx.translate(r.x + r.w / 2, r.y + 30);
+      ctx.scale(0.55, 0.55);
+      drawPlant(ctx, type, 0, 0, now);
+      ctx.restore();
+    } else drawPiece(ctx, st.piece, true, r.x + r.w / 2, r.y + 27, 34, { shadow: false });
     text(ctx, String(st.cost), r.x + r.w / 2, r.y + r.h - 6, { font: `bold 15px ${FONT.ui}`, color: '#111', align: 'center' });
     if (g.sun < st.cost) {
       rr(ctx, r.x, r.y, r.w, r.h, 6);
@@ -4572,15 +5991,17 @@ function drawPubgBars(ctx, g) {
 }
 
 function drawCsAmmo(ctx, g) {
-  const gun = g.gun;
-  const col = gun.mag <= 5 ? 'rgba(255,80,60,0.95)' : 'rgba(255,184,40,0.95)';
-  text(ctx, String(gun.mag), 1194, 708, { font: `42px ${FONT.gta}`, color: col, align: 'right', stroke: 'rgba(0,0,0,0.65)', lw: 5 });
-  text(ctx, `| ${gun.reserve}`, 1270, 708, { font: `26px ${FONT.gta}`, color: col, align: 'right', stroke: 'rgba(0,0,0,0.65)', lw: 5 });
+  const gun = g.gun, a = g.cur;
+  const col = a.mag <= Math.ceil(g.wdef.mag / 6) && !g.infAmmo ? 'rgba(255,80,60,0.95)' : 'rgba(255,184,40,0.95)';
+  text(ctx, g.infAmmo ? '∞' : String(a.mag), 1194, 708, { font: `42px ${FONT.gta}`, color: col, align: 'right', stroke: 'rgba(0,0,0,0.65)', lw: 5 });
+  text(ctx, g.infAmmo ? '| ∞' : `| ${a.reserve}`, 1270, 708, { font: `26px ${FONT.gta}`, color: col, align: 'right', stroke: 'rgba(0,0,0,0.65)', lw: 5 });
   ctx.fillStyle = col;
   rr(ctx, 1124, 678, 8, 26, 3);
   ctx.fill();
+  drawGrenade(ctx, 1076, 694, 1);
+  text(ctx, `×${g.grenades}`, 1090, 704, { font: `bold 16px ${FONT.ui}`, color: g.grenades ? '#fff' : '#888', stroke: '#000', lw: 3 });
   if (gun.reload > 0) text(ctx, 'ПЕРЕЗАРЯДКА', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: '#ffd54a', align: 'right', stroke: '#000', lw: 4 });
-  else if (gun.mag === 0 && gun.reserve === 0) text(ctx, 'НЕТ ПАТРОНОВ', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: '#ff5252', align: 'right', stroke: '#000', lw: 4 });
+  else if (a.mag === 0 && a.reserve === 0 && !g.infAmmo) text(ctx, 'НЕТ ПАТРОНОВ — B', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: '#ff5252', align: 'right', stroke: '#000', lw: 4 });
 }
 
 function drawChat(ctx, g) {
@@ -4617,12 +6038,48 @@ function drawBanner(ctx, g) {
 function drawCrosshair(ctx, g) {
   const gun = g.gun;
   const x = Input.x, y = Input.y;
+  if (g.weapon === 'awp') {
+    ctx.beginPath();
+    ctx.arc(x, y, 30, 0, TAU);
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    line(ctx, x - 44, y, x - 6, y, '#000', 2);
+    line(ctx, x + 6, y, x + 44, y, '#000', 2);
+    line(ctx, x, y - 44, x, y - 6, '#000', 2);
+    line(ctx, x, y + 6, x, y + 44, '#000', 2);
+    circ(ctx, x, y, 2.5, '#ff1744');
+  } else if (g.weapon === 'nova') {
+    ctx.beginPath();
+    ctx.arc(x, y, WEAPONS.nova.spread, 0, TAU);
+    ctx.strokeStyle = 'rgba(57,255,20,0.55)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    circ(ctx, x, y, 3, '#39ff14');
+  }
+  if (g.weapon !== 'ak') {
+    if (gun.reload > 0) {
+      const p = 1 - gun.reload / g.wdef.reload;
+      ctx.beginPath();
+      ctx.arc(x, y, 24, -Math.PI / 2, -Math.PI / 2 + p * TAU);
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    } else if (gun.cd > 0) {
+      ctx.beginPath();
+      ctx.arc(x, y, 36, -Math.PI / 2, -Math.PI / 2 + (1 - gun.cd / g.wdef.interval) * TAU);
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    return;
+  }
   const gap = 5 + gun.heat * 22, len = 9;
   const segs = [[x - gap - len, y, x - gap, y], [x + gap, y, x + gap + len, y], [x, y - gap - len, x, y - gap], [x, y + gap, x, y + gap + len]];
   for (const s of segs) line(ctx, s[0], s[1], s[2], s[3], 'rgba(0,0,0,0.7)', 4);
   for (const s of segs) line(ctx, s[0], s[1], s[2], s[3], '#39ff14', 2);
   if (gun.reload > 0) {
-    const p = 1 - gun.reload / CFG.reloadTime;
+    const p = 1 - gun.reload / g.wdef.reload;
     ctx.beginPath();
     ctx.arc(x, y, 24, -Math.PI / 2, -Math.PI / 2 + p * TAU);
     ctx.strokeStyle = 'rgba(255,255,255,0.85)';
@@ -4670,29 +6127,32 @@ function toggleFullscreen() {
 }
 
 const CONTROLS = [
-  ['ЛКМ', 'стрелять из АК-47'],
+  ['ЛКМ', 'стрелять'],
   ['ПКМ', 'удочка: открыть клетку, подобрать, посадить'],
   ['F / Пробел', 'поставить или снять флажок'],
   ['R', 'перезарядка'],
+  ['Колесо / X', 'сменить оружие'],
+  ['B', 'меню закупки CS'],
+  ['G', 'бросить HE-гранату'],
   ['1–9, E', 'предметы хотбара'],
-  ['Q', 'выбрать фигуру для посадки'],
+  ['Q', 'выбрать растение или фигуру для посадки'],
   ['Shift', 'замедление времени (буст)'],
   ['Esc', 'пауза,  M — звук'],
 ];
 
 function drawControls(ctx, x, y) {
   CONTROLS.forEach(([k, v], i) => {
-    const yy = y + i * 27;
-    ctx.font = `bold 15px ${FONT.ui}`;
-    const w = ctx.measureText(k).width + 16;
-    rr(ctx, x, yy - 17, w, 23, 5);
+    const yy = y + i * 22;
+    ctx.font = `bold 14px ${FONT.ui}`;
+    const w = ctx.measureText(k).width + 14;
+    rr(ctx, x, yy - 15, w, 20, 5);
     ctx.fillStyle = '#e8e8e8';
     ctx.fill();
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#555';
     ctx.stroke();
-    text(ctx, k, x + 8, yy, { font: `bold 15px ${FONT.ui}`, color: '#111' });
-    text(ctx, v, x + w + 10, yy, { font: `15px ${FONT.ui}`, color: '#eef3e6' });
+    text(ctx, k, x + 7, yy, { font: `bold 14px ${FONT.ui}`, color: '#111' });
+    text(ctx, v, x + w + 9, yy, { font: `14px ${FONT.ui}`, color: '#eef3e6' });
   });
 }
 
@@ -4709,7 +6169,7 @@ function drawTitle(ctx, g, now) {
   text(ctx, 'ХАОС-ДОСКА', 6, 8, { font: `104px ${FONT.title}`, color: '#7a1010', align: 'center' });
   text(ctx, 'ХАОС-ДОСКА', 0, 0, { font: `104px ${FONT.title}`, color: tg, stroke: '#1a0b00', lw: 14, align: 'center' });
   ctx.restore();
-  text(ctx, 'шахматы × сапёр × CS × Minecraft × GTA × PvZ × FNAF × Clash Royale × Pac-Man × PUBG × змейка', 640, 198, { font: `bold 16px ${FONT.ui}`, color: '#d7e8c4', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 4 });
+  text(ctx, 'шахматы × сапёр × CS × Minecraft × GTA × PvZ × FNAF × Clash Royale × Pac-Man × PUBG × змейка × Mario × Duck Hunt × Among Us × скибиди', 640, 198, { font: `bold 15px ${FONT.ui}`, color: '#d7e8c4', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 4 });
   mcButton(ctx, g, 'ИГРАТЬ', 640 - 150, 226, 300, 56, () => g.start(), { size: 22 });
 
   rr(ctx, 210, 306, 860, 296, 14);
@@ -4730,8 +6190,10 @@ function drawTitle(ctx, g, now) {
     'Не пускай врагов к белым фигурам.',
     'Сбивай ядра короля, пока не прилетели.',
     'В полночь приходит Золотой Фредди...',
+    'Деньги тратятся в меню закупки (B).',
+    'Говорят, тут работают читы из GTA SA...',
   ];
-  goals.forEach((s, i) => text(ctx, s, 690, 370 + i * 27, { font: `15px ${FONT.ui}`, color: '#eef3e6' }));
+  goals.forEach((s, i) => text(ctx, s, 690, 370 + i * 22, { font: `14px ${FONT.ui}`, color: '#eef3e6' }));
 
   text(ctx, `Рекорд: $${pad(g.best, 8)}`, 640, 636, { font: `30px ${FONT.gta}`, color: '#3fbf4a', stroke: '#000', lw: 6, align: 'center' });
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', 1020, 662, 240, 40, toggleFullscreen, { size: 11 });
@@ -4743,29 +6205,30 @@ function drawTitle(ctx, g, now) {
 function drawPause(ctx, g) {
   ctx.fillStyle = 'rgba(0,0,0,0.62)';
   ctx.fillRect(0, 0, W, H);
-  text(ctx, 'ПАУЗА', 640, 140, { font: `72px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 10, align: 'center' });
+  text(ctx, 'ПАУЗА', 640, 118, { font: `64px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 10, align: 'center' });
   const bx = 640 - 160;
-  mcButton(ctx, g, 'ПРОДОЛЖИТЬ', bx, 190, 320, 46, () => g.resume());
-  mcButton(ctx, g, 'НАЧАТЬ ЗАНОВО', bx, 248, 320, 46, () => g.start());
-  mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', bx, 306, 320, 46, () => Sound.toggleMute());
-  mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', bx, 364, 320, 46, toggleFullscreen);
-  mcButton(ctx, g, 'В ГЛАВНОЕ МЕНЮ', bx, 422, 320, 46, () => g.toTitle());
-  rr(ctx, 380, 486, 520, 226, 12);
+  mcButton(ctx, g, 'ПРОДОЛЖИТЬ', bx, 150, 320, 42, () => g.resume());
+  mcButton(ctx, g, 'НАЧАТЬ ЗАНОВО', bx, 200, 320, 42, () => g.start());
+  mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', bx, 250, 320, 42, () => Sound.toggleMute());
+  mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', bx, 300, 320, 42, toggleFullscreen);
+  mcButton(ctx, g, 'В ГЛАВНОЕ МЕНЮ', bx, 350, 320, 42, () => g.toTitle());
+  rr(ctx, 380, 410, 520, 282, 12);
   ctx.fillStyle = 'rgba(10,16,8,0.8)';
   ctx.fill();
-  drawControls(ctx, 404, 516);
+  drawControls(ctx, 404, 440);
+  text(ctx, 'Псс... попробуй набрать HESOYAM', 640, 684, { font: `13px ${FONT.ui}`, color: 'rgba(255,255,255,0.45)', align: 'center' });
 }
 
 function statsLines(g) {
   const p = g.player;
   const mins = Math.floor(g.t / 60), secs = Math.floor(g.t % 60);
   return [
-    ['Деньги', `$${p.money}`],
+    ['Заработано', `$${p.earned}`],
     ['Врагов повержено', String(g.kills)],
     ['Клеток открыто', String(g.tilesOpened)],
     ['Полей сапёра пройдено', String(g.fieldsCleared)],
     ['Уровень', String(p.level)],
-    ['Время', `${mins}:${pad(secs, 2)}`],
+    ['Утки / Время', `${g.ducksShot} / ${mins}:${pad(secs, 2)}`],
   ];
 }
 
@@ -4777,7 +6240,8 @@ function drawStats(ctx, g, y) {
     text(ctx, k, 464, y + 32 + i * 27, { font: `16px ${FONT.ui}`, color: '#ddd' });
     text(ctx, v, 816, y + 32 + i * 27, { font: `bold 17px ${FONT.ui}`, color: '#fff', align: 'right' });
   });
-  if (g.newRecord) text(ctx, 'НОВЫЙ РЕКОРД!', 640, y + 222, { font: `24px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 6, align: 'center' });
+  if (g.cheated) text(ctx, 'ЧИТЕР! Рекорд не засчитан', 640, y + 222, { font: `22px ${FONT.title}`, color: '#ff8a80', stroke: '#000', lw: 6, align: 'center' });
+  else if (g.newRecord) text(ctx, 'НОВЫЙ РЕКОРД!', 640, y + 222, { font: `24px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 6, align: 'center' });
 }
 
 function drawDead(ctx, g) {
@@ -4805,8 +6269,8 @@ function drawDead(ctx, g) {
   if (g.deadT > 1.5) {
     text(ctx, `Причина: ${g.deathCause}`, 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#ffcdd2', stroke: '#000', lw: 4, align: 'center' });
     drawStats(ctx, g, 318);
-    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord ? 20 : 0), 240, 46, () => g.start());
-    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord ? 20 : 0), 240, 46, () => g.toTitle());
+    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.start());
+    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
   }
 }
 
@@ -4825,10 +6289,10 @@ function drawWin(ctx, g, now) {
   }
   ctx.globalAlpha = 1;
   if (g.winT > 1.5) {
-    text(ctx, 'Башня короля разрушена. +$10000', 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#c8f7a0', stroke: '#000', lw: 4, align: 'center' });
+    text(ctx, 'Башня короля разрушена. +$10000 · #1 VICTORY ROYALE', 640, 300, { font: `bold 18px ${FONT.ui}`, color: '#c8f7a0', stroke: '#000', lw: 4, align: 'center' });
     drawStats(ctx, g, 318);
-    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord ? 20 : 0), 240, 46, () => g.start());
-    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord ? 20 : 0), 240, 46, () => g.toTitle());
+    mcButton(ctx, g, 'ЕЩЁ РАЗ', 640 - 250, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.start());
+    mcButton(ctx, g, 'В МЕНЮ', 640 + 10, 560 + (g.newRecord || g.cheated ? 20 : 0), 240, 46, () => g.toTitle());
   }
 }
 
@@ -4852,6 +6316,88 @@ function drawJumpscare(ctx, g, now) {
     ctx.fillRect(0, rand(0, H), W, rand(1, 3));
   }
   ctx.globalAlpha = 1;
+}
+
+// ---------- меню закупки в стиле CS 1.6 ----------
+function drawBuyIcon(ctx, key, x, y) {
+  if (key === 'awp' || key === 'nova') drawWeaponIcon(ctx, key, x, y);
+  else if (key === 'he') drawGrenade(ctx, x, y, 1.3);
+  else if (key === 'kevlar') drawVest(ctx, x, y, 34);
+  else if (key === 'ammo') drawAmmoBox(ctx, x, y, 36);
+  else if (key === 'detector') {
+    drawMine(ctx, x - 6, y + 4, 9);
+    drawFlag(ctx, x + 8, y - 2, 0.9);
+  }
+}
+
+function drawBuy(ctx, g) {
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(0, 0, W, H);
+  rr(ctx, 40, 90, 580, 566, 8);
+  ctx.fillStyle = 'rgba(22,20,10,0.9)';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255,176,32,0.6)';
+  ctx.stroke();
+  text(ctx, 'МЕНЮ ЗАКУПКИ', 70, 136, { font: `30px ${FONT.gta}`, color: '#ffb020' });
+  text(ctx, `$${g.player.money}`, 590, 136, { font: `28px ${FONT.gta}`, color: '#7ee05a', align: 'right' });
+  BUY_ITEMS.forEach((it, i) => {
+    const r = buyRect(i);
+    const hov = inRect(Input.x, Input.y, r);
+    const owned = (it.key === 'awp' || it.key === 'nova') && g.arsenal[it.key].owned;
+    const can = g.player.money >= it.price && !owned;
+    rr(ctx, r.x, r.y, r.w, r.h, 5);
+    ctx.fillStyle = hov ? 'rgba(255,176,32,0.22)' : 'rgba(255,255,255,0.05)';
+    ctx.fill();
+    drawBuyIcon(ctx, it.key, r.x + 44, r.y + r.h / 2);
+    text(ctx, `${i + 1}. ${it.name}`, r.x + 92, r.y + 24, { font: `bold 19px ${FONT.ui}`, color: can ? '#ffb020' : '#7a6a4a' });
+    text(ctx, it.desc, r.x + 92, r.y + 44, { font: `14px ${FONT.ui}`, color: can ? '#d9cfae' : '#7d7562' });
+    text(ctx, owned ? 'есть' : `$${it.price}`, r.x + r.w - 14, r.y + 36, { font: `24px ${FONT.gta}`, color: can ? '#ffd54a' : '#8a6a3a', align: 'right' });
+    g.buttons.push({ x: r.x, y: r.y, w: r.w, h: r.h, action: () => g.buy(i) });
+  });
+  if (g.buyMsg) text(ctx, g.buyMsg.text, 330, 562, { font: `bold 17px ${FONT.ui}`, color: g.buyMsg.bad ? '#ff8a80' : '#a5f07a', align: 'center' });
+  mcButton(ctx, g, 'ЗАКРЫТЬ (B)', 240, 584, 180, 36, () => g.closeBuy(), { size: 11 });
+  text(ctx, '1–6 или клик — купить. Пока меню открыто, игра на паузе.', 330, 642, { font: `13px ${FONT.ui}`, color: '#a8a08a', align: 'center' });
+}
+
+// ---------- экстренное собрание (Among Us) ----------
+function drawMeeting(ctx, g, now) {
+  const m = g.meeting;
+  if (m.t < 2.2) {
+    const k = Math.min(1, m.t * 4);
+    ctx.fillStyle = `rgba(70,0,0,${0.8 * k})`;
+    ctx.fillRect(0, 0, W, H);
+    ['#e53935', '#1e88e5', '#43a047', '#fdd835', '#f5f5f5'].forEach((c, i) => {
+      drawCrewmate(ctx, 340 + i * 150, 480 + Math.sin(now * 4 + i) * 5, 1.3, c);
+    });
+    const sc = 1 + Math.max(0, 0.3 - m.t) * 2;
+    ctx.save();
+    ctx.translate(640, 230);
+    ctx.scale(sc, sc);
+    text(ctx, 'ЭКСТРЕННОЕ', 0, -40, { font: `78px ${FONT.title}`, color: '#ff1744', stroke: '#fff', lw: 10, align: 'center' });
+    text(ctx, 'СОБРАНИЕ', 0, 46, { font: `78px ${FONT.title}`, color: '#ff1744', stroke: '#fff', lw: 10, align: 'center' });
+    ctx.restore();
+    text(ctx, 'Среди врагов кто-то очень подозрительный...', 640, 352, { font: `bold 22px ${FONT.ui}`, color: '#fff', stroke: '#000', lw: 5, align: 'center' });
+    return;
+  }
+  ctx.fillStyle = '#05050f';
+  ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 140; i++) {
+    const sx = (((i * 137.5) % W) - (m.t - 2.2) * (20 + (i % 5) * 15) + W) % W;
+    const sy = (i * 71.3) % H;
+    ctx.fillStyle = `rgba(255,255,255,${0.3 + (i % 4) * 0.18})`;
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+  const k = (m.t - 2.2) / 3;
+  ctx.save();
+  ctx.translate(lerp(-90, W + 90, k), 320 + Math.sin(k * 6) * 30);
+  ctx.rotate(k * 12);
+  drawCrewmate(ctx, 0, 0, 1.2, m.color);
+  ctx.restore();
+  const full = `${m.name} был предателем.`;
+  const n = Math.floor(clamp((m.t - 2.6) * 22, 0, full.length));
+  text(ctx, full.slice(0, n), 640, 470, { font: `bold 34px ${FONT.ui}`, color: '#fff', align: 'center' });
+  if (m.t > 4) text(ctx, 'Осталось предателей: 0', 640, 515, { font: `22px ${FONT.ui}`, color: '#bdbdbd', align: 'center' });
 }
 
 // ---- js/main.js ----
