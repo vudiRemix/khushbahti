@@ -119,7 +119,7 @@ const W = 1280, H = 720, T = 80, COLS = 16, ROWS = 9;
 const TAU = Math.PI * 2;
 
 // Номер выпуска: виден в главном меню. Меняй вместе с CACHE в sw.js.
-const GAME_VERSION = 14;
+const GAME_VERSION = 15;
 
 // Поле сапёра: столбцы 2..13, строки 2..6.
 const MF = { c0: 2, r0: 2, cols: 12, rows: 5 };
@@ -15055,12 +15055,13 @@ function drawTitle(ctx, g, now) {
   text(ctx, TITLE_SPLASH, 0, 0, { font: `bold 26px ${FONT.ui}`, color: '#ffff3c', stroke: '#3a3a00', lw: 5, align: 'center' });
   ctx.restore();
   text(ctx, 'шахматы × сапёр × CS × Minecraft × GTA × PvZ × FNAF × Clash Royale × Pac-Man × PUBG × змейка × Mario × Duck Hunt × Among Us × скибиди', 640, 198, { font: `bold 15px ${FONT.ui}`, color: '#d7e8c4', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 4 });
-  // «ИГРАТЬ» — посередине
-  mcButton(ctx, g, 'УРОВНИ', 205, 226, 150, 56, () => (g.state = 'levels'), { size: 12 });
-  mcButton(ctx, g, 'ДУЭЛЬ', 365, 226, 150, 56, () => Duel.open(g), { size: 14, fill: '#8a4a3a' });
+  // «ИГРАТЬ» — посередине, мультиплеер — сразу справа, как раньше
+  mcButton(ctx, g, 'УРОВНИ', 215, 226, 150, 56, () => (g.state = 'levels'), { size: 12 });
+  mcButton(ctx, g, 'ДУРАК', 375, 226, 140, 56, () => Durak.start(g, 'bot'), { size: 14, fill: '#2e7d32' });
   mcButton(ctx, g, 'ИГРАТЬ', 525, 226, 230, 56, () => g.start(), { size: 22 });
-  mcButton(ctx, g, 'ДУРАК', 765, 226, 140, 56, () => Durak.start(g, 'bot'), { size: 14, fill: '#2e7d32' });
-  mcButton(ctx, g, `ДОСТИЖЕНИЯ ${Ach.got.size}/${ACHIEVEMENTS.length}`, 915, 226, 170, 56, () => (g.state = 'achievements'), { size: 8 });
+  mcButton(ctx, g, 'МУЛЬТИПЛЕЕР', 765, 226, 190, 56, () => Duel.open(g), { size: 12, fill: '#8a4a3a' });
+  text(ctx, 'с другом по сети', 860, 298, { font: `bold 13px ${FONT.ui}`, color: '#ffccbc', align: 'center', stroke: 'rgba(0,0,0,0.6)', lw: 3 });
+  mcButton(ctx, g, `ДОСТИЖЕНИЯ ${Ach.got.size}/${ACHIEVEMENTS.length}`, 965, 226, 150, 56, () => (g.state = 'achievements'), { size: 7 });
   mcButton(ctx, g, `НИК: ${Duel.name}`, 20, 16, 250, 44, () => Top.editNick(), { size: 9, fill: '#8a4a3a' });
   mcButton(ctx, g, 'ЗАЛ СЛАВЫ', 1030, 16, 230, 44, () => Top.open(g), { size: 12, fill: '#c2185b' });
 
@@ -15579,8 +15580,8 @@ function drawDuelLobby(ctx, g, now) {
   text(ctx, Net.kind === 'room' ? 'claude.ai' : Net.server || '—', 900, 556, { font: `bold 17px ${FONT.ui}`, color: '#fff' });
   if (ph === 'lobby' && Net.canSwitch()) mcButton(ctx, g, 'СМЕНИТЬ', 900, 568, 170, 34, () => Duel.switchServer(g), { size: 10 });
   const how = Net.kind === 'room'
-    ? 'Друг открывает эту же игру по ссылке claude.ai (поделись ей через «Поделиться») и жмёт «Дуэль».'
-    : 'Друг открывает эту же игру на сайте и жмёт «Дуэль». Не видите дуэли друг друга — выберите одинаковый сервер. Сервер публичный: не пиши в ник ничего личного.';
+    ? 'Друг открывает эту же игру по ссылке claude.ai (поделись ей через «Поделиться») и жмёт «МУЛЬТИПЛЕЕР».'
+    : 'Друг открывает эту же игру на сайте и жмёт «МУЛЬТИПЛЕЕР». Не видите дуэли друг друга — выберите одинаковый сервер. Сервер публичный: не пиши в ник ничего личного.';
   wrapText(ctx, how, 640, 640, 1080, 20, { font: `14px ${FONT.ui}`, color: '#90a4ae', align: 'center' });
   mcButton(ctx, g, 'НАЗАД', 1030, 664, 160, 40, () => Duel.close(g), { size: 11 });
 
