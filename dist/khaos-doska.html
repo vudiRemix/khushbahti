@@ -2,22 +2,68 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Хаос-Доска</title>
+<meta name="theme-color" content="#0d1208">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Хаос-Доска">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Press+Start+2P&family=Russo+One&display=swap">
 <style>
   /* Единый «игровой» вид: тёмная рамка вокруг доски, без светлой темы. */
-  :root { color-scheme: dark; --bg: #0d1208; --fg: #eef3e6; }
+  :root { color-scheme: dark; --bg: #0d1208; --fg: #eef3e6; --side: 72px; }
   html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--fg); }
+  body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
   #wrap { position: fixed; inset: 0; display: grid; place-items: center; }
   #game { display: block; cursor: none; touch-action: none; user-select: none; -webkit-user-select: none; outline: none; }
   noscript { font: 16px system-ui, sans-serif; padding: 16px; display: block; }
+
+  /* Сенсорные кнопки по краям — только на телефонах и планшетах */
+  .tbar { display: none; position: fixed; top: 0; bottom: 0; width: var(--side); z-index: 5;
+    flex-direction: column; justify-content: center; align-items: center; gap: 6px;
+    padding-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px); touch-action: none; }
+  #touch-left { left: env(safe-area-inset-left, 0px); }
+  #touch-right { right: env(safe-area-inset-right, 0px); }
+  body.touch.ui-play .tbar { display: flex; }
+  .tbar button { --sz: min(calc(var(--side) - 10px), calc((100dvh - 64px) / 5.3), 68px);
+    width: var(--sz); height: var(--sz); border-radius: 50%; padding: 0;
+    border: 2px solid rgba(255, 255, 255, 0.35); background: rgba(20, 28, 16, 0.78); color: #fff;
+    font-size: calc(var(--sz) * 0.38); line-height: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  .tbar button small { font: 600 calc(var(--sz) * 0.15)/1.1 system-ui, sans-serif; margin-top: 2px; opacity: 0.9; }
+  .tbar button.on { background: rgba(126, 224, 60, 0.9); color: #102006; border-color: #fff; }
+  .tbar button.held { transform: scale(0.93); background: rgba(255, 213, 74, 0.85); color: #201800; }
+  .tbar button:focus-visible { outline: 3px solid #ffd54a; outline-offset: 2px; }
+
+  #rotate { display: none; position: fixed; inset: 0; z-index: 10; background: var(--bg); color: var(--fg);
+    flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center;
+    font: 600 18px/1.4 system-ui, sans-serif; padding: 16px; }
+  #rotate .phone { font-size: 64px; animation: turn 1.6s ease-in-out infinite; }
+  @keyframes turn { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+  @media (prefers-reduced-motion: reduce) { #rotate .phone { animation: none; } }
+  @media (orientation: portrait) { body.touch #rotate { display: flex; } }
 </style>
 </head>
 <body>
 <div id="wrap"><canvas id="game" width="1280" height="720" aria-label="Игра Хаос-Доска"></canvas></div>
+<div id="touch-left" class="tbar">
+  <button type="button" data-act="pause" aria-label="Пауза">⏸<small>пауза</small></button>
+  <button type="button" data-act="buy" aria-label="Меню закупки">🛒<small>закупка</small></button>
+  <button type="button" data-act="grenade" aria-label="Граната">💣<small>граната</small></button>
+  <button type="button" data-hold="slow" aria-label="Замедление времени">⏳<small>замедл.</small></button>
+  <button type="button" data-act="weapon" aria-label="Сменить оружие">🔁<small>оружие</small></button>
+</div>
+<div id="touch-right" class="tbar">
+  <button type="button" data-mode="shoot" class="on" aria-label="Режим стрельбы">🔫<small>огонь</small></button>
+  <button type="button" data-mode="rod" aria-label="Режим удочки">🎣<small>удочка</small></button>
+  <button type="button" data-mode="flag" aria-label="Режим флажков">🚩<small>флажок</small></button>
+  <button type="button" data-act="reload" aria-label="Перезарядка">🔄<small>перезар.</small></button>
+  <button type="button" data-act="fullscreen" aria-label="На весь экран">⛶<small>экран</small></button>
+</div>
+<div id="rotate"><div class="phone">📱</div>Поверни телефон горизонтально<br>— так играть удобнее</div>
 <noscript>Для игры нужен включённый JavaScript.</noscript>
 <script>
 // ---- js/core.js ----
@@ -120,6 +166,7 @@ const Input = {
   keys: new Set(),
   queue: [],
   touch: false,
+  mode: 'shoot', // режим касания на телефоне: shoot | rod | flag
 };
 
 // Параметры вывода (заполняются в main.js при изменении размера окна).
@@ -3729,7 +3776,8 @@ class Enderman extends Zombie {
   update(dt, g) {
     if (this.dead || this.frozen > 0) return super.update(dt, g);
     if (this.tpCd > 0) this.tpCd -= dt;
-    if (g.state === 'play' && this.hit(Input.x, Input.y)) this.lookT += dt;
+    // на телефоне «взгляд» считается, только пока палец на экране
+    if (g.state === 'play' && (!Input.touch || Input.lmb) && this.hit(Input.x, Input.y)) this.lookT += dt;
     else this.lookT = Math.max(0, this.lookT - dt);
     if (this.lookT >= 0.45 && this.tpCd <= 0) {
       FX.burst(g, this.x, this.y - 30, 16, { colors: ['#e040fb', '#7b1fa2', '#111'], size: 5, speed: 180, grav: 0, life: 0.6 });
@@ -4748,16 +4796,17 @@ Ach.load();
 
 const HOTBAR = ['steak', 'gapple', 'potion', 'tnt', 'dice', 'ammo', 'ice', 'pellet', 'totem'];
 
+// [время, подсказка для ПК, подсказка для телефона]
 const HINTS = [
-  [1.5, 'ЛКМ — стрелять из АК-47, R — перезарядка.'],
-  [6, 'ПКМ — закинуть удочку: открыть клетку сапёра или подобрать предмет.'],
-  [11, 'F или Пробел — флажок. Враг, наступивший на флажок с миной, взрывается!'],
-  [17, 'Открой все безопасные клетки — оставшиеся мины полетят в башню короля.'],
-  [24, 'Лови солнце удочкой. ПКМ по пустой клетке в ряду белых — посадить фигуру (Q — выбор).'],
-  [31, 'Цифры 1–9 — предметы из хотбара. Shift — замедление времени.'],
-  [40, 'B — меню закупки как в CS: AWP, дробовик, гранаты, кевлар.'],
-  [48, 'Колесо мыши или X — смена оружия, G — бросить HE-гранату.'],
-  [56, 'Стреляй по «?»-блокам и уткам — внутри награды!'],
+  [1.5, 'ЛКМ — стрелять из АК-47, R — перезарядка.', 'Касайся доски — стреляешь. Держи палец — очередь.'],
+  [6, 'ПКМ — закинуть удочку: открыть клетку сапёра или подобрать предмет.', 'Кнопка 🎣 — режим удочки: открывай клетки сапёра и подбирай предметы.'],
+  [11, 'F или Пробел — флажок. Враг, наступивший на флажок с миной, взрывается!', 'Кнопка 🚩 — флажки. Враг, наступивший на флажок с миной, взрывается!'],
+  [17, 'Открой все безопасные клетки — оставшиеся мины полетят в башню короля.', 'Открой все безопасные клетки — оставшиеся мины полетят в босса.'],
+  [24, 'Лови солнце удочкой. ПКМ по пустой клетке в ряду белых — посадить фигуру (Q — выбор).', 'Лови солнце удочкой. Удочкой по пустой клетке у белых — посадить (карточки справа вверху).'],
+  [31, 'Цифры 1–9 — предметы из хотбара. Shift — замедление времени.', 'Касайся предметов в хотбаре внизу. Держи ⏳ — замедление времени.'],
+  [40, 'B — меню закупки как в CS: AWP, дробовик, гранаты, кевлар.', 'Кнопка 🛒 — закупка как в CS: AWP, дробовик, гранаты, кевлар.'],
+  [48, 'Колесо мыши или X — смена оружия, G — бросить HE-гранату.', '🔁 — смена оружия, 💣 — граната (потом коснись цели).'],
+  [56, 'Стреляй по «?»-блокам и уткам — внутри награды!', 'Стреляй по «?»-блокам и уткам — внутри награды!'],
 ];
 
 // Чит-коды из GTA San Andreas (и один местный).
@@ -4856,6 +4905,7 @@ class Game {
     this.starOffset = 0;
     this.bloodMoon = false;
     this.fieldBlasts = 0;
+    this.pendingThrow = null;
     this.rod = { state: 'idle', t: 0, tx: 0, ty: 0, cd: 0, carry: null };
     this.slotFlash = new Array(9).fill(0);
     this.sun = CFG.startSun;
@@ -4993,7 +5043,7 @@ class Game {
       if (this.introT > 7) this.beginLevel();
       return;
     }
-    if (this.state === 'pause' || this.state === 'buy') return;
+    if (this.state === 'pause' || this.state === 'buy' || this.state === 'cheats') return;
     if (this.state === 'dead') {
       this.deadT += realDt;
       this.updateFx(realDt * 0.3, realDt);
@@ -5040,7 +5090,7 @@ class Game {
     this.runT += dt;
     if (this.starT > 0) this.starT -= dt;
     while (this.hintIdx < HINTS.length && this.t >= HINTS[this.hintIdx][0]) {
-      this.say('[Подсказка] ' + HINTS[this.hintIdx][1], '#9be7ff');
+      this.say('[Подсказка] ' + HINTS[this.hintIdx][Input.touch ? 2 : 1], '#9be7ff');
       this.hintIdx++;
     }
     this.updateClock(dt);
@@ -5171,6 +5221,10 @@ class Game {
       if (code === 'Enter' || code === 'Space' || code === 'Escape') this.beginLevel();
       return;
     }
+    if (this.state === 'cheats') {
+      if (code === 'Escape' || code === 'Backspace') this.state = 'pause';
+      return;
+    }
     if (this.state === 'pause') {
       if (code === 'Escape' || code === 'KeyP' || code === 'Enter') this.resume();
       else if (code === 'KeyN') this.retry();
@@ -5221,6 +5275,12 @@ class Game {
         this.suppressFire = true;
         return;
       }
+      if (this.pendingThrow) {
+        this.throwAt(this.pendingThrow, x, y);
+        this.pendingThrow = null;
+        this.suppressFire = true;
+        return;
+      }
       this.suppressFire = false;
       this.tryFire();
     } else if (btn === 2) {
@@ -5228,6 +5288,44 @@ class Game {
     } else if (btn === 1) {
       this.flagAt(x, y);
     }
+  }
+
+  // Касание попало в интерфейс (хотбар или карточки растений)?
+  isUiPoint(x, y) {
+    for (let i = 0; i < 9; i++) if (inRect(x, y, hotbarSlotRect(i))) return true;
+    for (let i = 0; i < PACKETS.length; i++) if (inRect(x, y, packetRect(i))) return true;
+    return false;
+  }
+
+  // На телефоне гранату и динамит бросают в два касания: кнопка, потом цель.
+  armThrow(kind) {
+    if (this.state !== 'play') return;
+    if (this.pendingThrow === kind) {
+      this.pendingThrow = null;
+      return;
+    }
+    if (kind === 'he' && this.grenades <= 0) {
+      FX.text(this, 640, 600, 'Нет гранат — купи в закупке', { color: '#ffd54a', font: `bold 18px ${FONT.ui}` });
+      Sound.empty();
+      return;
+    }
+    if (kind === 'tnt' && !this.inv.tnt) return;
+    this.pendingThrow = kind;
+    Sound.click();
+  }
+
+  throwAt(kind, x, y) {
+    if (kind === 'he') {
+      if (this.grenades <= 0) return;
+      this.grenades--;
+      this.tnts.push({ kind: 'he', x0: 640, y0: 760, x1: x, y1: y, t: 0, dur: 0.5, fuse: 0.5, state: 'fly', gone: false });
+      this.say('<Ты> Fire in the hole!', '#ffcc80');
+    } else {
+      if (!this.inv.tnt) return;
+      this.inv.tnt--;
+      this.tnts.push({ x0: 640, y0: 760, x1: x, y1: y, t: 0, dur: 0.45, fuse: 0.7, state: 'fly', gone: false });
+    }
+    Sound.whoosh();
   }
 
   uiClick(x, y) {
@@ -5324,7 +5422,7 @@ class Game {
     const owned = WEAPON_ORDER.filter((k) => this.arsenal[k].owned);
     if (owned.length < 2) {
       if (this.weaponNameT <= 0) {
-        FX.text(this, 1100, 600, 'Купи оружие в меню B', { color: '#ffd54a', font: `bold 15px ${FONT.ui}` });
+        FX.text(this, 1100, 600, Input.touch ? 'Купи оружие в закупке 🛒' : 'Купи оружие в меню B', { color: '#ffd54a', font: `bold 15px ${FONT.ui}` });
         this.weaponNameT = 1.2;
       }
       return;
@@ -5649,7 +5747,7 @@ class Game {
       if (m.cell.s === HIDDEN) this.openCell(m.c, m.r);
       else if (m.cell.s === OPEN) this.chordCell(m.c, m.r);
       else if (m.cell.s === FLAG) {
-        FX.text(this, x, y - 30, 'Тут флажок. Снять — F', { color: '#ffcdd2', font: `bold 14px ${FONT.ui}` });
+        FX.text(this, x, y - 30, Input.touch ? 'Тут флажок. Сними в режиме 🚩' : 'Тут флажок. Снять — F', { color: '#ffcdd2', font: `bold 14px ${FONT.ui}` });
         Sound.empty();
       }
       return null;
@@ -5838,6 +5936,11 @@ class Game {
         Sound.drink();
         break;
       case 'tnt':
+        if (Input.touch) {
+          this.armThrow('tnt');
+          used = false;
+          break;
+        }
         this.tnts.push({ x0: 640, y0: 760, x1: Input.x, y1: Input.y, t: 0, dur: 0.45, fuse: 0.7, state: 'fly', gone: false });
         Sound.whoosh();
         break;
@@ -6900,6 +7003,7 @@ function render(ctx, g) {
   else if (g.state === 'achievements') drawAchievements(ctx, g, now);
   else if (g.state === 'intro') drawIntro(ctx, g, now);
   else if (g.state === 'pause') drawPause(ctx, g, now);
+  else if (g.state === 'cheats') drawCheats(ctx, g, now);
   else if (g.state === 'buy') drawBuy(ctx, g, now);
   else if (g.state === 'dead') drawDead(ctx, g, now);
   else if (g.state === 'win') drawWin(ctx, g, now);
@@ -7333,6 +7437,13 @@ function drawHUD(ctx, g, now) {
     text(ctx, WEAPONS[g.weapon].name, 1270, 630, { font: `30px ${FONT.gta}`, color: '#ffd54a', align: 'right', stroke: '#000', lw: 5 });
     ctx.globalAlpha = 1;
   }
+  if (g.pendingThrow) {
+    const name = g.pendingThrow === 'he' ? 'гранату' : 'динамит';
+    rr(ctx, 440, 176, 400, 40, 20);
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fill();
+    text(ctx, `Коснись доски — бросить ${name}`, 640, 202, { font: `bold 18px ${FONT.ui}`, color: '#ffd54a', align: 'center' });
+  }
   if (g.starT > 0) text(ctx, `★ ЗВЕЗДА ${Math.ceil(g.starT)}`, 640, 640, { font: `bold 16px ${FONT.ui}`, color: `hsl(${(now * 600) % 360},100%,70%)`, align: 'center', stroke: '#000', lw: 4 });
   if (g.dice) {
     const d = g.dice;
@@ -7558,7 +7669,7 @@ function drawCsAmmo(ctx, g) {
   drawGrenade(ctx, 1076, 694, 1);
   text(ctx, `×${g.grenades}`, 1090, 704, { font: `bold 16px ${FONT.ui}`, color: g.grenades ? '#fff' : '#888', stroke: '#000', lw: 3 });
   if (gun.reload > 0) text(ctx, 'ПЕРЕЗАРЯДКА', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: '#ffd54a', align: 'right', stroke: '#000', lw: 4 });
-  else if (a.mag === 0 && a.reserve === 0 && !g.infAmmo) text(ctx, 'НЕТ ПАТРОНОВ — B', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: '#ff5252', align: 'right', stroke: '#000', lw: 4 });
+  else if (a.mag === 0 && a.reserve === 0 && !g.infAmmo) text(ctx, Input.touch ? 'НЕТ ПАТРОНОВ — 🛒' : 'НЕТ ПАТРОНОВ — B', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: '#ff5252', align: 'right', stroke: '#000', lw: 4 });
 }
 
 function drawChat(ctx, g) {
@@ -7595,6 +7706,17 @@ function drawBanner(ctx, g) {
 function drawCrosshair(ctx, g) {
   const gun = g.gun;
   const x = Input.x, y = Input.y;
+  if (Input.touch && (Input.mode !== 'shoot' || g.pendingThrow)) {
+    // на телефоне вместо прицела — значок режима касания
+    ctx.beginPath();
+    ctx.arc(x, y, 22, 0, TAU);
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    const icon = g.pendingThrow ? (g.pendingThrow === 'he' ? '💣' : '🧨') : Input.mode === 'rod' ? '🎣' : '🚩';
+    text(ctx, icon, x, y + 8, { font: `22px ${FONT.ui}`, align: 'center' });
+    return;
+  }
   if (g.weapon === 'awp') {
     ctx.beginPath();
     ctx.arc(x, y, 30, 0, TAU);
@@ -7670,6 +7792,7 @@ function mcButton(ctx, g, label, x, y, w, h, action, o = {}) {
 }
 
 function toggleFullscreen() {
+  if (Input.touch && window.goFullscreen) return window.goFullscreen();
   try {
     const el = document.documentElement;
     if (!document.fullscreenElement) {
@@ -7697,8 +7820,19 @@ const CONTROLS = [
   ['Esc', 'пауза,  M — звук'],
 ];
 
+const TOUCH_CONTROLS = [
+  ['Касание', 'стрелять в точку, держи — очередь'],
+  ['🎣 удочка', 'открыть клетку, подобрать, посадить'],
+  ['🚩 флажок', 'ставить и снимать флажки'],
+  ['💣 граната', 'нажми, потом коснись цели'],
+  ['⏳ держи', 'замедление времени'],
+  ['🛒 🔄 🔁', 'закупка, перезарядка, оружие'],
+  ['Хотбар', 'коснись предмета — использовать'],
+  ['Растения', 'выбери карточку справа вверху'],
+];
+
 function drawControls(ctx, x, y) {
-  CONTROLS.forEach(([k, v], i) => {
+  (Input.touch ? TOUCH_CONTROLS : CONTROLS).forEach(([k, v], i) => {
     const yy = y + i * 22;
     ctx.font = `bold 14px ${FONT.ui}`;
     const w = ctx.measureText(k).width + 14;
@@ -7757,8 +7891,8 @@ function drawTitle(ctx, g, now) {
   text(ctx, `Рекорд: $${pad(g.best, 8)}`, 640, 636, { font: `30px ${FONT.gta}`, color: '#3fbf4a', stroke: '#000', lw: 6, align: 'center' });
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', 1020, 662, 240, 40, toggleFullscreen, { size: 11 });
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', 20, 662, 200, 40, () => Sound.toggleMute(), { size: 11 });
-  text(ctx, 'Нажми «Играть» или Enter', 640, 684, { font: `bold 15px ${FONT.ui}`, color: 'rgba(255,255,255,0.75)', align: 'center' });
-  if (Input.touch) text(ctx, 'Игра сделана для ПК: нужны мышь и клавиатура', 640, 706, { font: `bold 14px ${FONT.ui}`, color: '#ffab91', align: 'center' });
+  text(ctx, Input.touch ? 'Нажми «Играть»' : 'Нажми «Играть» или Enter', 640, 684, { font: `bold 15px ${FONT.ui}`, color: 'rgba(255,255,255,0.75)', align: 'center' });
+  if (Input.touch) text(ctx, 'На телефоне: режимы и действия — кнопками по краям экрана', 640, 706, { font: `bold 14px ${FONT.ui}`, color: '#ffe082', align: 'center' });
 }
 
 function drawPause(ctx, g) {
@@ -7771,11 +7905,13 @@ function drawPause(ctx, g) {
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', bx, 250, 320, 42, () => Sound.toggleMute());
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', bx, 300, 320, 42, toggleFullscreen);
   mcButton(ctx, g, 'В ГЛАВНОЕ МЕНЮ', bx, 350, 320, 42, () => g.toTitle());
-  rr(ctx, 380, 410, 520, 282, 12);
+  if (Input.touch) mcButton(ctx, g, 'ЧИТ-КОДЫ', bx, 400, 320, 42, () => (g.state = 'cheats'));
+  const py = Input.touch ? 456 : 410;
+  rr(ctx, 380, py, 520, 712 - py, 12);
   ctx.fillStyle = 'rgba(10,16,8,0.8)';
   ctx.fill();
-  drawControls(ctx, 404, 440);
-  text(ctx, 'Псс... попробуй набрать HESOYAM', 640, 684, { font: `13px ${FONT.ui}`, color: 'rgba(255,255,255,0.45)', align: 'center' });
+  drawControls(ctx, 404, py + 30);
+  if (!Input.touch) text(ctx, 'Псс... попробуй набрать HESOYAM', 640, 684, { font: `13px ${FONT.ui}`, color: 'rgba(255,255,255,0.45)', align: 'center' });
 }
 
 function statsLines(g) {
@@ -8088,9 +8224,27 @@ function drawAchievements(ctx, g) {
   mcButton(ctx, g, 'НАЗАД', 540, 620 + 32, 200, 44, () => g.toTitle(), { size: 13 });
 }
 
+// ---------- чит-коды для телефона (набрать на клавиатуре нельзя) ----------
+function drawCheats(ctx, g) {
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.fillRect(0, 0, W, H);
+  text(ctx, 'ЧИТ-КОДЫ', 640, 110, { font: `56px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 9, align: 'center' });
+  text(ctx, 'Как в GTA San Andreas. С читами рекорд не засчитывается.', 640, 146, { font: `bold 16px ${FONT.ui}`, color: '#cfd8dc', align: 'center' });
+  Object.keys(CHEATS).forEach((name, i) => {
+    const x = i % 2 ? 660 : 300, y = 180 + Math.floor(i / 2) * 110;
+    mcButton(ctx, g, name, x, y, 320, 50, () => {
+      g.activateCheat(name);
+      g.state = 'play';
+      g.suppressFire = true;
+    }, { size: 16 });
+    text(ctx, CHEATS[name], x + 160, y + 78, { font: `15px ${FONT.ui}`, color: '#eef3e6', align: 'center' });
+  });
+  mcButton(ctx, g, 'НАЗАД', 540, 520, 200, 44, () => (g.state = 'pause'), { size: 13 });
+}
+
 // ---- js/main.js ----
 'use strict';
-/* Запуск: холст, масштабирование под окно, обработчики ввода, игровой цикл. */
+/* Запуск: холст, масштабирование под окно, мышь, клавиатура, касания и игровой цикл. */
 
 (function boot() {
   const canvas = document.getElementById('game');
@@ -8098,9 +8252,20 @@ function drawAchievements(ctx, g) {
   const game = new Game();
   window.__game = game; // для отладки из консоли
 
+  // Телефон или планшет: показываем сенсорные кнопки по краям экрана.
+  const mq = (q) => !!(window.matchMedia && matchMedia(q).matches);
+  const isTouch = mq('(pointer: coarse)') || (navigator.maxTouchPoints > 0 && !mq('(pointer: fine)'));
+  if (isTouch) {
+    document.body.classList.add('touch');
+    Input.touch = true;
+  }
+
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const side = isTouch ? Math.round(clamp(vw * 0.085, 58, 96)) : 0;
+    document.documentElement.style.setProperty('--side', side + 'px');
+    const dpr = Math.min(window.devicePixelRatio || 1, isTouch ? 1.75 : 2);
+    const scale = Math.max(0.1, Math.min((vw - side * 2) / W, vh / H));
     canvas.style.width = Math.floor(W * scale) + 'px';
     canvas.style.height = Math.floor(H * scale) + 'px';
     canvas.width = Math.max(1, Math.round(W * scale * dpr));
@@ -8110,6 +8275,7 @@ function drawAchievements(ctx, g) {
     View.ph = canvas.height;
   }
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 200));
   resize();
 
   function toLogical(clientX, clientY) {
@@ -8117,7 +8283,9 @@ function drawAchievements(ctx, g) {
     return { x: ((clientX - r.left) / r.width) * W, y: ((clientY - r.top) / r.height) * H };
   }
 
+  // ---------- мышь и клавиатура ----------
   window.addEventListener('mousemove', (e) => {
+    if (Input.touch && e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
     const p = toLogical(e.clientX, e.clientY);
     Input.x = clamp(p.x, 0, W);
     Input.y = clamp(p.y, 0, H);
@@ -8125,7 +8293,6 @@ function drawAchievements(ctx, g) {
   canvas.addEventListener('mousedown', (e) => {
     e.preventDefault();
     Sound.init();
-    Input.touch = false;
     const p = toLogical(e.clientX, e.clientY);
     Input.x = p.x;
     Input.y = p.y;
@@ -8163,26 +8330,32 @@ function drawAchievements(ctx, g) {
     if (document.hidden) game.onBlur();
   });
 
-  // Простейшая поддержка касаний: тап = ЛКМ, долгое нажатие = ПКМ (удочка).
-  let touchTimer = null;
+  // ---------- касания по доске ----------
+  // Один палец целится: в режиме «огонь» касание стреляет (держи — очередь),
+  // в режимах «удочка» и «флажок» касание делает это действие в точке.
+  let aimTouch = null;
   canvas.addEventListener(
     'touchstart',
     (e) => {
       e.preventDefault();
       Sound.init();
       Input.touch = true;
+      if (aimTouch !== null) return;
       const t = e.changedTouches[0];
+      aimTouch = t.identifier;
       const p = toLogical(t.clientX, t.clientY);
       Input.x = p.x;
       Input.y = p.y;
-      if (game.state !== 'play') {
+      if (game.state !== 'play' || game.pendingThrow || game.isUiPoint(p.x, p.y)) {
         Input.queue.push({ type: 'down', button: 0, x: p.x, y: p.y });
         return;
       }
-      touchTimer = setTimeout(() => {
-        touchTimer = null;
-        Input.queue.push({ type: 'down', button: 2, x: Input.x, y: Input.y });
-      }, 350);
+      if (Input.mode === 'rod') Input.queue.push({ type: 'down', button: 2, x: p.x, y: p.y });
+      else if (Input.mode === 'flag') Input.queue.push({ type: 'down', button: 1, x: p.x, y: p.y });
+      else {
+        Input.lmb = true;
+        Input.queue.push({ type: 'down', button: 0, x: p.x, y: p.y });
+      }
     },
     { passive: false }
   );
@@ -8190,30 +8363,109 @@ function drawAchievements(ctx, g) {
     'touchmove',
     (e) => {
       e.preventDefault();
-      const t = e.changedTouches[0];
-      const p = toLogical(t.clientX, t.clientY);
-      Input.x = p.x;
-      Input.y = p.y;
+      for (const t of e.changedTouches) {
+        if (t.identifier !== aimTouch) continue;
+        const p = toLogical(t.clientX, t.clientY);
+        Input.x = clamp(p.x, 0, W);
+        Input.y = clamp(p.y, 0, H);
+      }
     },
     { passive: false }
   );
-  canvas.addEventListener('touchend', (e) => {
+  function endTouch(e) {
     e.preventDefault();
-    if (touchTimer) {
-      clearTimeout(touchTimer);
-      touchTimer = null;
-      Input.queue.push({ type: 'down', button: 0, x: Input.x, y: Input.y });
+    Sound.init();
+    for (const t of e.changedTouches) {
+      if (t.identifier !== aimTouch) continue;
+      aimTouch = null;
+      Input.lmb = false;
       Input.queue.push({ type: 'up', button: 0 });
     }
-  });
+  }
+  canvas.addEventListener('touchend', endTouch, { passive: false });
+  canvas.addEventListener('touchcancel', endTouch, { passive: false });
+
+  // ---------- сенсорные кнопки ----------
+  const modeButtons = [...document.querySelectorAll('[data-mode]')];
+  function setMode(mode) {
+    Input.mode = mode;
+    for (const b of modeButtons) b.classList.toggle('on', b.dataset.mode === mode);
+  }
+  setMode('shoot');
+  const actions = {
+    pause: () => Input.queue.push({ type: 'key', code: 'Escape' }),
+    buy: () => Input.queue.push({ type: 'key', code: 'KeyB' }),
+    reload: () => Input.queue.push({ type: 'key', code: 'KeyR' }),
+    weapon: () => Input.queue.push({ type: 'key', code: 'KeyX' }),
+    grenade: () => game.armThrow('he'),
+    fullscreen: () => goFullscreen(),
+  };
+  for (const b of document.querySelectorAll('.tbar button')) {
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      Sound.init();
+      if (b.dataset.mode) setMode(b.dataset.mode);
+      else if (b.dataset.act) actions[b.dataset.act]();
+      else if (b.dataset.hold) {
+        Input.keys.add('ShiftLeft');
+        b.classList.add('held');
+      }
+    });
+    const release = () => {
+      if (!b.dataset.hold) return;
+      Input.keys.delete('ShiftLeft');
+      b.classList.remove('held');
+    };
+    b.addEventListener('pointerup', release);
+    b.addEventListener('pointercancel', release);
+    b.addEventListener('pointerleave', release);
+    b.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  // Полный экран и альбомная ориентация (работает на Android; на iPhone — через «На экран Домой»).
+  function goFullscreen() {
+    try {
+      const el = document.documentElement;
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (!document.fullscreenElement && req) {
+        const p = req.call(el);
+        const lock = () => {
+          if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+        };
+        if (p && p.then) p.then(lock).catch(() => {});
+        else lock();
+      } else if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    } catch (err) {
+      /* полноэкранный режим недоступен */
+    }
+  }
+  window.goFullscreen = goFullscreen;
+
+  // Офлайн-режим и установка на главный экран (только когда игра открыта с сайта).
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && document.querySelector('link[rel="manifest"]')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
 
   let last = performance.now();
+  let uiState = '';
   function frame(now) {
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
     try {
       game.update(dt);
       render(ctx, game);
+      const playing = ['play', 'buy', 'pause', 'cheats'].includes(game.state);
+      const st = playing ? 'play' : 'menu';
+      if (st !== uiState) {
+        uiState = st;
+        document.body.classList.toggle('ui-play', playing);
+        if (!playing) Input.keys.delete('ShiftLeft');
+      }
     } catch (err) {
       console.error(err);
     }

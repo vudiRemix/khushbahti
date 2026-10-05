@@ -186,7 +186,8 @@ class Enderman extends Zombie {
   update(dt, g) {
     if (this.dead || this.frozen > 0) return super.update(dt, g);
     if (this.tpCd > 0) this.tpCd -= dt;
-    if (g.state === 'play' && this.hit(Input.x, Input.y)) this.lookT += dt;
+    // на телефоне «взгляд» считается, только пока палец на экране
+    if (g.state === 'play' && (!Input.touch || Input.lmb) && this.hit(Input.x, Input.y)) this.lookT += dt;
     else this.lookT = Math.max(0, this.lookT - dt);
     if (this.lookT >= 0.45 && this.tpCd <= 0) {
       FX.burst(g, this.x, this.y - 30, 16, { colors: ['#e040fb', '#7b1fa2', '#111'], size: 5, speed: 180, grav: 0, life: 0.6 });

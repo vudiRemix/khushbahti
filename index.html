@@ -2,22 +2,70 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Хаос-Доска</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0d1208">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Хаос-Доска">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Press+Start+2P&family=Russo+One&display=swap">
 <style>
   /* Единый «игровой» вид: тёмная рамка вокруг доски, без светлой темы. */
-  :root { color-scheme: dark; --bg: #0d1208; --fg: #eef3e6; }
+  :root { color-scheme: dark; --bg: #0d1208; --fg: #eef3e6; --side: 72px; }
   html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--fg); }
+  body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
   #wrap { position: fixed; inset: 0; display: grid; place-items: center; }
   #game { display: block; cursor: none; touch-action: none; user-select: none; -webkit-user-select: none; outline: none; }
   noscript { font: 16px system-ui, sans-serif; padding: 16px; display: block; }
+
+  /* Сенсорные кнопки по краям — только на телефонах и планшетах */
+  .tbar { display: none; position: fixed; top: 0; bottom: 0; width: var(--side); z-index: 5;
+    flex-direction: column; justify-content: center; align-items: center; gap: 6px;
+    padding-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px); touch-action: none; }
+  #touch-left { left: env(safe-area-inset-left, 0px); }
+  #touch-right { right: env(safe-area-inset-right, 0px); }
+  body.touch.ui-play .tbar { display: flex; }
+  .tbar button { --sz: min(calc(var(--side) - 10px), calc((100dvh - 64px) / 5.3), 68px);
+    width: var(--sz); height: var(--sz); border-radius: 50%; padding: 0;
+    border: 2px solid rgba(255, 255, 255, 0.35); background: rgba(20, 28, 16, 0.78); color: #fff;
+    font-size: calc(var(--sz) * 0.38); line-height: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  .tbar button small { font: 600 calc(var(--sz) * 0.15)/1.1 system-ui, sans-serif; margin-top: 2px; opacity: 0.9; }
+  .tbar button.on { background: rgba(126, 224, 60, 0.9); color: #102006; border-color: #fff; }
+  .tbar button.held { transform: scale(0.93); background: rgba(255, 213, 74, 0.85); color: #201800; }
+  .tbar button:focus-visible { outline: 3px solid #ffd54a; outline-offset: 2px; }
+
+  #rotate { display: none; position: fixed; inset: 0; z-index: 10; background: var(--bg); color: var(--fg);
+    flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center;
+    font: 600 18px/1.4 system-ui, sans-serif; padding: 16px; }
+  #rotate .phone { font-size: 64px; animation: turn 1.6s ease-in-out infinite; }
+  @keyframes turn { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+  @media (prefers-reduced-motion: reduce) { #rotate .phone { animation: none; } }
+  @media (orientation: portrait) { body.touch #rotate { display: flex; } }
 </style>
 </head>
 <body>
 <div id="wrap"><canvas id="game" width="1280" height="720" aria-label="Игра Хаос-Доска"></canvas></div>
+<div id="touch-left" class="tbar">
+  <button type="button" data-act="pause" aria-label="Пауза">⏸<small>пауза</small></button>
+  <button type="button" data-act="buy" aria-label="Меню закупки">🛒<small>закупка</small></button>
+  <button type="button" data-act="grenade" aria-label="Граната">💣<small>граната</small></button>
+  <button type="button" data-hold="slow" aria-label="Замедление времени">⏳<small>замедл.</small></button>
+  <button type="button" data-act="weapon" aria-label="Сменить оружие">🔁<small>оружие</small></button>
+</div>
+<div id="touch-right" class="tbar">
+  <button type="button" data-mode="shoot" class="on" aria-label="Режим стрельбы">🔫<small>огонь</small></button>
+  <button type="button" data-mode="rod" aria-label="Режим удочки">🎣<small>удочка</small></button>
+  <button type="button" data-mode="flag" aria-label="Режим флажков">🚩<small>флажок</small></button>
+  <button type="button" data-act="reload" aria-label="Перезарядка">🔄<small>перезар.</small></button>
+  <button type="button" data-act="fullscreen" aria-label="На весь экран">⛶<small>экран</small></button>
+</div>
+<div id="rotate"><div class="phone">📱</div>Поверни телефон горизонтально<br>— так играть удобнее</div>
 <noscript>Для игры нужен включённый JavaScript.</noscript>
 <script src="js/core.js"></script>
 <script src="js/audio.js"></script>

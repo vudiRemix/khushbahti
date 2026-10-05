@@ -97,6 +97,7 @@ const Input = {
   keys: new Set(),
   queue: [],
   touch: false,
+  mode: 'shoot', // режим касания на телефоне: shoot | rod | flag
 };
 
 // Параметры вывода (заполняются в main.js при изменении размера окна).

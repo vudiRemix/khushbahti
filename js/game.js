@@ -3,16 +3,17 @@
 
 const HOTBAR = ['steak', 'gapple', 'potion', 'tnt', 'dice', 'ammo', 'ice', 'pellet', 'totem'];
 
+// [время, подсказка для ПК, подсказка для телефона]
 const HINTS = [
-  [1.5, 'ЛКМ — стрелять из АК-47, R — перезарядка.'],
-  [6, 'ПКМ — закинуть удочку: открыть клетку сапёра или подобрать предмет.'],
-  [11, 'F или Пробел — флажок. Враг, наступивший на флажок с миной, взрывается!'],
-  [17, 'Открой все безопасные клетки — оставшиеся мины полетят в башню короля.'],
-  [24, 'Лови солнце удочкой. ПКМ по пустой клетке в ряду белых — посадить фигуру (Q — выбор).'],
-  [31, 'Цифры 1–9 — предметы из хотбара. Shift — замедление времени.'],
-  [40, 'B — меню закупки как в CS: AWP, дробовик, гранаты, кевлар.'],
-  [48, 'Колесо мыши или X — смена оружия, G — бросить HE-гранату.'],
-  [56, 'Стреляй по «?»-блокам и уткам — внутри награды!'],
+  [1.5, 'ЛКМ — стрелять из АК-47, R — перезарядка.', 'Касайся доски — стреляешь. Держи палец — очередь.'],
+  [6, 'ПКМ — закинуть удочку: открыть клетку сапёра или подобрать предмет.', 'Кнопка 🎣 — режим удочки: открывай клетки сапёра и подбирай предметы.'],
+  [11, 'F или Пробел — флажок. Враг, наступивший на флажок с миной, взрывается!', 'Кнопка 🚩 — флажки. Враг, наступивший на флажок с миной, взрывается!'],
+  [17, 'Открой все безопасные клетки — оставшиеся мины полетят в башню короля.', 'Открой все безопасные клетки — оставшиеся мины полетят в босса.'],
+  [24, 'Лови солнце удочкой. ПКМ по пустой клетке в ряду белых — посадить фигуру (Q — выбор).', 'Лови солнце удочкой. Удочкой по пустой клетке у белых — посадить (карточки справа вверху).'],
+  [31, 'Цифры 1–9 — предметы из хотбара. Shift — замедление времени.', 'Касайся предметов в хотбаре внизу. Держи ⏳ — замедление времени.'],
+  [40, 'B — меню закупки как в CS: AWP, дробовик, гранаты, кевлар.', 'Кнопка 🛒 — закупка как в CS: AWP, дробовик, гранаты, кевлар.'],
+  [48, 'Колесо мыши или X — смена оружия, G — бросить HE-гранату.', '🔁 — смена оружия, 💣 — граната (потом коснись цели).'],
+  [56, 'Стреляй по «?»-блокам и уткам — внутри награды!', 'Стреляй по «?»-блокам и уткам — внутри награды!'],
 ];
 
 // Чит-коды из GTA San Andreas (и один местный).
@@ -111,6 +112,7 @@ class Game {
     this.starOffset = 0;
     this.bloodMoon = false;
     this.fieldBlasts = 0;
+    this.pendingThrow = null;
     this.rod = { state: 'idle', t: 0, tx: 0, ty: 0, cd: 0, carry: null };
     this.slotFlash = new Array(9).fill(0);
     this.sun = CFG.startSun;
@@ -248,7 +250,7 @@ class Game {
       if (this.introT > 7) this.beginLevel();
       return;
     }
-    if (this.state === 'pause' || this.state === 'buy') return;
+    if (this.state === 'pause' || this.state === 'buy' || this.state === 'cheats') return;
     if (this.state === 'dead') {
       this.deadT += realDt;
       this.updateFx(realDt * 0.3, realDt);
@@ -295,7 +297,7 @@ class Game {
     this.runT += dt;
     if (this.starT > 0) this.starT -= dt;
     while (this.hintIdx < HINTS.length && this.t >= HINTS[this.hintIdx][0]) {
-      this.say('[Подсказка] ' + HINTS[this.hintIdx][1], '#9be7ff');
+      this.say('[Подсказка] ' + HINTS[this.hintIdx][Input.touch ? 2 : 1], '#9be7ff');
       this.hintIdx++;
     }
     this.updateClock(dt);
@@ -426,6 +428,10 @@ class Game {
       if (code === 'Enter' || code === 'Space' || code === 'Escape') this.beginLevel();
       return;
     }
+    if (this.state === 'cheats') {
+      if (code === 'Escape' || code === 'Backspace') this.state = 'pause';
+      return;
+    }
     if (this.state === 'pause') {
       if (code === 'Escape' || code === 'KeyP' || code === 'Enter') this.resume();
       else if (code === 'KeyN') this.retry();
@@ -476,6 +482,12 @@ class Game {
         this.suppressFire = true;
         return;
       }
+      if (this.pendingThrow) {
+        this.throwAt(this.pendingThrow, x, y);
+        this.pendingThrow = null;
+        this.suppressFire = true;
+        return;
+      }
       this.suppressFire = false;
       this.tryFire();
     } else if (btn === 2) {
@@ -483,6 +495,44 @@ class Game {
     } else if (btn === 1) {
       this.flagAt(x, y);
     }
+  }
+
+  // Касание попало в интерфейс (хотбар или карточки растений)?
+  isUiPoint(x, y) {
+    for (let i = 0; i < 9; i++) if (inRect(x, y, hotbarSlotRect(i))) return true;
+    for (let i = 0; i < PACKETS.length; i++) if (inRect(x, y, packetRect(i))) return true;
+    return false;
+  }
+
+  // На телефоне гранату и динамит бросают в два касания: кнопка, потом цель.
+  armThrow(kind) {
+    if (this.state !== 'play') return;
+    if (this.pendingThrow === kind) {
+      this.pendingThrow = null;
+      return;
+    }
+    if (kind === 'he' && this.grenades <= 0) {
+      FX.text(this, 640, 600, 'Нет гранат — купи в закупке', { color: '#ffd54a', font: `bold 18px ${FONT.ui}` });
+      Sound.empty();
+      return;
+    }
+    if (kind === 'tnt' && !this.inv.tnt) return;
+    this.pendingThrow = kind;
+    Sound.click();
+  }
+
+  throwAt(kind, x, y) {
+    if (kind === 'he') {
+      if (this.grenades <= 0) return;
+      this.grenades--;
+      this.tnts.push({ kind: 'he', x0: 640, y0: 760, x1: x, y1: y, t: 0, dur: 0.5, fuse: 0.5, state: 'fly', gone: false });
+      this.say('<Ты> Fire in the hole!', '#ffcc80');
+    } else {
+      if (!this.inv.tnt) return;
+      this.inv.tnt--;
+      this.tnts.push({ x0: 640, y0: 760, x1: x, y1: y, t: 0, dur: 0.45, fuse: 0.7, state: 'fly', gone: false });
+    }
+    Sound.whoosh();
   }
 
   uiClick(x, y) {
@@ -579,7 +629,7 @@ class Game {
     const owned = WEAPON_ORDER.filter((k) => this.arsenal[k].owned);
     if (owned.length < 2) {
       if (this.weaponNameT <= 0) {
-        FX.text(this, 1100, 600, 'Купи оружие в меню B', { color: '#ffd54a', font: `bold 15px ${FONT.ui}` });
+        FX.text(this, 1100, 600, Input.touch ? 'Купи оружие в закупке 🛒' : 'Купи оружие в меню B', { color: '#ffd54a', font: `bold 15px ${FONT.ui}` });
         this.weaponNameT = 1.2;
       }
       return;
@@ -904,7 +954,7 @@ class Game {
       if (m.cell.s === HIDDEN) this.openCell(m.c, m.r);
       else if (m.cell.s === OPEN) this.chordCell(m.c, m.r);
       else if (m.cell.s === FLAG) {
-        FX.text(this, x, y - 30, 'Тут флажок. Снять — F', { color: '#ffcdd2', font: `bold 14px ${FONT.ui}` });
+        FX.text(this, x, y - 30, Input.touch ? 'Тут флажок. Сними в режиме 🚩' : 'Тут флажок. Снять — F', { color: '#ffcdd2', font: `bold 14px ${FONT.ui}` });
         Sound.empty();
       }
       return null;
@@ -1093,6 +1143,11 @@ class Game {
         Sound.drink();
         break;
       case 'tnt':
+        if (Input.touch) {
+          this.armThrow('tnt');
+          used = false;
+          break;
+        }
         this.tnts.push({ x0: 640, y0: 760, x1: Input.x, y1: Input.y, t: 0, dur: 0.45, fuse: 0.7, state: 'fly', gone: false });
         Sound.whoosh();
         break;

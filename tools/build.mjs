@@ -13,10 +13,21 @@ const out = args.find((a) => !a.startsWith('--')) || join(root, 'dist', 'khaos-d
 
 let html = readFileSync(join(root, 'index.html'), 'utf8');
 const scripts = [];
+const srcs = [];
 html = html.replace(/<script src="([^"]+)"><\/script>\n?/g, (_, src) => {
+  srcs.push(src);
   scripts.push(`// ---- ${src} ----\n` + readFileSync(join(root, src), 'utf8'));
   return '';
 });
+// Одному файлу не нужны манифест и иконки установки — их пути не будут работать.
+html = html
+  .replace(/<link rel="manifest"[^>]*>\n?/, '')
+  .replace(/<link rel="apple-touch-icon"[^>]*>\n?/, '');
+
+// Проверка: офлайн-кэш (sw.js) должен знать обо всех скриптах из index.html.
+const sw = readFileSync(join(root, 'sw.js'), 'utf8');
+const missing = srcs.filter((src) => !sw.includes(`'./${src}'`));
+if (missing.length) console.warn(`Внимание: в sw.js нет ${missing.join(', ')} — офлайн-режим их не закэширует.`);
 const bundle = `<script>\n${scripts.join('\n')}\n</script>\n`;
 // Замена через функцию: иначе последовательности вроде `$$` в коде игры испортятся.
 html = html.replace('</body>', () => bundle + '</body>');

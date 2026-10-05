@@ -1,0 +1,17 @@
+{
+  "name": "Хаос-Доска",
+  "short_name": "Хаос-Доска",
+  "description": "Шахматы, сапёр, CS, Minecraft, GTA, PvZ, FNAF, Clash Royale и мемы на одной доске.",
+  "lang": "ru",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0d1208",
+  "theme_color": "#0d1208",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

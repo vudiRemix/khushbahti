@@ -32,6 +32,7 @@ function render(ctx, g) {
   else if (g.state === 'achievements') drawAchievements(ctx, g, now);
   else if (g.state === 'intro') drawIntro(ctx, g, now);
   else if (g.state === 'pause') drawPause(ctx, g, now);
+  else if (g.state === 'cheats') drawCheats(ctx, g, now);
   else if (g.state === 'buy') drawBuy(ctx, g, now);
   else if (g.state === 'dead') drawDead(ctx, g, now);
   else if (g.state === 'win') drawWin(ctx, g, now);
@@ -465,6 +466,13 @@ function drawHUD(ctx, g, now) {
     text(ctx, WEAPONS[g.weapon].name, 1270, 630, { font: `30px ${FONT.gta}`, color: '#ffd54a', align: 'right', stroke: '#000', lw: 5 });
     ctx.globalAlpha = 1;
   }
+  if (g.pendingThrow) {
+    const name = g.pendingThrow === 'he' ? 'гранату' : 'динамит';
+    rr(ctx, 440, 176, 400, 40, 20);
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fill();
+    text(ctx, `Коснись доски — бросить ${name}`, 640, 202, { font: `bold 18px ${FONT.ui}`, color: '#ffd54a', align: 'center' });
+  }
   if (g.starT > 0) text(ctx, `★ ЗВЕЗДА ${Math.ceil(g.starT)}`, 640, 640, { font: `bold 16px ${FONT.ui}`, color: `hsl(${(now * 600) % 360},100%,70%)`, align: 'center', stroke: '#000', lw: 4 });
   if (g.dice) {
     const d = g.dice;
@@ -690,7 +698,7 @@ function drawCsAmmo(ctx, g) {
   drawGrenade(ctx, 1076, 694, 1);
   text(ctx, `×${g.grenades}`, 1090, 704, { font: `bold 16px ${FONT.ui}`, color: g.grenades ? '#fff' : '#888', stroke: '#000', lw: 3 });
   if (gun.reload > 0) text(ctx, 'ПЕРЕЗАРЯДКА', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: '#ffd54a', align: 'right', stroke: '#000', lw: 4 });
-  else if (a.mag === 0 && a.reserve === 0 && !g.infAmmo) text(ctx, 'НЕТ ПАТРОНОВ — B', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: '#ff5252', align: 'right', stroke: '#000', lw: 4 });
+  else if (a.mag === 0 && a.reserve === 0 && !g.infAmmo) text(ctx, Input.touch ? 'НЕТ ПАТРОНОВ — 🛒' : 'НЕТ ПАТРОНОВ — B', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: '#ff5252', align: 'right', stroke: '#000', lw: 4 });
 }
 
 function drawChat(ctx, g) {
@@ -727,6 +735,17 @@ function drawBanner(ctx, g) {
 function drawCrosshair(ctx, g) {
   const gun = g.gun;
   const x = Input.x, y = Input.y;
+  if (Input.touch && (Input.mode !== 'shoot' || g.pendingThrow)) {
+    // на телефоне вместо прицела — значок режима касания
+    ctx.beginPath();
+    ctx.arc(x, y, 22, 0, TAU);
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    const icon = g.pendingThrow ? (g.pendingThrow === 'he' ? '💣' : '🧨') : Input.mode === 'rod' ? '🎣' : '🚩';
+    text(ctx, icon, x, y + 8, { font: `22px ${FONT.ui}`, align: 'center' });
+    return;
+  }
   if (g.weapon === 'awp') {
     ctx.beginPath();
     ctx.arc(x, y, 30, 0, TAU);
@@ -802,6 +821,7 @@ function mcButton(ctx, g, label, x, y, w, h, action, o = {}) {
 }
 
 function toggleFullscreen() {
+  if (Input.touch && window.goFullscreen) return window.goFullscreen();
   try {
     const el = document.documentElement;
     if (!document.fullscreenElement) {
@@ -829,8 +849,19 @@ const CONTROLS = [
   ['Esc', 'пауза,  M — звук'],
 ];
 
+const TOUCH_CONTROLS = [
+  ['Касание', 'стрелять в точку, держи — очередь'],
+  ['🎣 удочка', 'открыть клетку, подобрать, посадить'],
+  ['🚩 флажок', 'ставить и снимать флажки'],
+  ['💣 граната', 'нажми, потом коснись цели'],
+  ['⏳ держи', 'замедление времени'],
+  ['🛒 🔄 🔁', 'закупка, перезарядка, оружие'],
+  ['Хотбар', 'коснись предмета — использовать'],
+  ['Растения', 'выбери карточку справа вверху'],
+];
+
 function drawControls(ctx, x, y) {
-  CONTROLS.forEach(([k, v], i) => {
+  (Input.touch ? TOUCH_CONTROLS : CONTROLS).forEach(([k, v], i) => {
     const yy = y + i * 22;
     ctx.font = `bold 14px ${FONT.ui}`;
     const w = ctx.measureText(k).width + 14;
@@ -889,8 +920,8 @@ function drawTitle(ctx, g, now) {
   text(ctx, `Рекорд: $${pad(g.best, 8)}`, 640, 636, { font: `30px ${FONT.gta}`, color: '#3fbf4a', stroke: '#000', lw: 6, align: 'center' });
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', 1020, 662, 240, 40, toggleFullscreen, { size: 11 });
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', 20, 662, 200, 40, () => Sound.toggleMute(), { size: 11 });
-  text(ctx, 'Нажми «Играть» или Enter', 640, 684, { font: `bold 15px ${FONT.ui}`, color: 'rgba(255,255,255,0.75)', align: 'center' });
-  if (Input.touch) text(ctx, 'Игра сделана для ПК: нужны мышь и клавиатура', 640, 706, { font: `bold 14px ${FONT.ui}`, color: '#ffab91', align: 'center' });
+  text(ctx, Input.touch ? 'Нажми «Играть»' : 'Нажми «Играть» или Enter', 640, 684, { font: `bold 15px ${FONT.ui}`, color: 'rgba(255,255,255,0.75)', align: 'center' });
+  if (Input.touch) text(ctx, 'На телефоне: режимы и действия — кнопками по краям экрана', 640, 706, { font: `bold 14px ${FONT.ui}`, color: '#ffe082', align: 'center' });
 }
 
 function drawPause(ctx, g) {
@@ -903,11 +934,13 @@ function drawPause(ctx, g) {
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', bx, 250, 320, 42, () => Sound.toggleMute());
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', bx, 300, 320, 42, toggleFullscreen);
   mcButton(ctx, g, 'В ГЛАВНОЕ МЕНЮ', bx, 350, 320, 42, () => g.toTitle());
-  rr(ctx, 380, 410, 520, 282, 12);
+  if (Input.touch) mcButton(ctx, g, 'ЧИТ-КОДЫ', bx, 400, 320, 42, () => (g.state = 'cheats'));
+  const py = Input.touch ? 456 : 410;
+  rr(ctx, 380, py, 520, 712 - py, 12);
   ctx.fillStyle = 'rgba(10,16,8,0.8)';
   ctx.fill();
-  drawControls(ctx, 404, 440);
-  text(ctx, 'Псс... попробуй набрать HESOYAM', 640, 684, { font: `13px ${FONT.ui}`, color: 'rgba(255,255,255,0.45)', align: 'center' });
+  drawControls(ctx, 404, py + 30);
+  if (!Input.touch) text(ctx, 'Псс... попробуй набрать HESOYAM', 640, 684, { font: `13px ${FONT.ui}`, color: 'rgba(255,255,255,0.45)', align: 'center' });
 }
 
 function statsLines(g) {
@@ -1218,4 +1251,22 @@ function drawAchievements(ctx, g) {
     text(ctx, a.desc, x + 42, y + 32, { font: `12px ${FONT.ui}`, color: got ? '#c8e6c9' : '#757575' });
   });
   mcButton(ctx, g, 'НАЗАД', 540, 620 + 32, 200, 44, () => g.toTitle(), { size: 13 });
+}
+
+// ---------- чит-коды для телефона (набрать на клавиатуре нельзя) ----------
+function drawCheats(ctx, g) {
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.fillRect(0, 0, W, H);
+  text(ctx, 'ЧИТ-КОДЫ', 640, 110, { font: `56px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 9, align: 'center' });
+  text(ctx, 'Как в GTA San Andreas. С читами рекорд не засчитывается.', 640, 146, { font: `bold 16px ${FONT.ui}`, color: '#cfd8dc', align: 'center' });
+  Object.keys(CHEATS).forEach((name, i) => {
+    const x = i % 2 ? 660 : 300, y = 180 + Math.floor(i / 2) * 110;
+    mcButton(ctx, g, name, x, y, 320, 50, () => {
+      g.activateCheat(name);
+      g.state = 'play';
+      g.suppressFire = true;
+    }, { size: 16 });
+    text(ctx, CHEATS[name], x + 160, y + 78, { font: `15px ${FONT.ui}`, color: '#eef3e6', align: 'center' });
+  });
+  mcButton(ctx, g, 'НАЗАД', 540, 520, 200, 44, () => (g.state = 'pause'), { size: 13 });
 }
