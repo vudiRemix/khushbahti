@@ -33,6 +33,8 @@ const ACHIEVEMENTS = [
   { id: 'reaction', name: 'Стихийный резонанс', desc: 'Устрой сопернику реакцию стихий' },
   { id: 'ut_spare', name: 'Пацифист', desc: 'Пощади Санса в бою «как в Undertale»' },
   { id: 'ut_kill', name: 'Плохое время', desc: 'Одолей Санса' },
+  { id: 'siu', name: 'СИУУУ!', desc: 'Увидь гол футболиста №7' },
+  { id: 'dovah', name: 'Довакин', desc: 'Убей драугра, пока он кричит «ФУС РО ДА!»' },
 ];
 
 const Ach = {

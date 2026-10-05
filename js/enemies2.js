@@ -1,5 +1,6 @@
 'use strict';
-/* Враги кампании: Гумба и Купа (Mario), Эндермен (Minecraft), коп (GTA), Соник. */
+/* Враги кампании: Гумба и Купа (Mario), Эндермен (Minecraft), коп (GTA), Соник,
+   драугр-щитоносец (Skyrim). */
 
 Object.assign(ENEMY_DEF, {
   goomba: { hp: 2, dmg: 2, bounty: 60, xp: 2, hw: 26, top: 30, bot: 30, name: 'Гумба' },
@@ -365,4 +366,283 @@ function drawRing(ctx, x, y, t) {
   ctx.lineWidth = 1.5;
   ctx.strokeStyle = '#fff3b0';
   ctx.stroke();
+}
+
+// ---------- Драугр-щитоносец (Skyrim) ----------
+// Огромный круглый щит держит пули и горох. Щит опускается, только когда драугр кричит
+// «ФУС РО ДА!» — крик оглушает твои фигуры рядом. Взрывы, мины, мяч и AWP щит не держит,
+// а после DRAUGR.shield попаданий он раскалывается.
+Object.assign(ENEMY_DEF, {
+  draugr: { hp: 14, dmg: 5, bounty: 400, xp: 14, hw: 30, top: 76, bot: 36, name: 'Драугр-щитоносец' },
+});
+
+const DRAUGR = { shield: 14, speed: 11, shoutEvery: [5, 7.5], shoutTime: 1.6, stun: 2.5, stunR: 2.6 * T };
+
+// Щит отбил пулю: металлический звон.
+function draugrClank() {
+  const a = Sound.audio();
+  if (!a || Sound.muted) return;
+  const t = a.ctx.currentTime;
+  for (const [f, v] of [[1870, 0.05], [2710, 0.035], [940, 0.04]]) {
+    const o = a.ctx.createOscillator(), g = a.ctx.createGain();
+    o.type = 'square';
+    o.frequency.setValueAtTime(f * rand(0.97, 1.03), t);
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g);
+    g.connect(a.master);
+    o.start(t);
+    o.stop(t + 0.2);
+  }
+}
+
+// «ФУС РО ДА!»: низкий рык с порывом ветра.
+function draugrShout() {
+  const a = Sound.audio();
+  if (!a || Sound.muted) return;
+  const { ctx, master, noiseBuf } = a;
+  const t = ctx.currentTime;
+  [0, 0.28, 0.56].forEach((d, i) => {
+    const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime([92, 84, 70][i], t + d);
+    o.frequency.exponentialRampToValueAtTime([80, 74, 48][i], t + d + (i === 2 ? 0.7 : 0.24));
+    f.type = 'lowpass';
+    f.frequency.value = 700;
+    g.gain.setValueAtTime(0.0001, t + d);
+    g.gain.exponentialRampToValueAtTime(0.22, t + d + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d + (i === 2 ? 0.8 : 0.26));
+    o.connect(f);
+    f.connect(g);
+    g.connect(master);
+    o.start(t + d);
+    o.stop(t + d + 0.85);
+  });
+  const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+  src.buffer = noiseBuf;
+  f.type = 'bandpass';
+  f.frequency.setValueAtTime(400, t + 0.5);
+  f.frequency.exponentialRampToValueAtTime(1800, t + 1.1);
+  g.gain.setValueAtTime(0.0001, t + 0.5);
+  g.gain.exponentialRampToValueAtTime(0.3, t + 0.65);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+  src.connect(f);
+  f.connect(g);
+  g.connect(master);
+  src.start(t + 0.5);
+  src.stop(t + 1.35);
+}
+
+function drawDraugr(ctx, x, y, t, o = {}) {
+  ctx.save();
+  ctx.translate(x, y);
+  ell(ctx, 0, 32, 30, 7, 'rgba(0,0,0,0.28)');
+  const step = o.walking ? Math.sin(t * 6) * 5 : 0;
+  const bone = '#d8ccb0', boneD = '#8f846c';
+  // ноги в лохмотьях
+  line(ctx, -8, 6, -10 + step, 30, bone, 6);
+  line(ctx, 8, 6, 10 - step, 30, bone, 6);
+  rr(ctx, -15 + step, 26, 12, 7, 3);
+  ctx.fillStyle = '#3a3129';
+  ctx.fill();
+  rr(ctx, 3 - step, 26, 12, 7, 3);
+  ctx.fill();
+  poly(ctx, [-17, 2, 17, 2, 20, 18, 8, 14, 0, 20, -8, 14, -20, 18], '#3b2f25');
+  // ржавая кираса
+  poly(ctx, [-17, -38, 17, -38, 14, 6, -14, 6], '#4f4b45');
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#2b2925';
+  ctx.stroke();
+  for (const [rx, ry] of [[-11, -32], [11, -32], [-9, 0], [9, 0]]) circ(ctx, rx, ry, 1.8, '#a1886a');
+  line(ctx, -15, -16, 15, -16, '#3a3732', 2);
+  // рука с мечом: машет, когда рубит фигуру
+  const sw = o.swing ? Math.sin(t * 9) * 0.9 : 0;
+  ctx.save();
+  ctx.translate(15, -30);
+  ctx.rotate(-0.5 + sw);
+  line(ctx, 0, 0, 14, -14, bone, 5);
+  line(ctx, 14, -14, 12, -58, '#a9b1b6', 6);
+  line(ctx, 14, -14, 13, -56, '#e3e8ea', 2);
+  line(ctx, 6, -16, 22, -12, '#6d5a3c', 4);
+  ctx.restore();
+  // голова: череп в рогатом шлеме, глаза светятся
+  const open = o.shout ? 1 : 0;
+  ell(ctx, 0, -52, 12, 13, bone);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = boneD;
+  ctx.stroke();
+  rr(ctx, -8, -45 + open * 2, 16, 6 + open * 6, 2);
+  ctx.fillStyle = open ? '#0d1a22' : '#5c5446';
+  ctx.fill();
+  for (let i = -6; i <= 6; i += 3) line(ctx, i, -45 + open * 2, i, -42 + open * 2, bone, 1.5);
+  ctx.save();
+  ctx.shadowColor = '#7fdcff';
+  ctx.shadowBlur = 10;
+  circ(ctx, -5, -53, 3.2, '#bff0ff');
+  circ(ctx, 5, -53, 3.2, '#bff0ff');
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(0, -55, 14, Math.PI, 0);
+  ctx.closePath();
+  ctx.fillStyle = '#5b5f63';
+  ctx.fill();
+  ctx.stroke();
+  line(ctx, 0, -69, 0, -55, '#3d4043', 3);
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(s * 12, -60);
+    ctx.quadraticCurveTo(s * 30, -62, s * 28, -80);
+    ctx.quadraticCurveTo(s * 22, -68, s * 10, -66);
+    ctx.closePath();
+    ctx.fillStyle = '#e6dcc3';
+    ctx.fill();
+    ctx.strokeStyle = '#8f846c';
+    ctx.stroke();
+  }
+  // крик: голубые волны вперёд, к твоим фигурам
+  if (o.shout) {
+    ctx.save();
+    for (let i = 0; i < 3; i++) {
+      const k = (t * 1.8 + i / 3) % 1;
+      ctx.globalAlpha = (1 - k) * 0.7;
+      ctx.beginPath();
+      ctx.ellipse(0, -36 + k * 70, 14 + k * 70, 6 + k * 24, 0, 0, Math.PI);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#9fe3ff';
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // огромный круглый щит: спереди — держит пули; во время крика отведён в сторону
+  if (o.shield) {
+    ctx.save();
+    if (o.shout) {
+      ctx.translate(-30, -4);
+      ctx.scale(0.55, 1);
+    } else ctx.translate(-2, -12);
+    circ(ctx, 0, 0, 30, '#6a4f33');
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#7d8084';
+    ctx.stroke();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = '#c9a66b';
+    ctx.beginPath();
+    for (let a = 0; a < 5.4 * Math.PI; a += 0.2) {
+      const r = 3 + a * 1.4;
+      const px = Math.cos(a) * r, py = Math.sin(a) * r;
+      if (a === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    for (let i = 0; i < 8; i++) circ(ctx, Math.cos((i * TAU) / 8) * 25, Math.sin((i * TAU) / 8) * 25, 1.8, '#b0b4b8');
+    circ(ctx, 0, 0, 5, '#9a9ea3');
+    if (o.cracks) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(25,15,8,0.85)';
+      ctx.beginPath();
+      ctx.moveTo(-20, -14);
+      ctx.lineTo(-6, -3);
+      ctx.lineTo(-10, 10);
+      if (o.cracks > 1) {
+        ctx.moveTo(18, -16);
+        ctx.lineTo(6, 2);
+        ctx.lineTo(16, 18);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else line(ctx, -15, -30, -26, -6, bone, 5);
+  ctx.restore();
+}
+
+class Draugr extends Enemy {
+  constructor(c) {
+    super('draugr', colX(clamp(c, 1, COLS - 2)), rowY(MF.r0) - 14);
+    this.shield = DRAUGR.shield; // сколько пуль ещё выдержит щит
+    this.shoutT = rand(3, DRAUGR.shoutEvery[1]);
+    this.shouting = 0; // > 0 — кричит, щит отведён
+    this.eating = false;
+    this.chompT = 0;
+    this.phase = rand(0, 10);
+  }
+  get guarded() {
+    return this.shield > 0 && this.shouting <= 0;
+  }
+  damage(n, g, src) {
+    if (!this.alive) return false;
+    if (this.guarded && ((src === 'gun' && g.weapon !== 'awp') || src === 'pea' || src === 'fist')) {
+      this.shield--;
+      this.shieldHit = true; // для hitFx: искры вместо крови
+      FX.burst(g, this.x + rand(-16, 12), this.y - 12 + rand(-16, 16), 6, { colors: ['#fff6c0', '#ffd54a', '#cfd8dc'], size: 4, speed: 280, grav: 500, life: 0.3 });
+      draugrClank();
+      if (this.shield <= 0) {
+        FX.burst(g, this.x - 2, this.y - 12, 16, { colors: ['#6a4f33', '#8d6e4a', '#7d8084'], size: 9, speed: 260, grav: 700, life: 0.8 });
+        FX.text(g, this.x, this.y - 92, 'щит расколот!', { color: '#ffcc80', font: `bold 16px ${FONT.ui}` });
+        Sound.stone();
+      } else if (Math.random() < 0.3) FX.text(g, this.x, this.y - 88, 'БЛОК', { color: '#cfd8dc', font: `bold 14px ${FONT.ui}`, life: 0.6 });
+      return false;
+    }
+    const r = super.damage(n, g, src);
+    if (this.dead && this.shouting > 0) Ach.unlock('dovah');
+    return r;
+  }
+  shout(g) {
+    this.shouting = DRAUGR.shoutTime;
+    this.shoutT = rand(...DRAUGR.shoutEvery);
+    FX.text(g, this.x, this.y - 96, 'ФУС РО ДА!', { color: '#9fe3ff', font: `bold 22px ${FONT.title}`, life: 1.6, vy: -30 });
+    draugrShout();
+    g.shake = Math.max(g.shake, 6);
+    // крик оглушает твои фигуры рядом: какое-то время они не бьют
+    for (let c = 1; c < COLS; c++) {
+      const d = g.def[c];
+      if (d && Math.hypot(colX(c) - this.x, rowY(PAWN_ROW) - this.y) < DRAUGR.stunR) {
+        d.cd = Math.max(d.cd, DRAUGR.stun);
+        d.hurt = 0.3;
+        FX.text(g, colX(c), rowY(PAWN_ROW) - 50, 'оглушён', { color: '#9fe3ff', font: `bold 13px ${FONT.ui}`, life: 1.2 });
+      }
+    }
+  }
+  update(dt, g) {
+    if (this.baseUpdate(dt)) return;
+    if (this.shouting > 0) this.shouting -= dt;
+    else {
+      this.shoutT -= dt;
+      if (this.shoutT <= 0) this.shout(g);
+    }
+    const c = this.col, d = g.def[c];
+    if (d && this.y >= PAWN_ROW * T - 26 && this.y < PAWN_ROW * T + 30) {
+      this.eating = true;
+      d.hp -= dt * 1.5;
+      d.hurt = 0.1;
+      this.chompT -= dt;
+      if (this.chompT <= 0) {
+        this.chompT = 0.6;
+        Sound.punch();
+      }
+      if (d.hp <= 0) g.killDefender(c, this);
+    } else {
+      this.eating = false;
+      if (this.shouting <= 0) this.y += DRAUGR.speed * dt * (g.bloodMoon ? 1.4 : 1);
+    }
+    this.gy = this.y;
+    g.checkTrapAt(this.x, this.y, this);
+    if (this.y >= ROWS * T - 60) g.enemyReached(this);
+  }
+  draw(ctx, t) {
+    this.beginDraw(ctx);
+    if (this.dead) {
+      ctx.translate(this.x, this.y + 30);
+      ctx.rotate(Math.min(1, this.deathT / 0.45) * 1.5);
+      ctx.translate(-this.x, -(this.y + 30));
+    }
+    const lost = DRAUGR.shield - this.shield;
+    drawDraugr(ctx, this.x, this.y, t + this.phase, {
+      shield: this.shield > 0,
+      cracks: lost >= DRAUGR.shield * 0.66 ? 2 : lost >= DRAUGR.shield * 0.33 ? 1 : 0,
+      shout: this.shouting > 0,
+      swing: this.eating,
+      walking: !this.eating && this.shouting <= 0 && this.frozen <= 0 && !this.dead,
+    });
+    this.endDraw(ctx);
+  }
 }

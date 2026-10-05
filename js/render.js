@@ -86,6 +86,7 @@ function drawWorld(ctx, g, t, now) {
 
   const es = g.enemies.slice().sort((a, b) => a.y - b.y);
   for (const e of es) e.draw(ctx, t);
+  if (g.footballer) g.footballer.draw(ctx, t);
 
   for (const q of g.qblocks) q.draw(ctx);
   for (const p of g.popups) {
@@ -888,7 +889,7 @@ function drawControls(ctx, x, y) {
 }
 
 // Жёлтая надпись у логотипа — как в Minecraft, при каждом запуске своя.
-const TITLE_SPLASH = choice(['Теперь с Сансом!', 'Впиши ник в зал славы!', 'Музыка как в Hotline Miami!', 'Хочешь дуэль?', 'HESOYAM!']);
+const TITLE_SPLASH = choice(['СИУУУ!', 'ФУС РО ДА!', 'Теперь с Сансом!', 'Впиши ник в зал славы!', 'Музыка как в Hotline Miami!', 'Хочешь дуэль?', 'HESOYAM!']);
 
 function drawTitle(ctx, g, now) {
   ctx.fillStyle = 'rgba(8,12,6,0.66)';
@@ -945,7 +946,7 @@ function drawTitle(ctx, g, now) {
 
   text(ctx, `Рекорд: $${pad(g.best, 8)}`, 640, 636, { font: `30px ${FONT.gta}`, color: '#3fbf4a', stroke: '#000', lw: 6, align: 'center' });
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', 1020, 662, 240, 40, toggleFullscreen, { size: 11 });
-  text(ctx, `версия ${GAME_VERSION} · новое: зал славы, музыка (${Input.touch ? 'в паузе' : 'N'})`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
+  text(ctx, `версия ${GAME_VERSION} · новое: футболист №7 (чит SIUUU), драугр, зал славы, музыка (${Input.touch ? 'в паузе' : 'N'})`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', 20, 662, 200, 40, () => Sound.toggleMute(), { size: 11 });
   text(ctx, Input.touch ? 'Нажми «Играть»' : 'Нажми «Играть» или Enter', 640, 684, { font: `bold 15px ${FONT.ui}`, color: 'rgba(255,255,255,0.75)', align: 'center' });
   if (Input.touch) text(ctx, 'На телефоне: режимы и действия — кнопками по краям экрана', 640, 706, { font: `bold 14px ${FONT.ui}`, color: '#ffe082', align: 'center' });

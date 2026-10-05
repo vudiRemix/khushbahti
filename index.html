@@ -44,6 +44,9 @@
   /* кнопка «супера» (Brawl Stars) — только на арене */
   .tbar button[data-act=super] { display: none; }
   body.ui-arena .tbar button[data-act=super] { display: flex; }
+  /* кнопка супера — оранжевый круг с черепом, как в Brawl Stars */
+  .tbar button[data-act=super] { border-radius: 50%; background: radial-gradient(circle at 40% 35%, #ffb74d, #f57c00 70%, #b84f00); border-color: #ffe0b2; }
+  .tbar button[data-act=super].on { background: radial-gradient(circle at 40% 35%, #fff59d, #ffb300 60%, #ff6f00); border-color: #fff; color: #000; box-shadow: 0 0 16px #ffca28; }
 
   #rotate { display: none; position: fixed; inset: 0; z-index: 10; background: var(--bg); color: var(--fg);
     flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center;
@@ -88,7 +91,7 @@
   <button type="button" data-mode="shoot" class="on" aria-label="Режим стрельбы">🔫<small>огонь</small></button>
   <button type="button" data-mode="rod" aria-label="Режим удочки">🎣<small>удочка</small></button>
   <button type="button" data-mode="flag" aria-label="Режим флажков">🚩<small>флажок</small></button>
-  <button type="button" data-act="super" aria-label="Супер">⭐<small>супер</small></button>
+  <button type="button" data-act="super" aria-label="Супер">💀<small>супер</small></button>
   <button type="button" data-act="reload" aria-label="Перезарядка">🔄<small>перезар.</small></button>
   <button type="button" data-act="fullscreen" aria-label="На весь экран">⛶<small>экран</small></button>
 </div>
@@ -122,6 +125,7 @@
 <script src="js/duel.js"></script>
 <script src="js/arena.js"></script>
 <script src="js/raid.js"></script>
+<script src="js/football.js"></script>
 <script src="js/undertale.js"></script>
 <script src="js/top.js"></script>
 <script src="js/game.js"></script>

@@ -6,27 +6,27 @@ const LEVELS = [
   {
     name: 'Королевская башня', ref: 'Clash Royale', boss: 'tower', hp: 1000, theme: 'classic', clock: 8 * 60, bonusStars: 0, mines: 10,
     tip: 'Сбивай ядра короля и проходи сапёра — мины летят в башню.',
-    pool: [['pawn', 5, 1], ['zombie', 4, 1], ['cone', 3, 2], ['knight', 2, 2], ['creeper', 1.5, 2], ['snake', 0.8, 3], ['skibidi', 1.2, 3], ['rook', 1.6, 4], ['bishop', 1.6, 5]],
+    pool: [['pawn', 5, 1], ['zombie', 4, 1], ['cone', 3, 2], ['knight', 2, 2], ['creeper', 1.5, 2], ['snake', 0.8, 3], ['skibidi', 1.2, 3], ['rook', 1.6, 4], ['bishop', 1.6, 5], ['draugr', 0.7, 3]],
   },
   {
     name: 'Замок Боузера', ref: 'Super Mario', boss: 'bowser', hp: 1100, theme: 'castle', clock: 10 * 60, bonusStars: 0, mines: 11,
     tip: 'Огонь Боузера выжигает целый столбец. На 30% HP появится топор — стреляй по нему!',
-    pool: [['goomba', 5, 1], ['koopa', 3, 1], ['zombie', 3, 1], ['pawn', 3, 1], ['cone', 2, 2], ['knight', 1.5, 2], ['sonic', 0.6, 2], ['creeper', 1, 3], ['snake', 0.8, 3], ['rook', 1, 4]],
+    pool: [['goomba', 5, 1], ['koopa', 3, 1], ['zombie', 3, 1], ['pawn', 3, 1], ['cone', 2, 2], ['knight', 1.5, 2], ['sonic', 0.6, 2], ['creeper', 1, 3], ['snake', 0.8, 3], ['rook', 1, 4], ['draugr', 0.8, 3]],
   },
   {
     name: 'Край', ref: 'Minecraft', boss: 'dragon', hp: 1250, theme: 'end', clock: 17 * 60, bonusStars: 1, mines: 11,
     tip: 'Кристаллы Края лечат дракона — разбей их первыми. Не держи прицел на эндермене!',
-    pool: [['enderman', 2.5, 1], ['zombie', 4, 1], ['creeper', 2.5, 1], ['pawn', 3, 1], ['cone', 2, 2], ['sonic', 0.5, 2], ['bishop', 1.5, 3], ['snake', 0.8, 3], ['rook', 1.5, 4]],
+    pool: [['enderman', 2.5, 1], ['zombie', 4, 1], ['creeper', 2.5, 1], ['pawn', 3, 1], ['cone', 2, 2], ['sonic', 0.5, 2], ['bishop', 1.5, 3], ['snake', 0.8, 3], ['rook', 1.5, 4], ['draugr', 1.2, 2]],
   },
   {
     name: 'Лос-Сантос', ref: 'GTA', boss: 'heli', hp: 1200, theme: 'city', clock: 19 * 60, bonusStars: 2, mines: 12,
     tip: 'Вертолёт поливает столбцы очередями — красная полоса показывает куда.',
-    pool: [['cop', 4, 1], ['zombie', 3, 1], ['pawn', 3, 1], ['cone', 2, 2], ['knight', 2, 2], ['sonic', 0.8, 2], ['skibidi', 1.5, 3], ['snake', 0.8, 3], ['rook', 1.5, 4]],
+    pool: [['cop', 4, 1], ['zombie', 3, 1], ['pawn', 3, 1], ['cone', 2, 2], ['knight', 2, 2], ['sonic', 0.8, 2], ['skibidi', 1.5, 3], ['snake', 0.8, 3], ['rook', 1.5, 4], ['draugr', 1.2, 2]],
   },
   {
     name: 'Скибиди-Титан', ref: 'финал', boss: 'titan', hp: 1300, theme: 'bath', clock: 22 * 60, bonusStars: 2, mines: 12,
     tip: 'Когда Титан заряжает лазер, стреляй ему в глаза — иначе сгорит весь ряд фигур.',
-    pool: [['skibidi', 4, 1], ['cop', 2, 1], ['goomba', 2, 1], ['koopa', 2, 1], ['enderman', 1.5, 2], ['creeper', 1.5, 2], ['cone', 2, 2], ['sonic', 0.6, 2], ['snake', 0.6, 3], ['rook', 1, 4], ['bishop', 1, 4]],
+    pool: [['skibidi', 4, 1], ['cop', 2, 1], ['goomba', 2, 1], ['koopa', 2, 1], ['enderman', 1.5, 2], ['creeper', 1.5, 2], ['cone', 2, 2], ['sonic', 0.6, 2], ['snake', 0.6, 3], ['rook', 1, 4], ['bishop', 1, 4], ['draugr', 1.5, 2]],
   },
 ];
 

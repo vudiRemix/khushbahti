@@ -42,6 +42,9 @@
   /* кнопка «супера» (Brawl Stars) — только на арене */
   .tbar button[data-act=super] { display: none; }
   body.ui-arena .tbar button[data-act=super] { display: flex; }
+  /* кнопка супера — оранжевый круг с черепом, как в Brawl Stars */
+  .tbar button[data-act=super] { border-radius: 50%; background: radial-gradient(circle at 40% 35%, #ffb74d, #f57c00 70%, #b84f00); border-color: #ffe0b2; }
+  .tbar button[data-act=super].on { background: radial-gradient(circle at 40% 35%, #fff59d, #ffb300 60%, #ff6f00); border-color: #fff; color: #000; box-shadow: 0 0 16px #ffca28; }
 
   #rotate { display: none; position: fixed; inset: 0; z-index: 10; background: var(--bg); color: var(--fg);
     flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center;
@@ -86,7 +89,7 @@
   <button type="button" data-mode="shoot" class="on" aria-label="Режим стрельбы">🔫<small>огонь</small></button>
   <button type="button" data-mode="rod" aria-label="Режим удочки">🎣<small>удочка</small></button>
   <button type="button" data-mode="flag" aria-label="Режим флажков">🚩<small>флажок</small></button>
-  <button type="button" data-act="super" aria-label="Супер">⭐<small>супер</small></button>
+  <button type="button" data-act="super" aria-label="Супер">💀<small>супер</small></button>
   <button type="button" data-act="reload" aria-label="Перезарядка">🔄<small>перезар.</small></button>
   <button type="button" data-act="fullscreen" aria-label="На весь экран">⛶<small>экран</small></button>
 </div>
@@ -116,7 +119,7 @@ const W = 1280, H = 720, T = 80, COLS = 16, ROWS = 9;
 const TAU = Math.PI * 2;
 
 // Номер выпуска: виден в главном меню. Меняй вместе с CACHE в sw.js.
-const GAME_VERSION = 11;
+const GAME_VERSION = 12;
 
 // Поле сапёра: столбцы 2..13, строки 2..6.
 const MF = { c0: 2, r0: 2, cols: 12, rows: 5 };
@@ -2920,6 +2923,7 @@ class Enemy {
     this.maxHp = d.hp;
     this.flash = 0;
     this.frozen = 0;
+    this.dazed = 0; // оглушён (крик футболиста): стоит, над головой кружатся звёзды
     this.age = 0;
     this.dead = false;
     this.remove = false;
@@ -2965,6 +2969,10 @@ class Enemy {
       this.frozen -= dt;
       return true;
     }
+    if (this.dazed > 0) {
+      this.dazed -= dt;
+      return true;
+    }
     return false;
   }
   beginDraw(ctx) {
@@ -2978,6 +2986,13 @@ class Enemy {
   }
   endDraw(ctx) {
     ctx.restore();
+    if (this.dazed > 0 && !this.dead) {
+      const d = this.def, a = this.age * 6;
+      for (let i = 0; i < 3; i++) {
+        const k = a + (i * TAU) / 3;
+        drawStar(ctx, this.x + Math.cos(k) * (d.hw * 0.8), this.y - d.top - 8 + Math.sin(k) * 5, 6, '#ffd54a', '#7a5b00');
+      }
+    }
     if (this.frozen > 0 && !this.dead) {
       const d = this.def;
       rr(ctx, this.x - d.hw - 4, this.y - d.top - 4, d.hw * 2 + 8, d.top + d.bot + 8, 8);
@@ -4346,7 +4361,8 @@ function drawCrewmate(ctx, x, y, s, color, t = 0) {
 
 // ---- js/enemies2.js ----
 'use strict';
-/* Враги кампании: Гумба и Купа (Mario), Эндермен (Minecraft), коп (GTA), Соник. */
+/* Враги кампании: Гумба и Купа (Mario), Эндермен (Minecraft), коп (GTA), Соник,
+   драугр-щитоносец (Skyrim). */
 
 Object.assign(ENEMY_DEF, {
   goomba: { hp: 2, dmg: 2, bounty: 60, xp: 2, hw: 26, top: 30, bot: 30, name: 'Гумба' },
@@ -4712,6 +4728,285 @@ function drawRing(ctx, x, y, t) {
   ctx.lineWidth = 1.5;
   ctx.strokeStyle = '#fff3b0';
   ctx.stroke();
+}
+
+// ---------- Драугр-щитоносец (Skyrim) ----------
+// Огромный круглый щит держит пули и горох. Щит опускается, только когда драугр кричит
+// «ФУС РО ДА!» — крик оглушает твои фигуры рядом. Взрывы, мины, мяч и AWP щит не держит,
+// а после DRAUGR.shield попаданий он раскалывается.
+Object.assign(ENEMY_DEF, {
+  draugr: { hp: 14, dmg: 5, bounty: 400, xp: 14, hw: 30, top: 76, bot: 36, name: 'Драугр-щитоносец' },
+});
+
+const DRAUGR = { shield: 14, speed: 11, shoutEvery: [5, 7.5], shoutTime: 1.6, stun: 2.5, stunR: 2.6 * T };
+
+// Щит отбил пулю: металлический звон.
+function draugrClank() {
+  const a = Sound.audio();
+  if (!a || Sound.muted) return;
+  const t = a.ctx.currentTime;
+  for (const [f, v] of [[1870, 0.05], [2710, 0.035], [940, 0.04]]) {
+    const o = a.ctx.createOscillator(), g = a.ctx.createGain();
+    o.type = 'square';
+    o.frequency.setValueAtTime(f * rand(0.97, 1.03), t);
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g);
+    g.connect(a.master);
+    o.start(t);
+    o.stop(t + 0.2);
+  }
+}
+
+// «ФУС РО ДА!»: низкий рык с порывом ветра.
+function draugrShout() {
+  const a = Sound.audio();
+  if (!a || Sound.muted) return;
+  const { ctx, master, noiseBuf } = a;
+  const t = ctx.currentTime;
+  [0, 0.28, 0.56].forEach((d, i) => {
+    const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime([92, 84, 70][i], t + d);
+    o.frequency.exponentialRampToValueAtTime([80, 74, 48][i], t + d + (i === 2 ? 0.7 : 0.24));
+    f.type = 'lowpass';
+    f.frequency.value = 700;
+    g.gain.setValueAtTime(0.0001, t + d);
+    g.gain.exponentialRampToValueAtTime(0.22, t + d + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d + (i === 2 ? 0.8 : 0.26));
+    o.connect(f);
+    f.connect(g);
+    g.connect(master);
+    o.start(t + d);
+    o.stop(t + d + 0.85);
+  });
+  const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+  src.buffer = noiseBuf;
+  f.type = 'bandpass';
+  f.frequency.setValueAtTime(400, t + 0.5);
+  f.frequency.exponentialRampToValueAtTime(1800, t + 1.1);
+  g.gain.setValueAtTime(0.0001, t + 0.5);
+  g.gain.exponentialRampToValueAtTime(0.3, t + 0.65);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+  src.connect(f);
+  f.connect(g);
+  g.connect(master);
+  src.start(t + 0.5);
+  src.stop(t + 1.35);
+}
+
+function drawDraugr(ctx, x, y, t, o = {}) {
+  ctx.save();
+  ctx.translate(x, y);
+  ell(ctx, 0, 32, 30, 7, 'rgba(0,0,0,0.28)');
+  const step = o.walking ? Math.sin(t * 6) * 5 : 0;
+  const bone = '#d8ccb0', boneD = '#8f846c';
+  // ноги в лохмотьях
+  line(ctx, -8, 6, -10 + step, 30, bone, 6);
+  line(ctx, 8, 6, 10 - step, 30, bone, 6);
+  rr(ctx, -15 + step, 26, 12, 7, 3);
+  ctx.fillStyle = '#3a3129';
+  ctx.fill();
+  rr(ctx, 3 - step, 26, 12, 7, 3);
+  ctx.fill();
+  poly(ctx, [-17, 2, 17, 2, 20, 18, 8, 14, 0, 20, -8, 14, -20, 18], '#3b2f25');
+  // ржавая кираса
+  poly(ctx, [-17, -38, 17, -38, 14, 6, -14, 6], '#4f4b45');
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#2b2925';
+  ctx.stroke();
+  for (const [rx, ry] of [[-11, -32], [11, -32], [-9, 0], [9, 0]]) circ(ctx, rx, ry, 1.8, '#a1886a');
+  line(ctx, -15, -16, 15, -16, '#3a3732', 2);
+  // рука с мечом: машет, когда рубит фигуру
+  const sw = o.swing ? Math.sin(t * 9) * 0.9 : 0;
+  ctx.save();
+  ctx.translate(15, -30);
+  ctx.rotate(-0.5 + sw);
+  line(ctx, 0, 0, 14, -14, bone, 5);
+  line(ctx, 14, -14, 12, -58, '#a9b1b6', 6);
+  line(ctx, 14, -14, 13, -56, '#e3e8ea', 2);
+  line(ctx, 6, -16, 22, -12, '#6d5a3c', 4);
+  ctx.restore();
+  // голова: череп в рогатом шлеме, глаза светятся
+  const open = o.shout ? 1 : 0;
+  ell(ctx, 0, -52, 12, 13, bone);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = boneD;
+  ctx.stroke();
+  rr(ctx, -8, -45 + open * 2, 16, 6 + open * 6, 2);
+  ctx.fillStyle = open ? '#0d1a22' : '#5c5446';
+  ctx.fill();
+  for (let i = -6; i <= 6; i += 3) line(ctx, i, -45 + open * 2, i, -42 + open * 2, bone, 1.5);
+  ctx.save();
+  ctx.shadowColor = '#7fdcff';
+  ctx.shadowBlur = 10;
+  circ(ctx, -5, -53, 3.2, '#bff0ff');
+  circ(ctx, 5, -53, 3.2, '#bff0ff');
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(0, -55, 14, Math.PI, 0);
+  ctx.closePath();
+  ctx.fillStyle = '#5b5f63';
+  ctx.fill();
+  ctx.stroke();
+  line(ctx, 0, -69, 0, -55, '#3d4043', 3);
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(s * 12, -60);
+    ctx.quadraticCurveTo(s * 30, -62, s * 28, -80);
+    ctx.quadraticCurveTo(s * 22, -68, s * 10, -66);
+    ctx.closePath();
+    ctx.fillStyle = '#e6dcc3';
+    ctx.fill();
+    ctx.strokeStyle = '#8f846c';
+    ctx.stroke();
+  }
+  // крик: голубые волны вперёд, к твоим фигурам
+  if (o.shout) {
+    ctx.save();
+    for (let i = 0; i < 3; i++) {
+      const k = (t * 1.8 + i / 3) % 1;
+      ctx.globalAlpha = (1 - k) * 0.7;
+      ctx.beginPath();
+      ctx.ellipse(0, -36 + k * 70, 14 + k * 70, 6 + k * 24, 0, 0, Math.PI);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#9fe3ff';
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // огромный круглый щит: спереди — держит пули; во время крика отведён в сторону
+  if (o.shield) {
+    ctx.save();
+    if (o.shout) {
+      ctx.translate(-30, -4);
+      ctx.scale(0.55, 1);
+    } else ctx.translate(-2, -12);
+    circ(ctx, 0, 0, 30, '#6a4f33');
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#7d8084';
+    ctx.stroke();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = '#c9a66b';
+    ctx.beginPath();
+    for (let a = 0; a < 5.4 * Math.PI; a += 0.2) {
+      const r = 3 + a * 1.4;
+      const px = Math.cos(a) * r, py = Math.sin(a) * r;
+      if (a === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    for (let i = 0; i < 8; i++) circ(ctx, Math.cos((i * TAU) / 8) * 25, Math.sin((i * TAU) / 8) * 25, 1.8, '#b0b4b8');
+    circ(ctx, 0, 0, 5, '#9a9ea3');
+    if (o.cracks) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(25,15,8,0.85)';
+      ctx.beginPath();
+      ctx.moveTo(-20, -14);
+      ctx.lineTo(-6, -3);
+      ctx.lineTo(-10, 10);
+      if (o.cracks > 1) {
+        ctx.moveTo(18, -16);
+        ctx.lineTo(6, 2);
+        ctx.lineTo(16, 18);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else line(ctx, -15, -30, -26, -6, bone, 5);
+  ctx.restore();
+}
+
+class Draugr extends Enemy {
+  constructor(c) {
+    super('draugr', colX(clamp(c, 1, COLS - 2)), rowY(MF.r0) - 14);
+    this.shield = DRAUGR.shield; // сколько пуль ещё выдержит щит
+    this.shoutT = rand(3, DRAUGR.shoutEvery[1]);
+    this.shouting = 0; // > 0 — кричит, щит отведён
+    this.eating = false;
+    this.chompT = 0;
+    this.phase = rand(0, 10);
+  }
+  get guarded() {
+    return this.shield > 0 && this.shouting <= 0;
+  }
+  damage(n, g, src) {
+    if (!this.alive) return false;
+    if (this.guarded && ((src === 'gun' && g.weapon !== 'awp') || src === 'pea' || src === 'fist')) {
+      this.shield--;
+      this.shieldHit = true; // для hitFx: искры вместо крови
+      FX.burst(g, this.x + rand(-16, 12), this.y - 12 + rand(-16, 16), 6, { colors: ['#fff6c0', '#ffd54a', '#cfd8dc'], size: 4, speed: 280, grav: 500, life: 0.3 });
+      draugrClank();
+      if (this.shield <= 0) {
+        FX.burst(g, this.x - 2, this.y - 12, 16, { colors: ['#6a4f33', '#8d6e4a', '#7d8084'], size: 9, speed: 260, grav: 700, life: 0.8 });
+        FX.text(g, this.x, this.y - 92, 'щит расколот!', { color: '#ffcc80', font: `bold 16px ${FONT.ui}` });
+        Sound.stone();
+      } else if (Math.random() < 0.3) FX.text(g, this.x, this.y - 88, 'БЛОК', { color: '#cfd8dc', font: `bold 14px ${FONT.ui}`, life: 0.6 });
+      return false;
+    }
+    const r = super.damage(n, g, src);
+    if (this.dead && this.shouting > 0) Ach.unlock('dovah');
+    return r;
+  }
+  shout(g) {
+    this.shouting = DRAUGR.shoutTime;
+    this.shoutT = rand(...DRAUGR.shoutEvery);
+    FX.text(g, this.x, this.y - 96, 'ФУС РО ДА!', { color: '#9fe3ff', font: `bold 22px ${FONT.title}`, life: 1.6, vy: -30 });
+    draugrShout();
+    g.shake = Math.max(g.shake, 6);
+    // крик оглушает твои фигуры рядом: какое-то время они не бьют
+    for (let c = 1; c < COLS; c++) {
+      const d = g.def[c];
+      if (d && Math.hypot(colX(c) - this.x, rowY(PAWN_ROW) - this.y) < DRAUGR.stunR) {
+        d.cd = Math.max(d.cd, DRAUGR.stun);
+        d.hurt = 0.3;
+        FX.text(g, colX(c), rowY(PAWN_ROW) - 50, 'оглушён', { color: '#9fe3ff', font: `bold 13px ${FONT.ui}`, life: 1.2 });
+      }
+    }
+  }
+  update(dt, g) {
+    if (this.baseUpdate(dt)) return;
+    if (this.shouting > 0) this.shouting -= dt;
+    else {
+      this.shoutT -= dt;
+      if (this.shoutT <= 0) this.shout(g);
+    }
+    const c = this.col, d = g.def[c];
+    if (d && this.y >= PAWN_ROW * T - 26 && this.y < PAWN_ROW * T + 30) {
+      this.eating = true;
+      d.hp -= dt * 1.5;
+      d.hurt = 0.1;
+      this.chompT -= dt;
+      if (this.chompT <= 0) {
+        this.chompT = 0.6;
+        Sound.punch();
+      }
+      if (d.hp <= 0) g.killDefender(c, this);
+    } else {
+      this.eating = false;
+      if (this.shouting <= 0) this.y += DRAUGR.speed * dt * (g.bloodMoon ? 1.4 : 1);
+    }
+    this.gy = this.y;
+    g.checkTrapAt(this.x, this.y, this);
+    if (this.y >= ROWS * T - 60) g.enemyReached(this);
+  }
+  draw(ctx, t) {
+    this.beginDraw(ctx);
+    if (this.dead) {
+      ctx.translate(this.x, this.y + 30);
+      ctx.rotate(Math.min(1, this.deathT / 0.45) * 1.5);
+      ctx.translate(-this.x, -(this.y + 30));
+    }
+    const lost = DRAUGR.shield - this.shield;
+    drawDraugr(ctx, this.x, this.y, t + this.phase, {
+      shield: this.shield > 0,
+      cracks: lost >= DRAUGR.shield * 0.66 ? 2 : lost >= DRAUGR.shield * 0.33 ? 1 : 0,
+      shout: this.shouting > 0,
+      swing: this.eating,
+      walking: !this.eating && this.shouting <= 0 && this.frozen <= 0 && !this.dead,
+    });
+    this.endDraw(ctx);
+  }
 }
 
 // ---- js/bosses.js ----
@@ -5350,27 +5645,27 @@ const LEVELS = [
   {
     name: 'Королевская башня', ref: 'Clash Royale', boss: 'tower', hp: 1000, theme: 'classic', clock: 8 * 60, bonusStars: 0, mines: 10,
     tip: 'Сбивай ядра короля и проходи сапёра — мины летят в башню.',
-    pool: [['pawn', 5, 1], ['zombie', 4, 1], ['cone', 3, 2], ['knight', 2, 2], ['creeper', 1.5, 2], ['snake', 0.8, 3], ['skibidi', 1.2, 3], ['rook', 1.6, 4], ['bishop', 1.6, 5]],
+    pool: [['pawn', 5, 1], ['zombie', 4, 1], ['cone', 3, 2], ['knight', 2, 2], ['creeper', 1.5, 2], ['snake', 0.8, 3], ['skibidi', 1.2, 3], ['rook', 1.6, 4], ['bishop', 1.6, 5], ['draugr', 0.7, 3]],
   },
   {
     name: 'Замок Боузера', ref: 'Super Mario', boss: 'bowser', hp: 1100, theme: 'castle', clock: 10 * 60, bonusStars: 0, mines: 11,
     tip: 'Огонь Боузера выжигает целый столбец. На 30% HP появится топор — стреляй по нему!',
-    pool: [['goomba', 5, 1], ['koopa', 3, 1], ['zombie', 3, 1], ['pawn', 3, 1], ['cone', 2, 2], ['knight', 1.5, 2], ['sonic', 0.6, 2], ['creeper', 1, 3], ['snake', 0.8, 3], ['rook', 1, 4]],
+    pool: [['goomba', 5, 1], ['koopa', 3, 1], ['zombie', 3, 1], ['pawn', 3, 1], ['cone', 2, 2], ['knight', 1.5, 2], ['sonic', 0.6, 2], ['creeper', 1, 3], ['snake', 0.8, 3], ['rook', 1, 4], ['draugr', 0.8, 3]],
   },
   {
     name: 'Край', ref: 'Minecraft', boss: 'dragon', hp: 1250, theme: 'end', clock: 17 * 60, bonusStars: 1, mines: 11,
     tip: 'Кристаллы Края лечат дракона — разбей их первыми. Не держи прицел на эндермене!',
-    pool: [['enderman', 2.5, 1], ['zombie', 4, 1], ['creeper', 2.5, 1], ['pawn', 3, 1], ['cone', 2, 2], ['sonic', 0.5, 2], ['bishop', 1.5, 3], ['snake', 0.8, 3], ['rook', 1.5, 4]],
+    pool: [['enderman', 2.5, 1], ['zombie', 4, 1], ['creeper', 2.5, 1], ['pawn', 3, 1], ['cone', 2, 2], ['sonic', 0.5, 2], ['bishop', 1.5, 3], ['snake', 0.8, 3], ['rook', 1.5, 4], ['draugr', 1.2, 2]],
   },
   {
     name: 'Лос-Сантос', ref: 'GTA', boss: 'heli', hp: 1200, theme: 'city', clock: 19 * 60, bonusStars: 2, mines: 12,
     tip: 'Вертолёт поливает столбцы очередями — красная полоса показывает куда.',
-    pool: [['cop', 4, 1], ['zombie', 3, 1], ['pawn', 3, 1], ['cone', 2, 2], ['knight', 2, 2], ['sonic', 0.8, 2], ['skibidi', 1.5, 3], ['snake', 0.8, 3], ['rook', 1.5, 4]],
+    pool: [['cop', 4, 1], ['zombie', 3, 1], ['pawn', 3, 1], ['cone', 2, 2], ['knight', 2, 2], ['sonic', 0.8, 2], ['skibidi', 1.5, 3], ['snake', 0.8, 3], ['rook', 1.5, 4], ['draugr', 1.2, 2]],
   },
   {
     name: 'Скибиди-Титан', ref: 'финал', boss: 'titan', hp: 1300, theme: 'bath', clock: 22 * 60, bonusStars: 2, mines: 12,
     tip: 'Когда Титан заряжает лазер, стреляй ему в глаза — иначе сгорит весь ряд фигур.',
-    pool: [['skibidi', 4, 1], ['cop', 2, 1], ['goomba', 2, 1], ['koopa', 2, 1], ['enderman', 1.5, 2], ['creeper', 1.5, 2], ['cone', 2, 2], ['sonic', 0.6, 2], ['snake', 0.6, 3], ['rook', 1, 4], ['bishop', 1, 4]],
+    pool: [['skibidi', 4, 1], ['cop', 2, 1], ['goomba', 2, 1], ['koopa', 2, 1], ['enderman', 1.5, 2], ['creeper', 1.5, 2], ['cone', 2, 2], ['sonic', 0.6, 2], ['snake', 0.6, 3], ['rook', 1, 4], ['bishop', 1, 4], ['draugr', 1.5, 2]],
   },
 ];
 
@@ -5506,6 +5801,8 @@ const ACHIEVEMENTS = [
   { id: 'reaction', name: 'Стихийный резонанс', desc: 'Устрой сопернику реакцию стихий' },
   { id: 'ut_spare', name: 'Пацифист', desc: 'Пощади Санса в бою «как в Undertale»' },
   { id: 'ut_kill', name: 'Плохое время', desc: 'Одолей Санса' },
+  { id: 'siu', name: 'СИУУУ!', desc: 'Увидь гол футболиста №7' },
+  { id: 'dovah', name: 'Довакин', desc: 'Убей драугра, пока он кричит «ФУС РО ДА!»' },
 ];
 
 const Ach = {
@@ -8839,6 +9136,386 @@ const Raid = {
   },
 };
 
+// ---- js/football.js ----
+'use strict';
+/* Футболист №7 — с новой версии мема: иногда выбегает на доску, ведёт мяч, пробивает через
+   врагов прямо в ворота — башню босса — и празднует гол прыжком с разворотом: «СИУУУ!».
+   От крика все враги на доске на пару секунд оглушены. Чит-код SIUUU зовёт его сразу. */
+
+const SIU = {
+  first: [60, 110], // через сколько секунд уровня он выбежит в первый раз
+  every: [140, 220], // и потом
+  ballDmg: 4,
+  ballTime: 2.2, // сколько мяч мечется по доске, прежде чем полететь в ворота
+  ballSpeed: 760,
+  goal: 120, // урон башне от гола
+  stun: 2.5,
+  money: 700,
+};
+
+// «СИУУУ!»: шипение «С», голос из пилы через две форманты — «И» плавно переходит в «У», — и рёв трибун.
+function playSiu() {
+  const a = Sound.audio();
+  if (!a || Sound.muted) return;
+  const { ctx, master, noiseBuf } = a;
+  const t = ctx.currentTime + 0.02;
+  const out = ctx.createGain();
+  out.gain.value = 0.9;
+  out.connect(master);
+  const noise = (type, f, q, at, peak, rise, end) => {
+    const src = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = noiseBuf;
+    src.loop = true;
+    fl.type = type;
+    fl.frequency.value = f;
+    fl.Q.value = q;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(peak, at + rise);
+    g.gain.exponentialRampToValueAtTime(0.0001, end);
+    src.connect(fl);
+    fl.connect(g);
+    g.connect(out);
+    src.start(at);
+    src.stop(end + 0.05);
+  };
+  noise('highpass', 4200, 0.7, t, 0.22, 0.03, t + 0.17);
+  const v = t + 0.13, end = v + 1.5;
+  const src = ctx.createOscillator();
+  src.type = 'sawtooth';
+  src.frequency.setValueAtTime(185, v);
+  src.frequency.linearRampToValueAtTime(265, v + 0.25);
+  src.frequency.linearRampToValueAtTime(245, v + 1.1);
+  src.frequency.linearRampToValueAtTime(205, end);
+  const vib = ctx.createOscillator(), vg = ctx.createGain();
+  vib.frequency.value = 6;
+  vg.gain.value = 7;
+  vib.connect(vg);
+  vg.connect(src.frequency);
+  const voice = ctx.createGain();
+  voice.gain.setValueAtTime(0.0001, v);
+  voice.gain.exponentialRampToValueAtTime(0.55, v + 0.08);
+  voice.gain.setValueAtTime(0.55, end - 0.35);
+  voice.gain.exponentialRampToValueAtTime(0.0001, end);
+  voice.connect(out);
+  const formant = (f0, f1, q, gain) => {
+    const fl = ctx.createBiquadFilter(), g = ctx.createGain();
+    fl.type = 'bandpass';
+    fl.Q.value = q;
+    fl.frequency.setValueAtTime(f0, v);
+    fl.frequency.setValueAtTime(f0, v + 0.3);
+    fl.frequency.exponentialRampToValueAtTime(f1, v + 0.55);
+    g.gain.value = gain;
+    src.connect(fl);
+    fl.connect(g);
+    g.connect(voice);
+  };
+  formant(290, 330, 5, 1.6); // первая форманта: у «И» и «У» низкая
+  formant(2250, 820, 7, 1.2); // вторая: высоко у «И», низко у «У»
+  formant(3000, 2400, 9, 0.35);
+  src.start(v);
+  vib.start(v);
+  src.stop(end + 0.05);
+  vib.stop(end + 0.05);
+  noise('bandpass', 900, 0.6, v + 0.2, 0.16, 0.6, v + 2.6); // трибуны
+}
+
+function drawSoccerBall(ctx, x, y, r, spin) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(spin);
+  circ(ctx, 0, 0, r, '#fafafa');
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#333';
+  ctx.stroke();
+  const pent = (cx, cy, s) => {
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + (i * TAU) / 5;
+      ctx.lineTo(cx + Math.cos(a) * s, cy + Math.sin(a) * s);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#222';
+    ctx.fill();
+  };
+  pent(0, 0, r * 0.38);
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI / 2 + (i * TAU) / 5;
+    pent(Math.cos(a) * r * 0.86, Math.sin(a) * r * 0.86, r * 0.22);
+  }
+  ctx.restore();
+}
+
+// Футболист: красная футболка с семёркой, тёмно-зелёные шорты, причёска с коком.
+// (x, y) — точка между ступнями; pose: run | kick | jump | siu.
+function drawFootballer(ctx, x, y, t, o = {}) {
+  const skin = '#d9a074', red = '#c8102e', shorts = '#14532d', sock = '#c8102e';
+  ctx.save();
+  ctx.translate(x, y);
+  ell(ctx, 0, 2, 24, 6, 'rgba(0,0,0,0.3)');
+  ctx.translate(0, -(o.jump || 0));
+  if (o.spin !== undefined) ctx.scale(Math.cos(o.spin) || 0.02, 1);
+  if (o.dir < 0) ctx.scale(-1, 1);
+  const pose = o.pose || 'run';
+  const sw = Math.sin(t * 14);
+  // углы ног и рук от вертикали
+  let legL = 0, legR = 0, armL = 0.3, armR = -0.3, bendL = 0, bendR = 0;
+  if (pose === 'run') {
+    legL = sw * 0.6;
+    legR = -sw * 0.6;
+    armL = -sw * 0.7 + 0.2;
+    armR = sw * 0.7 - 0.2;
+  } else if (pose === 'kick') {
+    legL = -0.15;
+    legR = -1.25;
+    armL = 0.9;
+    armR = -1.1;
+  } else if (pose === 'jump') {
+    legL = 0.5;
+    legR = -0.5;
+    bendL = bendR = 1.3;
+    armL = 2.6;
+    armR = -2.6;
+  } else if (pose === 'siu') {
+    legL = 0.42;
+    legR = -0.42;
+    armL = 1.15;
+    armR = -1.15;
+  }
+  const leg = (hx, ang, bend) => {
+    const kx = hx - Math.sin(ang) * 20, ky = -40 + Math.cos(ang) * 20;
+    const fa = ang - bend;
+    const fx = kx - Math.sin(fa) * 20, fy = ky + Math.cos(fa) * 20;
+    line(ctx, hx, -42, kx, ky, skin, 9);
+    line(ctx, kx, ky, fx, fy, sock, 9);
+    ell(ctx, fx + 4, fy + 2, 8, 4, '#111');
+    line(ctx, fx - 2, fy + 1, fx + 8, fy + 1, '#f5f5f5', 1.5);
+  };
+  leg(-7, legL, bendL);
+  leg(7, legR, bendR);
+  rr(ctx, -14, -50, 28, 14, 3);
+  ctx.fillStyle = shorts;
+  ctx.fill();
+  // руки (за туловищем — ближняя рисуется после)
+  const arm = (sx, ang) => {
+    const ex = sx + Math.sin(ang) * 30, ey = -76 + Math.cos(ang) * 30;
+    line(ctx, sx, -76, sx + Math.sin(ang) * 10, -76 + Math.cos(ang) * 10, red, 9);
+    line(ctx, sx + Math.sin(ang) * 9, -76 + Math.cos(ang) * 9, ex, ey, skin, 7);
+    circ(ctx, ex, ey, 4, skin);
+  };
+  arm(-15, -armL);
+  rr(ctx, -16, -82, 32, 36, 7);
+  ctx.fillStyle = red;
+  ctx.fill();
+  line(ctx, -16, -64, 16, -64, 'rgba(0,0,0,0.12)', 2);
+  poly(ctx, [-6, -82, 6, -82, 0, -75], '#14532d');
+  ctx.save();
+  ctx.translate(6, -55);
+  if (o.dir < 0) ctx.scale(-1, 1); // цифра не должна отражаться
+  text(ctx, '7', 0, 0, { font: `bold 15px ${FONT.ui}`, color: '#ffd54a', align: 'center' });
+  ctx.restore();
+  arm(15, -armR);
+  // голова
+  line(ctx, 0, -84, 0, -88, skin, 6);
+  const tilt = pose === 'siu' ? -0.25 : 0;
+  ctx.save();
+  ctx.translate(0, -96);
+  ctx.rotate(tilt);
+  ell(ctx, 0, 0, 11, 13, skin);
+  // кок
+  ctx.beginPath();
+  ctx.moveTo(-11, -2);
+  ctx.quadraticCurveTo(-12, -16, -2, -17);
+  ctx.quadraticCurveTo(10, -20, 12, -8);
+  ctx.quadraticCurveTo(11, -2, 10, 0);
+  ctx.quadraticCurveTo(4, -9, -11, -2);
+  ctx.fillStyle = '#21160f';
+  ctx.fill();
+  line(ctx, -7, -3, -2, -4, '#21160f', 2);
+  line(ctx, 3, -4, 8, -3, '#21160f', 2);
+  circ(ctx, -4, 0, 1.6, '#111');
+  circ(ctx, 5, 0, 1.6, '#111');
+  if (pose === 'siu' || pose === 'jump') {
+    ell(ctx, 1, 7, 4.5, 4, '#5a1010');
+  } else line(ctx, -3, 7, 4, 7, '#7a3b2a', 1.5);
+  ctx.restore();
+  ctx.restore();
+}
+
+class Footballer {
+  constructor() {
+    this.phase = 'run'; // run | kick | ball | goal | jump | siu | leave
+    this.t = 0;
+    this.time = 0;
+    this.dir = Math.random() < 0.5 ? 1 : -1;
+    this.x = this.dir > 0 ? -60 : W + 60;
+    this.y = rowY(6) + 38;
+    this.kickX = 640 + rand(-220, 220);
+    this.ball = { x: this.x, y: this.y - 8, vx: 0, vy: 0, spin: 0 };
+    this.hitAt = new Map(); // враг → когда его последний раз задело мячом
+    this.goalText = 0;
+    this.gone = false;
+  }
+
+  setPhase(p) {
+    this.phase = p;
+    this.t = 0;
+  }
+
+  update(dt, g) {
+    this.t += dt;
+    this.time += dt;
+    const b = this.ball;
+    if (this.goalText > 0) this.goalText -= dt;
+    if (this.phase === 'run') {
+      this.x += this.dir * 330 * dt;
+      b.x = this.x + this.dir * 24;
+      b.y = this.y - 8 - Math.abs(Math.sin(this.time * 11)) * 10;
+      b.spin += dt * 14 * this.dir;
+      if ((this.x - this.kickX) * this.dir >= 0) this.setPhase('kick');
+    } else if (this.phase === 'kick') {
+      b.x = this.x + this.dir * 24;
+      if (this.t > 0.22) {
+        const ang = -Math.PI / 2 + rand(-0.55, 0.55);
+        b.vx = Math.cos(ang) * SIU.ballSpeed;
+        b.vy = Math.sin(ang) * SIU.ballSpeed;
+        Sound.kick();
+        this.setPhase('ball');
+      }
+    } else if (this.phase === 'ball') {
+      this.moveBall(dt, g);
+      if (this.t > SIU.ballTime) {
+        if (g.tower.dead) this.setPhase('jump');
+        else {
+          this.setPhase('goal');
+          Sound.kick();
+        }
+      }
+    } else if (this.phase === 'goal') {
+      // мяч летит в ворота — в башню босса
+      const c = g.tower.center;
+      const dx = c.x - b.x, dy = c.y - b.y, d = Math.hypot(dx, dy) || 1;
+      b.vx = (dx / d) * 1000;
+      b.vy = (dy / d) * 1000;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      b.spin += dt * 30;
+      if (d < 40 || this.t > 1.5) {
+        if (!g.tower.dead) g.damageTower(SIU.goal, true);
+        FX.burst(g, c.x, c.y, 30, { colors: ['#fff', '#ffd54a', '#c8102e', '#14532d'], size: 8, speed: 420, grav: 300, life: 1 });
+        Sound.explosion(false);
+        this.goalText = 1.6;
+        this.goalAt = { x: c.x, y: c.y };
+        this.setPhase('jump');
+      }
+    } else if (this.phase === 'jump') {
+      if (this.t >= 0.75) {
+        this.setPhase('siu');
+        this.siu(g);
+      }
+    } else if (this.phase === 'siu') {
+      if (this.t >= 1.8) this.setPhase('leave');
+    } else if (this.phase === 'leave') {
+      this.x += this.dir * 360 * dt;
+      if (this.x < -80 || this.x > W + 80) this.gone = true;
+    }
+  }
+
+  // мяч мечется по доске, отскакивает от краёв и от врагов
+  moveBall(dt, g) {
+    const b = this.ball;
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    b.spin += dt * 22;
+    const top = 2 * T + 12, bottom = PAWN_ROW * T - 14;
+    if (b.x < 24 || b.x > W - 24) {
+      b.vx = -b.vx;
+      b.x = clamp(b.x, 24, W - 24);
+    }
+    if (b.y < top || b.y > bottom) {
+      b.vy = -b.vy;
+      b.y = clamp(b.y, top, bottom);
+    }
+    for (const e of g.enemies) {
+      if (!e.alive || e.air) continue;
+      const d = e.def;
+      if (Math.abs(b.x - e.x) > d.hw + 10 || b.y < e.y - d.top - 10 || b.y > e.y + d.bot + 10) continue;
+      if (this.time - (this.hitAt.get(e) || -9) < 0.45) continue;
+      this.hitAt.set(e, this.time);
+      e.damage(SIU.ballDmg, g, 'ball');
+      FX.burst(g, b.x, b.y, 8, { colors: ['#fff', '#ddd', '#ffd54a'], size: 5, speed: 240, grav: 400, life: 0.4 });
+      Sound.kick();
+      // отскок от врага: отражаем скорость от направления «центр врага → мяч»
+      const cy = e.y - d.top / 2;
+      let nx = b.x - e.x, ny = b.y - cy;
+      const n = Math.hypot(nx, ny) || 1;
+      nx /= n;
+      ny /= n;
+      const dot = b.vx * nx + b.vy * ny;
+      if (dot < 0) {
+        b.vx -= 2 * dot * nx;
+        b.vy -= 2 * dot * ny;
+      }
+    }
+  }
+
+  siu(g) {
+    playSiu();
+    g.shake = Math.max(g.shake, 10);
+    for (const e of g.enemies) if (e.alive) e.dazed = Math.max(e.dazed || 0, SIU.stun);
+    g.addMoney(SIU.money, this.x, this.y - 140, '#ffd54a');
+    g.say('Футболист №7: «СИУУУ!» — враги оглушены', '#ffd54a');
+    Ach.unlock('siu');
+  }
+
+  draw(ctx, now) {
+    const b = this.ball;
+    let pose = 'run', jump = 0, spin, dir = this.dir, t = this.time;
+    if (this.phase === 'kick' || (this.phase === 'ball' && this.t < 0.3)) pose = 'kick';
+    else if (this.phase === 'ball' || this.phase === 'goal') t = 0; // стоит и следит за мячом
+    else if (this.phase === 'jump') {
+      const k = clamp(this.t / 0.75, 0, 1);
+      pose = 'jump';
+      jump = Math.sin(k * Math.PI) * 95;
+      spin = k * TAU;
+      dir = 1;
+    } else if (this.phase === 'siu') {
+      pose = 'siu';
+      dir = 1;
+    }
+    drawFootballer(ctx, this.x, this.y, t, { pose, jump, spin, dir });
+    if (this.phase === 'run' || this.phase === 'kick' || this.phase === 'ball' || this.phase === 'goal') {
+      drawSoccerBall(ctx, b.x, b.y, 11, b.spin);
+    }
+    if (this.goalText > 0 && this.goalAt) {
+      const k = 1.6 - this.goalText;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, this.goalText * 2);
+      ctx.translate(this.goalAt.x, this.goalAt.y + 30);
+      ctx.scale(1 + Math.min(1, k * 4) * 0.3, 1 + Math.min(1, k * 4) * 0.3);
+      text(ctx, 'ГОООЛ!', 0, 0, { font: `52px ${FONT.gta}`, color: '#ffd54a', stroke: '#000', lw: 8, align: 'center' });
+      ctx.restore();
+    }
+    if (this.phase === 'siu') {
+      const k = this.t;
+      // волна крика
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - k / 0.9) * 0.7;
+      circ(ctx, this.x, this.y - 60, 40 + k * 1100);
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = '#ffd54a';
+      ctx.stroke();
+      ctx.restore();
+      ctx.save();
+      ctx.translate(this.x + rand(-2, 2), this.y - 150);
+      const s = Math.min(1, k * 6) * (1 + Math.sin(now * 20) * 0.03);
+      ctx.scale(s, s);
+      ctx.rotate(-0.06);
+      text(ctx, 'СИУУУ!', 0, 0, { font: `64px ${FONT.title}`, color: '#ffd54a', stroke: '#7a0010', lw: 10, align: 'center' });
+      ctx.restore();
+    }
+  }
+}
+
 // ---- js/undertale.js ----
 'use strict';
 /* Внезапный бой «как в Undertale» посреди кампании: экран чернеет, душа-сердечко и скелет Санс.
@@ -10115,6 +10792,7 @@ const CHEATS = {
   OSRBLHH: 'розыск +2 звезды',
   SKIBIDI: 'скибиди доп-доп ес-ес',
   SANS: 'бой как в Undertale прямо сейчас',
+  SIUUU: 'на поле выбегает футболист №7',
 };
 
 const TILE_LOOT = [['sun', 16], ['steak', 22], ['ammo', 14], ['tnt', 9], ['dice', 11], ['potion', 8], ['gapple', 5], ['ice', 7], ['pellet', 5]];
@@ -10199,6 +10877,8 @@ class Game {
     this.duckT = rand(25, 35);
     this.meetingT = rand(120, 170);
     this.meeting = null;
+    this.siuT = rand(...SIU.first);
+    this.footballer = null;
     this.dogT = 0;
     this.starT = 0;
     this.starOffset = 0;
@@ -10495,6 +11175,10 @@ class Game {
     this.shells = this.shells.filter((sh) => !sh.gone);
     for (const q of this.qblocks) q.update(dt);
     for (const d of this.ducks) d.update(dt, this);
+    if (this.footballer) {
+      this.footballer.update(dt, this);
+      if (this.footballer.gone) this.footballer = null;
+    }
     this.updateFx(dt, realDt);
     this.qblocks = this.qblocks.filter((q) => !q.gone);
     this.ducks = this.ducks.filter((d) => !d.gone);
@@ -10905,6 +11589,10 @@ class Game {
   }
 
   hitFx(e, x, y) {
+    if (e.shieldHit) {
+      e.shieldHit = false; // пулю отбил щит — искры уже были
+      return;
+    }
     const colors = {
       zombie: ['#7fa35c', '#4e6b2f'],
       cone: ['#7fa35c', '#f08a24'],
@@ -10913,6 +11601,7 @@ class Game {
       creeper: ['#5cb84a', '#86d672'],
       skibidi: ['#ffffff', '#9fd4ff'],
       mega: ['#c0c4cf', '#7b4fb0'],
+      draugr: ['#d8ccb0', '#8f846c', '#5b5f63'],
     }[e.type] || ['#222', '#555', '#8a8a8a'];
     FX.burst(this, x, y, 5, { colors, size: 5, speed: 200, grav: 600, life: 0.4 });
     Sound.hit();
@@ -11887,6 +12576,15 @@ class Game {
       this.meetingT = rand(130, 190);
       if (this.enemies.filter((e) => e.alive && e.type !== 'mega').length >= 3) this.startMeeting();
     }
+    // футболист №7: гол в башню босса и «СИУУУ!»
+    if (!this.duel && !this.footballer) {
+      this.siuT -= dt;
+      if (this.siuT <= 0) {
+        this.siuT = rand(...SIU.every);
+        this.footballer = new Footballer();
+        this.say('На поле выбегает футболист №7!', '#ff8a80');
+      }
+    }
   }
 
   pickEnemy() {
@@ -11938,6 +12636,13 @@ class Game {
       case 'mega':
         e = new MegaKnight();
         Sound.megaLand();
+        break;
+      case 'draugr':
+        e = new Draugr(c);
+        if (!this.toldDraugr) {
+          this.toldDraugr = true;
+          this.say('Драугр-щитоносец! Щит держит пули — стреляй, когда он кричит, или взрывай.', '#9fe3ff');
+        }
         break;
       case 'snake':
         e = new Snake(Math.random() < 0.5);
@@ -12222,6 +12927,9 @@ class Game {
       case 'SANS':
         this.utT = 0.05;
         break;
+      case 'SIUUU':
+        this.siuT = 0;
+        break;
     }
     Sound.cheat();
     Ach.unlock('cheat');
@@ -12467,6 +13175,7 @@ function drawWorld(ctx, g, t, now) {
 
   const es = g.enemies.slice().sort((a, b) => a.y - b.y);
   for (const e of es) e.draw(ctx, t);
+  if (g.footballer) g.footballer.draw(ctx, t);
 
   for (const q of g.qblocks) q.draw(ctx);
   for (const p of g.popups) {
@@ -13269,7 +13978,7 @@ function drawControls(ctx, x, y) {
 }
 
 // Жёлтая надпись у логотипа — как в Minecraft, при каждом запуске своя.
-const TITLE_SPLASH = choice(['Теперь с Сансом!', 'Впиши ник в зал славы!', 'Музыка как в Hotline Miami!', 'Хочешь дуэль?', 'HESOYAM!']);
+const TITLE_SPLASH = choice(['СИУУУ!', 'ФУС РО ДА!', 'Теперь с Сансом!', 'Впиши ник в зал славы!', 'Музыка как в Hotline Miami!', 'Хочешь дуэль?', 'HESOYAM!']);
 
 function drawTitle(ctx, g, now) {
   ctx.fillStyle = 'rgba(8,12,6,0.66)';
@@ -13326,7 +14035,7 @@ function drawTitle(ctx, g, now) {
 
   text(ctx, `Рекорд: $${pad(g.best, 8)}`, 640, 636, { font: `30px ${FONT.gta}`, color: '#3fbf4a', stroke: '#000', lw: 6, align: 'center' });
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', 1020, 662, 240, 40, toggleFullscreen, { size: 11 });
-  text(ctx, `версия ${GAME_VERSION} · новое: зал славы, музыка (${Input.touch ? 'в паузе' : 'N'})`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
+  text(ctx, `версия ${GAME_VERSION} · новое: футболист №7 (чит SIUUU), драугр, зал славы, музыка (${Input.touch ? 'в паузе' : 'N'})`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', 20, 662, 200, 40, () => Sound.toggleMute(), { size: 11 });
   text(ctx, Input.touch ? 'Нажми «Играть»' : 'Нажми «Играть» или Enter', 640, 684, { font: `bold 15px ${FONT.ui}`, color: 'rgba(255,255,255,0.75)', align: 'center' });
   if (Input.touch) text(ctx, 'На телефоне: режимы и действия — кнопками по краям экрана', 640, 706, { font: `bold 14px ${FONT.ui}`, color: '#ffe082', align: 'center' });

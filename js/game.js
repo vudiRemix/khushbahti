@@ -25,6 +25,7 @@ const CHEATS = {
   OSRBLHH: 'розыск +2 звезды',
   SKIBIDI: 'скибиди доп-доп ес-ес',
   SANS: 'бой как в Undertale прямо сейчас',
+  SIUUU: 'на поле выбегает футболист №7',
 };
 
 const TILE_LOOT = [['sun', 16], ['steak', 22], ['ammo', 14], ['tnt', 9], ['dice', 11], ['potion', 8], ['gapple', 5], ['ice', 7], ['pellet', 5]];
@@ -109,6 +110,8 @@ class Game {
     this.duckT = rand(25, 35);
     this.meetingT = rand(120, 170);
     this.meeting = null;
+    this.siuT = rand(...SIU.first);
+    this.footballer = null;
     this.dogT = 0;
     this.starT = 0;
     this.starOffset = 0;
@@ -405,6 +408,10 @@ class Game {
     this.shells = this.shells.filter((sh) => !sh.gone);
     for (const q of this.qblocks) q.update(dt);
     for (const d of this.ducks) d.update(dt, this);
+    if (this.footballer) {
+      this.footballer.update(dt, this);
+      if (this.footballer.gone) this.footballer = null;
+    }
     this.updateFx(dt, realDt);
     this.qblocks = this.qblocks.filter((q) => !q.gone);
     this.ducks = this.ducks.filter((d) => !d.gone);
@@ -815,6 +822,10 @@ class Game {
   }
 
   hitFx(e, x, y) {
+    if (e.shieldHit) {
+      e.shieldHit = false; // пулю отбил щит — искры уже были
+      return;
+    }
     const colors = {
       zombie: ['#7fa35c', '#4e6b2f'],
       cone: ['#7fa35c', '#f08a24'],
@@ -823,6 +834,7 @@ class Game {
       creeper: ['#5cb84a', '#86d672'],
       skibidi: ['#ffffff', '#9fd4ff'],
       mega: ['#c0c4cf', '#7b4fb0'],
+      draugr: ['#d8ccb0', '#8f846c', '#5b5f63'],
     }[e.type] || ['#222', '#555', '#8a8a8a'];
     FX.burst(this, x, y, 5, { colors, size: 5, speed: 200, grav: 600, life: 0.4 });
     Sound.hit();
@@ -1797,6 +1809,15 @@ class Game {
       this.meetingT = rand(130, 190);
       if (this.enemies.filter((e) => e.alive && e.type !== 'mega').length >= 3) this.startMeeting();
     }
+    // футболист №7: гол в башню босса и «СИУУУ!»
+    if (!this.duel && !this.footballer) {
+      this.siuT -= dt;
+      if (this.siuT <= 0) {
+        this.siuT = rand(...SIU.every);
+        this.footballer = new Footballer();
+        this.say('На поле выбегает футболист №7!', '#ff8a80');
+      }
+    }
   }
 
   pickEnemy() {
@@ -1848,6 +1869,13 @@ class Game {
       case 'mega':
         e = new MegaKnight();
         Sound.megaLand();
+        break;
+      case 'draugr':
+        e = new Draugr(c);
+        if (!this.toldDraugr) {
+          this.toldDraugr = true;
+          this.say('Драугр-щитоносец! Щит держит пули — стреляй, когда он кричит, или взрывай.', '#9fe3ff');
+        }
         break;
       case 'snake':
         e = new Snake(Math.random() < 0.5);
@@ -2131,6 +2159,9 @@ class Game {
         break;
       case 'SANS':
         this.utT = 0.05;
+        break;
+      case 'SIUUU':
+        this.siuT = 0;
         break;
     }
     Sound.cheat();

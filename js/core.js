@@ -8,7 +8,7 @@ const W = 1280, H = 720, T = 80, COLS = 16, ROWS = 9;
 const TAU = Math.PI * 2;
 
 // Номер выпуска: виден в главном меню. Меняй вместе с CACHE в sw.js.
-const GAME_VERSION = 11;
+const GAME_VERSION = 12;
 
 // Поле сапёра: столбцы 2..13, строки 2..6.
 const MF = { c0: 2, r0: 2, cols: 12, rows: 5 };

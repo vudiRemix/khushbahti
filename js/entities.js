@@ -61,6 +61,7 @@ class Enemy {
     this.maxHp = d.hp;
     this.flash = 0;
     this.frozen = 0;
+    this.dazed = 0; // оглушён (крик футболиста): стоит, над головой кружатся звёзды
     this.age = 0;
     this.dead = false;
     this.remove = false;
@@ -106,6 +107,10 @@ class Enemy {
       this.frozen -= dt;
       return true;
     }
+    if (this.dazed > 0) {
+      this.dazed -= dt;
+      return true;
+    }
     return false;
   }
   beginDraw(ctx) {
@@ -119,6 +124,13 @@ class Enemy {
   }
   endDraw(ctx) {
     ctx.restore();
+    if (this.dazed > 0 && !this.dead) {
+      const d = this.def, a = this.age * 6;
+      for (let i = 0; i < 3; i++) {
+        const k = a + (i * TAU) / 3;
+        drawStar(ctx, this.x + Math.cos(k) * (d.hw * 0.8), this.y - d.top - 8 + Math.sin(k) * 5, 6, '#ffd54a', '#7a5b00');
+      }
+    }
     if (this.frozen > 0 && !this.dead) {
       const d = this.def;
       rr(ctx, this.x - d.hw - 4, this.y - d.top - 4, d.hw * 2 + 8, d.top + d.bot + 8, 8);
