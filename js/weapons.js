@@ -17,8 +17,15 @@ const WEAPONS = {
     spread: 0, heatSpread: 0, heatAdd: 0, auto: false, pellets: 1, pierce: true,
     kick: 34, shake: 7, muzzle: { x: -512, y: -10 }, scale: 0.8, refill: 10, iconCx: -165, iconScale: 0.095,
   },
+  // Топор Левиафан (God of War): не стреляет — бросается и возвращается (Game.axeAction).
+  axe: {
+    name: 'Топор Левиафан', dmg: 6, interval: 0.3, mag: 1, reserveMax: 0, reload: 0.01,
+    spread: 0, heatSpread: 0, heatAdd: 0, auto: false, pellets: 1, pierce: false,
+    kick: 10, shake: 2, muzzle: { x: -250, y: -40 }, scale: 0.9, refill: 0, iconCx: -130, iconScale: 0.17,
+  },
 };
-const WEAPON_ORDER = ['ak', 'nova', 'awp'];
+const WEAPON_ORDER = ['ak', 'nova', 'awp', 'axe'];
+const AXE = { speed: 1500, freeze: 1.5, hand: { x: 1150, y: 630 } };
 
 // Цены как в CS (почти).
 const BUY_ITEMS = [
@@ -28,8 +35,60 @@ const BUY_ITEMS = [
   { key: 'kevlar', name: 'Кевлар + шлем', price: 1000, desc: 'броня до 100' },
   { key: 'ammo', name: 'Патроны', price: 200, desc: 'пачка к текущему стволу: АК +90, Nova +16, AWP +10' },
   { key: 'detector', name: 'Миноискатель', price: 800, desc: 'ставит флажок на одну мину' },
+  { key: 'axe', name: 'Топор Левиафан', price: 2500, desc: 'God of War: бросок и возврат, морозит врагов' },
 ];
-const buyRect = (i) => ({ x: 70, y: 168 + i * 62, w: 520, h: 54 });
+const buyRect = (i) => ({ x: 70, y: 160 + i * 56, w: 520, h: 50 });
+
+// Левиафан от первого лица: обмотанная рукоять, широкое лезвие с инеем и рунами.
+// empty — топор брошен, в руке пусто.
+function drawLeviathan(ctx, hands = true, empty = false) {
+  if (hands) drawSleeve(ctx);
+  if (!empty) {
+    // рукоять
+    rr(ctx, -200, -22, 250, 18, 8);
+    ctx.fillStyle = '#4e342e';
+    ctx.fill();
+    for (let x = -190; x < 40; x += 14) line(ctx, x, -22, x + 8, -4, 'rgba(0,0,0,0.35)', 3);
+    circ(ctx, 52, -13, 11, '#78909c');
+    // обух
+    rr(ctx, -214, -30, 24, 34, 4);
+    ctx.fillStyle = '#90a4ae';
+    ctx.fill();
+    // лезвие
+    ctx.save();
+    ctx.shadowColor = '#80d8ff';
+    ctx.shadowBlur = 16;
+    const steel = ctx.createLinearGradient(-300, -100, -200, 20);
+    steel.addColorStop(0, '#eceff1');
+    steel.addColorStop(1, '#78909c');
+    ctx.beginPath();
+    ctx.moveTo(-214, -26);
+    ctx.lineTo(-232, -78);
+    ctx.quadraticCurveTo(-276, -112, -312, -86);
+    ctx.quadraticCurveTo(-328, -30, -300, 18);
+    ctx.quadraticCurveTo(-262, 30, -236, 6);
+    ctx.lineTo(-214, 2);
+    ctx.closePath();
+    ctx.fillStyle = steel;
+    ctx.fill();
+    ctx.restore();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#455a64';
+    ctx.stroke();
+    // заточенная кромка и руны
+    ctx.beginPath();
+    ctx.moveTo(-308, -84);
+    ctx.quadraticCurveTo(-322, -30, -298, 14);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    for (const [x, y] of [[-262, -60], [-272, -30], [-260, -4]]) {
+      line(ctx, x, y - 8, x, y + 8, '#4fc3f7', 2.5);
+      line(ctx, x, y - 2, x + 7, y - 9, '#4fc3f7', 2.5);
+    }
+  }
+  if (hands) drawGlove(ctx);
+}
 
 function drawSleeve(ctx) {
   poly(ctx, [-10, 30, 40, 20, 200, 160, 120, 230], '#3f4a2c');
@@ -129,8 +188,9 @@ function drawAWP(ctx, flash, hands = true) {
   if (flash > 0) drawMuzzleFlash(ctx, WEAPONS.awp.muzzle.x, WEAPONS.awp.muzzle.y, 1.6);
 }
 
-function drawWeapon(ctx, key, flash, hands = true) {
-  if (key === 'awp') drawAWP(ctx, flash, hands);
+function drawWeapon(ctx, key, flash, hands = true, empty = false) {
+  if (key === 'axe') drawLeviathan(ctx, hands, empty);
+  else if (key === 'awp') drawAWP(ctx, flash, hands);
   else if (key === 'nova') drawNova(ctx, flash, hands);
   else drawAK(ctx, flash, hands);
 }
@@ -162,5 +222,16 @@ function drawGrenade(ctx, x, y, s = 1) {
   ctx.strokeStyle = '#d0d0d0';
   ctx.lineWidth = 1.5;
   ctx.stroke();
+  ctx.restore();
+}
+
+// Брошенный топор: крутится в полёте, торчит, воткнувшись.
+function drawThrownAxe(ctx, A) {
+  ctx.save();
+  ctx.translate(A.x, A.y);
+  ctx.rotate(A.state === 'stuck' ? -0.5 : A.spin);
+  ctx.scale(0.32, 0.32);
+  ctx.translate(250, 30);
+  drawLeviathan(ctx, false);
   ctx.restore();
 }

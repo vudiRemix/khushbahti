@@ -2,7 +2,7 @@
    Если меняешь список скриптов в index.html — обнови ASSETS.
    В каждом выпуске меняй CACHE вместе с GAME_VERSION в js/core.js:
    по новому sw.js открытые вкладки узнают, что вышла новая версия. */
-const CACHE = 'khaos-doska-v15';
+const CACHE = 'khaos-doska-v16';
 const ASSETS = [
   './',
   './index.html',
@@ -30,6 +30,11 @@ const ASSETS = [
   './js/undertale.js',
   './js/top.js',
   './js/durak.js',
+  './js/challenges.js',
+  './js/plague.js',
+  './js/visitors.js',
+  './js/hotline.js',
+  './js/focus.js',
   './js/game.js',
   './js/render.js',
   './js/main.js',

@@ -15,6 +15,15 @@ function render(ctx, g) {
   ctx.fillStyle = '#0d1208';
   ctx.fillRect(0, 0, W, H);
   if (g.state === 'arena' || (g.state === 'duelover' && Arena.on)) return renderArena(ctx, g, now);
+  if (g.state === 'challenge') {
+    ctx.save();
+    drawWorld(ctx, g, g.t, now);
+    ctx.restore();
+    renderChallenge(ctx, g, now);
+    Ach.draw(ctx);
+    if (!Input.touch) drawPointer(ctx);
+    return;
+  }
   if (g.state === 'durak') {
     // партия с боссом идёт прямо на его доске — она просвечивает за столом
     if (Durak.mode === 'boss') {
@@ -44,6 +53,8 @@ function render(ctx, g) {
   if (!menu) {
     drawScreenFx(ctx, g, now);
     drawHUD(ctx, g, now);
+    Hotline.drawOverlay(ctx, g, now);
+    drawVisitorsHud(ctx, g, now);
   }
   g.buttons = [];
   if (g.state === 'title') drawTitle(ctx, g, now);
@@ -59,9 +70,10 @@ function render(ctx, g) {
   else if (g.state === 'dead') drawDead(ctx, g, now);
   else if (g.state === 'win') drawWin(ctx, g, now);
   if (g.meeting) drawMeeting(ctx, g, now);
+  if (g.visit && g.state === 'play') drawVisit(ctx, g, now);
   if (g.jumpscare) drawJumpscare(ctx, g, now);
   Ach.draw(ctx);
-  if (g.state === 'play' && !g.jumpscare && !g.meeting) drawCrosshair(ctx, g, now);
+  if (g.state === 'play' && !g.jumpscare && !g.meeting && !g.visit) drawCrosshair(ctx, g, now);
   else if (!g.jumpscare && !g.meeting && !Input.touch) drawPointer(ctx);
 }
 
@@ -99,6 +111,10 @@ function drawWorld(ctx, g, t, now) {
   const es = g.enemies.slice().sort((a, b) => a.y - b.y);
   for (const e of es) e.draw(ctx, t);
   if (g.footballer) g.footballer.draw(ctx, t);
+  Plague.draw(ctx, g, t);
+  Focus.draw(ctx, g);
+  if (g.axe && g.axe.state !== 'hand') drawThrownAxe(ctx, g.axe);
+  drawVisitorsWorld(ctx, g, t);
 
   for (const q of g.qblocks) q.draw(ctx);
   for (const p of g.popups) {
@@ -386,7 +402,7 @@ function drawHands(ctx, g, now) {
   ctx.translate(pose.px, pose.py);
   ctx.rotate(pose.rot);
   ctx.scale(pose.s, pose.s);
-  drawWeapon(ctx, g.weapon, g.gun.flash);
+  drawWeapon(ctx, g.weapon, g.gun.flash, true, g.weapon === 'axe' && g.axe.state !== 'hand');
   ctx.restore();
   if (g.gun.punch > 0) {
     const k = g.gun.punch / 0.4;
@@ -467,6 +483,8 @@ function drawScreenFx(ctx, g, now) {
 // ---------- интерфейс ----------
 function drawHUD(ctx, g, now) {
   drawGtaHud(ctx, g, now);
+  Focus.drawHud(ctx, g);
+  Plague.drawHud(ctx, g);
   // проиграл боссу в дурака — колпак поверх значка оружия
   if (g.foolCapT > 0) {
     drawFoolCap(ctx, 48, 30 + Math.sin(now * 4) * 2, 0.55);
@@ -531,7 +549,7 @@ function drawGtaHud(ctx, g, now) {
   if (a.mag + a.reserve === 0 && !g.infAmmo) drawFist(ctx, 48, 46, 1.2, '#1a1a1a');
   else {
     drawWeaponIcon(ctx, g.weapon, 48, 42);
-    text(ctx, g.infAmmo ? '∞' : `${a.mag}-${a.reserve}`, 48, 78, { font: `bold 12px ${FONT.ui}`, color: '#111', align: 'center' });
+    text(ctx, g.weapon === 'axe' ? (g.axe.state === 'hand' ? 'в руке' : 'брошен') : g.infAmmo ? '∞' : `${a.mag}-${a.reserve}`, 48, 78, { font: `bold 12px ${FONT.ui}`, color: '#111', align: 'center' });
   }
   const hh = Math.floor(g.hours), mm = Math.floor(g.clock % 60);
   text(ctx, `${pad(hh, 2)}:${pad(mm, 2)}`, 98, 40, { font: `32px ${FONT.gta}`, color: '#e8e8e8', stroke: '#000', lw: 6 });
@@ -718,6 +736,14 @@ function drawPubgBars(ctx, g) {
 
 function drawCsAmmo(ctx, g) {
   const gun = g.gun, a = g.cur;
+  if (g.weapon === 'axe') {
+    const inHand = g.axe.state === 'hand';
+    text(ctx, 'ЛЕВИАФАН', 1270, 708, { font: `30px ${FONT.gta}`, color: '#4fc3f7', align: 'right', stroke: 'rgba(0,0,0,0.65)', lw: 5 });
+    text(ctx, inHand ? 'ЛКМ — бросить' : 'ЛКМ — вернуть топор', 1270, 664, { font: `bold 14px ${FONT.ui}`, color: inHand ? '#e1f5fe' : '#ffd54a', align: 'right', stroke: '#000', lw: 4 });
+    drawGrenade(ctx, 1076, 694, 1);
+    text(ctx, `×${g.grenades}`, 1090, 704, { font: `bold 16px ${FONT.ui}`, color: g.grenades ? '#fff' : '#888', stroke: '#000', lw: 3 });
+    return;
+  }
   const col = a.mag <= Math.ceil(g.wdef.mag / 6) && !g.infAmmo ? 'rgba(255,80,60,0.95)' : 'rgba(255,184,40,0.95)';
   text(ctx, g.infAmmo ? '∞' : String(a.mag), 1194, 708, { font: `42px ${FONT.gta}`, color: col, align: 'right', stroke: 'rgba(0,0,0,0.65)', lw: 5 });
   text(ctx, g.infAmmo ? '| ∞' : `| ${a.reserve}`, 1270, 708, { font: `26px ${FONT.gta}`, color: col, align: 'right', stroke: 'rgba(0,0,0,0.65)', lw: 5 });
@@ -906,7 +932,7 @@ function drawControls(ctx, x, y) {
 }
 
 // Жёлтая надпись у логотипа — как в Minecraft, при каждом запуске своя.
-const TITLE_SPLASH = choice(['Козыри — черви!', 'СИУУУ!', 'ФУС РО ДА!', 'Теперь с Сансом!', 'Впиши ник в зал славы!', 'Музыка как в Hotline Miami!', 'Хочешь дуэль?', 'HESOYAM!']);
+const TITLE_SPLASH = choice(['Время урока!', 'BOY!', 'Ты ведь останешься?', 'Тише! Гренни спит', 'BLAST!', 'Нулевой пациент!', 'Козыри — черви!', 'СИУУУ!', 'ФУС РО ДА!', 'Теперь с Сансом!', 'Впиши ник в зал славы!', 'Музыка как в Hotline Miami!', 'Хочешь дуэль?', 'HESOYAM!']);
 
 function drawTitle(ctx, g, now) {
   ctx.fillStyle = 'rgba(8,12,6,0.66)';
@@ -966,7 +992,7 @@ function drawTitle(ctx, g, now) {
 
   text(ctx, `Рекорд: $${pad(g.best, 8)}`, 640, 636, { font: `30px ${FONT.gta}`, color: '#3fbf4a', stroke: '#000', lw: 6, align: 'center' });
   mcButton(ctx, g, 'ПОЛНЫЙ ЭКРАН', 1020, 662, 240, 40, toggleFullscreen, { size: 11 });
-  text(ctx, `версия ${GAME_VERSION} · новое: дурак с боссом (чит DURAK), футболист №7 (SIUUU), драугр, музыка (${Input.touch ? 'в паузе' : 'N'})`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
+  text(ctx, `версия ${GAME_VERSION} · новое: испытания босса, чума, Дуо, Мита, Гренни, топор Кратоса, музыка (${Input.touch ? 'в паузе' : 'N'})`, 1260, 648, { font: `bold 14px ${FONT.ui}`, color: 'rgba(255,255,255,0.7)', align: 'right', stroke: 'rgba(0,0,0,0.5)', lw: 3 });
   mcButton(ctx, g, Sound.muted ? 'ЗВУК: ВЫКЛ' : 'ЗВУК: ВКЛ', 20, 662, 200, 40, () => Sound.toggleMute(), { size: 11 });
   text(ctx, Input.touch ? 'Нажми «Играть»' : 'Нажми «Играть» или Enter', 640, 684, { font: `bold 15px ${FONT.ui}`, color: 'rgba(255,255,255,0.75)', align: 'center' });
   if (Input.touch) text(ctx, 'На телефоне: режимы и действия — кнопками по краям экрана', 640, 706, { font: `bold 14px ${FONT.ui}`, color: '#ffe082', align: 'center' });
@@ -1106,7 +1132,7 @@ function drawJumpscare(ctx, g, now) {
 
 // ---------- меню закупки в стиле CS 1.6 ----------
 function drawBuyIcon(ctx, key, x, y) {
-  if (key === 'awp' || key === 'nova') drawWeaponIcon(ctx, key, x, y);
+  if (key === 'awp' || key === 'nova' || key === 'axe') drawWeaponIcon(ctx, key, x, y);
   else if (key === 'he') drawGrenade(ctx, x, y, 1.3);
   else if (key === 'kevlar') drawVest(ctx, x, y, 34);
   else if (key === 'ammo') drawAmmoBox(ctx, x, y, 36);
@@ -1130,7 +1156,7 @@ function drawBuy(ctx, g) {
   BUY_ITEMS.forEach((it, i) => {
     const r = buyRect(i);
     const hov = inRect(Input.x, Input.y, r);
-    const owned = (it.key === 'awp' || it.key === 'nova') && g.arsenal[it.key].owned;
+    const owned = (it.key === 'awp' || it.key === 'nova' || it.key === 'axe') && g.arsenal[it.key].owned;
     const can = g.player.money >= it.price && !owned;
     rr(ctx, r.x, r.y, r.w, r.h, 5);
     ctx.fillStyle = hov ? 'rgba(255,176,32,0.22)' : 'rgba(255,255,255,0.05)';
@@ -1143,7 +1169,7 @@ function drawBuy(ctx, g) {
   });
   if (g.buyMsg) text(ctx, g.buyMsg.text, 330, 562, { font: `bold 17px ${FONT.ui}`, color: g.buyMsg.bad ? '#ff8a80' : '#a5f07a', align: 'center' });
   mcButton(ctx, g, 'ЗАКРЫТЬ (B)', 240, 584, 180, 36, () => g.closeBuy(), { size: 11 });
-  text(ctx, '1–6 или клик — купить. Пока меню открыто, игра на паузе.', 330, 642, { font: `13px ${FONT.ui}`, color: '#a8a08a', align: 'center' });
+  text(ctx, `1–${BUY_ITEMS.length} или клик — купить. Пока меню открыто, игра на паузе.`, 330, 642, { font: `13px ${FONT.ui}`, color: '#a8a08a', align: 'center' });
 }
 
 // ---------- экстренное собрание (Among Us) ----------
@@ -1240,7 +1266,8 @@ function drawIntro(ctx, g, now) {
   drawBossPortrait(ctx, L.boss, px, 330, PORTRAIT_SCALE[L.boss] * 1.7, now);
   text(ctx, g.tower.name.toUpperCase(), px, 560, { font: `30px ${FONT.title}`, color: '#ffd54a', stroke: '#000', lw: 6, align: 'center' });
   text(ctx, 'VS', 700, 360, { font: `110px ${FONT.gta}`, color: '#ff1744', stroke: '#fff', lw: 8, align: 'center' });
-  if (Math.floor(now * 2) % 2 === 0) text(ctx, 'Клик или Enter — в бой!', 640, 670, { font: `bold 22px ${FONT.ui}`, color: '#fff', stroke: '#000', lw: 5, align: 'center' });
+  Focus.drawOffer(ctx, g, now);
+  if (Math.floor(now * 2) % 2 === 0) text(ctx, g.focusOffer && !g.duel ? 'Выбери фокус — или клик, Enter: случайный' : 'Клик или Enter — в бой!', 640, 690, { font: `bold 22px ${FONT.ui}`, color: '#fff', stroke: '#000', lw: 5, align: 'center' });
 }
 
 function drawLevels(ctx, g, now) {
@@ -1295,19 +1322,21 @@ function drawAchievements(ctx, g) {
   ctx.fillRect(0, 0, W, H);
   text(ctx, 'ДОСТИЖЕНИЯ', 640, 70, { font: `46px ${FONT.title}`, color: '#7ee03c', stroke: '#000', lw: 7, align: 'center' });
   text(ctx, `Открыто: ${Ach.got.size} из ${ACHIEVEMENTS.length}`, 640, 100, { font: `bold 17px ${FONT.ui}`, color: '#cfd8dc', align: 'center' });
-  const half = Math.ceil(ACHIEVEMENTS.length / 2);
-  const rowH = Math.min(39, Math.floor(528 / half)), boxH = rowH - 4;
+  // много достижений — три колонки, иначе строки слишком тонкие
+  const cols = ACHIEVEMENTS.length > 32 ? 3 : 2, per = Math.ceil(ACHIEVEMENTS.length / cols);
+  const colW = cols === 3 ? 392 : 560, gap = cols === 3 ? 404 : 580, x0 = (W - (cols - 1) * gap - colW) / 2;
+  const rowH = Math.min(39, Math.floor(528 / per)), boxH = rowH - 4;
   ACHIEVEMENTS.forEach((a, i) => {
-    const col = i < half ? 0 : 1, row = i % half;
-    const x = 70 + col * 580, y = 116 + row * rowH;
+    const col = Math.floor(i / per), row = i % per;
+    const x = x0 + col * gap, y = 116 + row * rowH;
     const got = Ach.got.has(a.id);
-    rr(ctx, x, y, 560, boxH, 8);
+    rr(ctx, x, y, colW, boxH, 8);
     ctx.fillStyle = got ? 'rgba(16,124,16,0.35)' : 'rgba(255,255,255,0.06)';
     ctx.fill();
-    circ(ctx, x + 20, y + boxH / 2, 12, got ? '#107c10' : '#424242');
-    drawStar(ctx, x + 20, y + boxH / 2, 7, got ? '#fff' : '#757575', got ? '#0b5e0b' : '#333');
-    text(ctx, a.name, x + 42, y + boxH * 0.46, { font: `bold 14px ${FONT.ui}`, color: got ? '#fff' : '#9e9e9e' });
-    text(ctx, a.desc, x + 42, y + boxH * 0.88, { font: `12px ${FONT.ui}`, color: got ? '#c8e6c9' : '#757575' });
+    circ(ctx, x + 18, y + boxH / 2, 11, got ? '#107c10' : '#424242');
+    drawStar(ctx, x + 18, y + boxH / 2, 6.5, got ? '#fff' : '#757575', got ? '#0b5e0b' : '#333');
+    text(ctx, a.name, x + 36, y + boxH * 0.46, { font: `bold ${cols === 3 ? 13 : 14}px ${FONT.ui}`, color: got ? '#fff' : '#9e9e9e' });
+    text(ctx, a.desc, x + 36, y + boxH * 0.88, { font: `${cols === 3 ? 11 : 12}px ${FONT.ui}`, color: got ? '#c8e6c9' : '#757575' });
   });
   mcButton(ctx, g, 'НАЗАД', 540, 620 + 32, 200, 44, () => g.toTitle(), { size: 13 });
 }
@@ -1318,19 +1347,20 @@ function drawCheats(ctx, g) {
   ctx.fillRect(0, 0, W, H);
   text(ctx, 'ЧИТ-КОДЫ', 640, 110, { font: `56px ${FONT.title}`, color: '#fff', stroke: '#000', lw: 9, align: 'center' });
   text(ctx, 'Как в GTA San Andreas. С читами рекорд не засчитывается.', 640, 146, { font: `bold 16px ${FONT.ui}`, color: '#cfd8dc', align: 'center' });
-  // больше восьми кодов — три колонки, чтобы подписи не налезали на кнопки
-  const names = Object.keys(CHEATS), cols = names.length > 8 ? 3 : 2, bw = cols === 3 ? 330 : 320;
-  const rowH = Math.min(110, Math.floor(330 / Math.ceil(names.length / cols)));
+  // чем больше кодов, тем больше колонок — чтобы подписи не налезали на кнопки
+  const names = Object.keys(CHEATS), cols = names.length > 12 ? 4 : names.length > 8 ? 3 : 2;
+  const bw = cols === 4 ? 280 : cols === 3 ? 330 : 320, gap = cols === 4 ? 300 : 370;
+  const rows = Math.ceil(names.length / cols), rowH = Math.min(110, Math.floor(360 / rows));
   names.forEach((name, i) => {
-    const x = cols === 3 ? 95 + (i % 3) * 370 : i % 2 ? 660 : 300, y = 172 + Math.floor(i / cols) * rowH;
-    mcButton(ctx, g, name, x, y, bw, 50, () => {
+    const x = cols === 2 ? (i % 2 ? 660 : 300) : (W - (cols - 1) * gap - bw) / 2 + (i % cols) * gap, y = 165 + Math.floor(i / cols) * rowH;
+    mcButton(ctx, g, name, x, y, bw, 46, () => {
       g.activateCheat(name);
       g.state = 'play';
       g.suppressFire = true;
-    }, { size: 16 });
-    text(ctx, CHEATS[name], x + bw / 2, y + 70, { font: `15px ${FONT.ui}`, color: '#eef3e6', align: 'center' });
+    }, { size: 15 });
+    text(ctx, CHEATS[name], x + bw / 2, y + 64, { font: `14px ${FONT.ui}`, color: '#eef3e6', align: 'center' });
   });
-  mcButton(ctx, g, 'НАЗАД', 540, 520, 200, 44, () => (g.state = 'pause'), { size: 13 });
+  mcButton(ctx, g, 'НАЗАД', 540, Math.min(560, 165 + rows * rowH + 6), 200, 44, () => (g.state = 'pause'), { size: 13 });
 }
 
 // ---------- дуэль ----------

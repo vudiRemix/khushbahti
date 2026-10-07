@@ -26,11 +26,18 @@ const CHEATS = {
   SKIBIDI: 'скибиди доп-доп ес-ес',
   SANS: 'бой как в Undertale прямо сейчас',
   SIUUU: 'на поле выбегает футболист №7',
+  PLAGUE: 'нулевой пациент: чума среди врагов',
+  DUO: 'урок английского с Дуо',
+  MITA: 'в гости приходит Мита',
+  GRANNY: 'Гренни дома — тише!',
+  RICHARD: 'маска Ричарда (Hotline Miami)',
   DURAK: 'босс зовёт сыграть в дурака',
+  ROYAL: 'испытание босса: три в ряд',
+  BLAST: 'испытание босса: блок-бласт',
 };
 
 const TILE_LOOT = [['sun', 16], ['steak', 22], ['ammo', 14], ['tnt', 9], ['dice', 11], ['potion', 8], ['gapple', 5], ['ice', 7], ['pellet', 5]];
-const DROP_LOOT = [['gapple', 20], ['potion', 15], ['totem', 6], ['ammo', 20], ['tnt', 15], ['pellet', 8], ['ice', 8], ['vest', 18], ['dice', 10], ['steak', 12]];
+const DROP_LOOT = [['gapple', 20], ['potion', 15], ['totem', 6], ['ammo', 20], ['tnt', 15], ['pellet', 8], ['ice', 8], ['vest', 18], ['dice', 10], ['steak', 12], ['mask', 6]];
 
 const LAYOUT = {
   hotbar: { x: 433, y: 674, slot: 46 },
@@ -64,7 +71,9 @@ class Game {
       ak: { owned: true, mag: CFG.magSize, reserve: CFG.startReserve },
       nova: { owned: false, mag: 0, reserve: 0 },
       awp: { owned: false, mag: 0, reserve: 0 },
+      axe: { owned: false, mag: 1, reserve: 0 },
     };
+    this.axe = { state: 'hand' };
     this.weapon = 'ak';
     this.grenades = 1;
     this.infAmmo = false;
@@ -113,7 +122,15 @@ class Game {
     this.meeting = null;
     this.siuT = rand(...SIU.first);
     this.footballer = null;
-    this.durakT = 0; // > 0 — скоро босс позовёт играть в дурака
+    Plague.reset(this);
+    Visitors.reset(this);
+    this.hotline = null;
+    this.focus = '';
+    this.focusT = 0;
+    this.airRaid = null;
+    this.mitaScareT = 0;
+    this.challengeT = 0; // > 0 — скоро босс позовёт на испытание
+    this.challengeKind = '';
     this.foolCapT = 0;
     this.dogT = 0;
     this.starT = 0;
@@ -195,6 +212,7 @@ class Game {
     this.resetRun();
     this.player.money = this.levelIdx * 2500;
     this.resetLevel();
+    Focus.offer(this);
     this.state = 'intro';
     this.introT = 0;
   }
@@ -232,10 +250,19 @@ class Game {
     if (this.levelIdx >= LEVELS.length - 1) return this.toTitle();
     this.levelIdx++;
     this.resetLevel();
+    Focus.offer(this);
     this.state = 'intro';
     this.introT = 0;
   }
   beginLevel() {
+    // не выбрал национальный фокус — выбираем за тебя
+    if (this.focusOffer && !this.duel) {
+      if (!this.focus) {
+        Focus.pick(this, choice(this.focusOffer));
+        this.say('[Фокус] Выбран за тебя — в следующий раз нажми карточку на заставке', '#d4af37');
+      }
+      this.focusOffer = null;
+    }
     this.state = 'play';
     this.suppressFire = true;
     this.utT = rand(70, 130); // через сколько секунд внезапно начнётся бой «как в Undertale»
@@ -255,6 +282,7 @@ class Game {
     if (Duel.phase !== 'off') Duel.shutdown();
     Battle.phase = 'off';
     Durak.stop();
+    Challenge.stop();
     this.duel = false;
     this.state = 'title';
     this.titleT = 0;
@@ -290,6 +318,11 @@ class Game {
       Durak.update(realDt, this);
       return;
     }
+    if (this.state === 'challenge') {
+      Challenge.update(realDt);
+      this.updateFx(realDt, realDt);
+      return;
+    }
     if (this.state === 'arena') {
       Arena.update(realDt, this);
       // одиночный рейд идёт без сети — итог проверяем здесь
@@ -320,7 +353,7 @@ class Game {
     }
     if (this.state === 'intro') {
       this.introT += realDt;
-      if (this.introT > 7) this.beginLevel();
+      if (this.introT > 10) this.beginLevel();
       return;
     }
     if (this.state === 'pause' || this.state === 'buy' || this.state === 'cheats') return;
@@ -339,6 +372,12 @@ class Game {
     }
 
     // --- игра ---
+    // гость поставил бой на паузу: урок Дуо или разговор с Митой
+    if (this.visit) {
+      Visitors.updateVisit(realDt, this);
+      this.updateFx(realDt * 0.2, realDt);
+      return;
+    }
     // иногда тебя внезапно кидает в бой «как в Undertale»
     if (!this.duel && !this.jumpscare && !this.meeting && !this.tower.dead && this.utT !== undefined) {
       this.utT -= realDt;
@@ -348,16 +387,17 @@ class Game {
         return;
       }
     }
-    // босс в ярости зовёт сыграть в дурака
-    if (this.durakT > 0 && !this.duel && !this.jumpscare && !this.meeting && !this.tower.dead) {
-      this.durakT -= realDt;
-      if (this.durakT <= 0) {
-        this.durakT = 0;
-        Durak.start(this, 'boss');
+    // босс в ярости зовёт на испытание: дурак, три в ряд или блок-бласт
+    if (this.challengeT > 0 && !this.duel && !this.jumpscare && !this.meeting && !this.tower.dead) {
+      this.challengeT -= realDt;
+      if (this.challengeT <= 0) {
+        this.challengeT = 0;
+        Challenge.start(this, this.challengeKind || Challenge.pick());
         return;
       }
     }
     if (this.foolCapT > 0) this.foolCapT -= realDt;
+    if (this.mitaScareT > 0) this.mitaScareT -= realDt;
     this.updateBoost(realDt);
     this.updateGun(realDt);
     this.updateRod(realDt);
@@ -430,6 +470,10 @@ class Game {
       this.footballer.update(dt, this);
       if (this.footballer.gone) this.footballer = null;
     }
+    Plague.update(dt, this);
+    Visitors.tick(dt, this);
+    Hotline.update(dt, this);
+    Focus.update(dt, this);
     this.updateFx(dt, realDt);
     this.qblocks = this.qblocks.filter((q) => !q.gone);
     this.ducks = this.ducks.filter((d) => !d.gone);
@@ -507,6 +551,7 @@ class Game {
 
   onKey(code) {
     // чит-коды проверяются первыми, иначе буква M в HESOYAM выключила бы звук
+    if (this.state === 'play' && this.visit && Visitors.onKey(this, code)) return;
     if (this.state === 'play' && !this.jumpscare && !this.meeting && this.handleCheatKey(code)) return;
     if (code === 'KeyM') {
       Sound.toggleMute();
@@ -528,6 +573,10 @@ class Game {
     }
     if (this.state === 'durak') {
       Durak.onKey(code, this);
+      return;
+    }
+    if (this.state === 'challenge') {
+      Challenge.onKey(code);
       return;
     }
     if (this.state === 'title') {
@@ -608,6 +657,10 @@ class Game {
       return;
     }
     if (this.jumpscare || this.meeting) return;
+    if (this.visit) {
+      if (btn === 0) this.clickButtons(x, y);
+      return;
+    }
     if (btn === 0) {
       if (this.uiClick(x, y)) {
         this.suppressFire = true;
@@ -705,7 +758,7 @@ class Game {
 
   // ---------- АК-47 ----------
   get fireRate() {
-    return 1 + Math.min(0.6, this.player.level * 0.03);
+    return (1 + Math.min(0.6, this.player.level * 0.03)) * (this.focus === 'blitz' ? 1.3 : 1);
   }
 
   get cur() {
@@ -733,13 +786,15 @@ class Game {
         gun.reload = 0;
       }
     }
-    if (Input.lmb && !this.suppressFire && !this.jumpscare && !this.meeting) this.tryFire();
+    if (Input.lmb && !this.suppressFire && !this.jumpscare && !this.meeting && !this.visit) this.tryFire();
+    this.updateAxe(dt);
     // оружие становится прозрачным, если прицел под ним
     const under = Input.x > 900 && Input.y > 430;
     this.gunAlpha = lerp(this.gunAlpha, under ? 0.3 : 1, Math.min(1, dt * 10));
   }
 
   reload() {
+    if (this.weapon === 'axe') return;
     const gun = this.gun, a = this.cur;
     if (this.infAmmo || gun.reload > 0 || a.mag >= this.wdef.mag || a.reserve <= 0) return;
     gun.reload = this.wdef.reload;
@@ -748,6 +803,7 @@ class Game {
 
   setWeapon(key) {
     if (!this.arsenal[key].owned || key === this.weapon) return;
+    if (this.weapon === 'axe' && this.axe.state !== 'hand') this.axe = { state: 'hand' }; // топор сам прилетает в руку
     this.weapon = key;
     this.gun.reload = 0;
     this.gun.switchT = 0.35;
@@ -770,6 +826,7 @@ class Game {
   }
 
   tryFire() {
+    if (this.weapon === 'axe') return this.axeAction();
     const gun = this.gun, wd = this.wdef, a = this.cur;
     if (gun.reload > 0 || gun.cd > 0 || gun.switchT > 0) return;
     if (a.mag <= 0 && !this.infAmmo) {
@@ -779,6 +836,7 @@ class Game {
       return;
     }
     if (!this.infAmmo) a.mag--;
+    Visitors.noise(this, this.weapon);
     gun.cd = wd.interval / (this.weapon === 'ak' ? this.fireRate : 1);
     if (!wd.auto) this.suppressFire = true;
     gun.kick = 1;
@@ -801,12 +859,76 @@ class Game {
     if (a.mag === 0 && a.reserve > 0 && !this.infAmmo) this.reload();
   }
 
+  // ---------- топор Левиафан (God of War) ----------
+  // В руке — бросок в прицел; брошен — возврат. По пути бьёт и морозит врагов.
+  axeAction() {
+    const gun = this.gun, A = this.axe;
+    if (gun.cd > 0 || gun.switchT > 0) return;
+    gun.cd = WEAPONS.axe.interval;
+    this.suppressFire = true;
+    if (A.state === 'hand') {
+      const pose = this.gunPose();
+      this.axe = { state: 'fly', x: pose.mx, y: pose.my, tx: Input.x, ty: Input.y, hit: new Set(), hits: 0, spin: 0 };
+      gun.kick = 1;
+      Sound.whoosh();
+      Visitors.noise(this, 'axe');
+    } else {
+      Object.assign(A, { state: 'back', hit: new Set(), hits: 0 });
+      Sound.whoosh();
+    }
+  }
+
+  updateAxe(dt) {
+    const A = this.axe;
+    if (!A || (A.state !== 'fly' && A.state !== 'back')) return;
+    const tx = A.state === 'fly' ? A.tx : AXE.hand.x, ty = A.state === 'fly' ? A.ty : AXE.hand.y;
+    const dx = tx - A.x, dy = ty - A.y, d = Math.hypot(dx, dy), step = AXE.speed * dt;
+    const x0 = A.x, y0 = A.y;
+    const arrived = d <= step;
+    if (arrived) {
+      A.x = tx;
+      A.y = ty;
+    } else {
+      A.x += (dx / d) * step;
+      A.y += (dy / d) * step;
+    }
+    A.spin += dt * (A.state === 'fly' ? 22 : -22);
+    if (Math.random() < 0.6) FX.burst(this, A.x, A.y, 1, { colors: ['#b3e5fc', '#e1f5fe'], size: 5, speed: 40, grav: 0, life: 0.4 });
+    // кто оказался на пути топора
+    const dmg = WEAPONS.axe.dmg * (this.starT > 0 ? 2 : 1);
+    for (const e of this.enemies) {
+      if (!e.alive || A.hit.has(e)) continue;
+      const cy = e.y - e.def.top / 2 + e.def.bot / 2;
+      if (segDist(e.x, cy, x0, y0, A.x, A.y) > e.def.hw + 18) continue;
+      A.hit.add(e);
+      A.hits++;
+      e.damage(dmg, this, 'axe');
+      if (e.alive) e.frozen = Math.max(e.frozen, AXE.freeze);
+      FX.burst(this, e.x, cy, 10, { colors: ['#b3e5fc', '#ffffff', '#4fc3f7'], size: 6, speed: 220, grav: 300, life: 0.5 });
+      Sound.freeze();
+      if (A.hits >= 3) Ach.unlock('boy');
+    }
+    if (!arrived) return;
+    if (A.state === 'fly') {
+      A.state = 'stuck';
+      Sound.thud();
+      // воткнулся в башню босса
+      if (!this.tower.dead && inRect(A.x, A.y, this.tower.box)) this.damageTower(dmg, true);
+    } else {
+      this.axe = { state: 'hand' };
+      this.gun.kick = 1;
+      Sound.kick();
+      if (A.hits || Math.random() < 0.3) FX.text(this, AXE.hand.x - 60, AXE.hand.y - 90, 'BOY!', { color: '#4fc3f7', font: `40px ${FONT.gta}`, life: 1.1 });
+    }
+  }
+
   punch() {
     const gun = this.gun;
     if (gun.punch > 0) return;
     gun.punch = 0.4;
     gun.cd = 0.4;
     Sound.punch();
+    Visitors.noise(this, 'fist');
     let best = null;
     for (const e of this.enemies) if (e.alive && e.distTo(Input.x, Input.y) < 50 && (!best || e.y > best.y)) best = e;
     if (best) {
@@ -960,13 +1082,15 @@ class Game {
     if (p.money < it.price) return fail(`Не хватает денег: нужно $${it.price}`);
     switch (it.key) {
       case 'awp':
-      case 'nova': {
+      case 'nova':
+      case 'axe': {
         const a = this.arsenal[it.key];
-        if (a.owned) return fail(`${it.name} уже есть. Патроны — пункт 5`);
+        if (a.owned) return fail(it.key === 'axe' ? 'Левиафан уже у тебя' : `${it.name} уже есть. Патроны — пункт 5`);
         a.owned = true;
         a.mag = WEAPONS[it.key].mag;
         a.reserve = WEAPONS[it.key].refill * 2;
         this.setWeapon(it.key);
+        if (it.key === 'axe') this.say('Левиафан: ЛКМ — бросить в прицел, ещё раз — вернуть. Морозит всех на пути.', '#4fc3f7');
         break;
       }
       case 'he':
@@ -1214,6 +1338,7 @@ class Game {
 
   explode(x, y, radius, dmg, src) {
     this.explosions.push({ x, y, r: radius, t: 0 });
+    Visitors.noise(this, 'boom');
     FX.burst(this, x, y, 26, { colors: ['#ffef8a', '#ffb300', '#ff6d00', '#5d4037'], size: 10, speed: 380, grav: 200, life: 0.7 });
     FX.burst(this, x, y, 10, { colors: ['rgba(60,60,60,0.6)', 'rgba(90,90,90,0.5)'], size: 26, speed: 90, grav: -40, life: 1.4, shape: 'circle' });
     Sound.explosion(radius > 120);
@@ -1223,6 +1348,12 @@ class Game {
 
   // ---------- предметы ----------
   giveItem(key, n = 1, fx, fy) {
+    // маска Ричарда (Hotline Miami) надевается сразу
+    if (key === 'mask') {
+      Hotline.start(this);
+      if (fx !== undefined) FX.text(this, fx, fy - 30, 'МАСКА РИЧАРДА!', { color: '#ff2a8a', font: `22px ${FONT.gta}` });
+      return;
+    }
     let tx, ty;
     if (key === 'vest') {
       this.player.armor = Math.min(100, this.player.armor + 50);
@@ -1639,10 +1770,12 @@ class Game {
 
   onKill(e, src) {
     this.kills++;
+    if (e.infected) Plague.onKill(this, e);
+    Hotline.onKill(this, e);
     if (this.duel) Duel.countKill(this);
     Ach.unlock('first');
     if (src === 'shell' && ++this.shellKills >= 3) Ach.unlock('shell');
-    if (src !== 'pac') this.addMoney(e.def.bounty * (this.bloodMoon ? 2 : 1), e.x, e.y - 50);
+    if (src !== 'pac') this.addMoney(Math.round(e.def.bounty * (this.bloodMoon ? 2 : 1) * (this.focus === 'industry' ? 1.5 : 1)), e.x, e.y - 50);
     if (e.type === 'koopa') {
       let left = 0, right = 0;
       for (const o of this.enemies) if (o.alive && Math.abs(o.y - e.y) < 50) o.x < e.x ? left++ : right++;
@@ -1691,6 +1824,7 @@ class Game {
     }
     this.sun -= cost;
     this.def[c] = makeDefender(type);
+    Focus.fortify(this, this.def[c]);
     if (DEF_STATS[type].plant && ++this.plantsPlanted >= 10) Ach.unlock('garden');
     Sound.plant();
     FX.burst(this, colX(c), rowY(PAWN_ROW) + 30, 10, { colors: ['#8d6e63', '#5d4037', '#a5d6a7'], size: 5, speed: 160, up: 120, life: 0.5 });
@@ -1968,9 +2102,10 @@ class Game {
     tw.onRage(this);
     if (this.duel) Duel.send('stars', this);
     else if (this.state === 'play') {
-      // через пару секунд — партия в дурака с боссом
-      this.durakT = 3;
-      this.say(`<${tw.speaker}> Сыграем в дурака? Проиграешь — колпак твой!`, '#ff8a65');
+      // через пару секунд — испытание босса
+      this.challengeKind = Challenge.pick();
+      this.challengeT = 3;
+      this.say(`<${tw.speaker}> ${CH_INVITE[this.challengeKind]}`, '#ff8a65');
     }
   }
 
@@ -2190,8 +2325,27 @@ class Game {
       case 'SIUUU':
         this.siuT = 0;
         break;
+      case 'RICHARD':
+        Hotline.start(this);
+        break;
+      case 'DUO':
+        Visitors.startDuo(this);
+        break;
+      case 'MITA':
+        Visitors.startMita(this);
+        break;
+      case 'GRANNY':
+        Visitors.startGranny(this);
+        break;
+      case 'PLAGUE':
+        if (this.plague.on) for (const e of this.enemies) Plague.infect(this, e);
+        else Plague.start(this);
+        break;
       case 'DURAK':
-        this.durakT = 0.05;
+      case 'ROYAL':
+      case 'BLAST':
+        this.challengeKind = { DURAK: 'durak', ROYAL: 'match3', BLAST: 'blast' }[name];
+        this.challengeT = 0.05;
         break;
     }
     Sound.cheat();
@@ -2224,7 +2378,7 @@ class Game {
     q.bumpT = 0.25;
     q.life = 1.4;
     Sound.bump();
-    const kind = weighted([['coins', 40], ['mushroom', 25], ['star', 20], ['oneup', 12]]);
+    const kind = weighted([['coins', 40], ['mushroom', 25], ['star', 20], ['oneup', 12], ['mask', 10]]);
     const x = q.x, y = q.y - 44;
     if (kind === 'coins') {
       for (let i = 0; i < 5; i++) this.popups.push({ kind: 'coin', x: x + (i - 2) * 16, y, t: -i * 0.08 });
@@ -2243,6 +2397,8 @@ class Game {
       if (this.duel) Duel.send('skibidi', this);
       Sound.starMusic(9);
       this.banner('ЗВЕЗДА!', 'Неуязвимость и двойной урон на 9 секунд', '#ffd23f');
+    } else if (kind === 'mask') {
+      this.giveItem('mask', 1, x, y);
     } else {
       this.popups.push({ kind: 'oneup', x, y, t: 0 });
       this.inv.totem++;

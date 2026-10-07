@@ -8,7 +8,7 @@ const W = 1280, H = 720, T = 80, COLS = 16, ROWS = 9;
 const TAU = Math.PI * 2;
 
 // Номер выпуска: виден в главном меню. Меняй вместе с CACHE в sw.js.
-const GAME_VERSION = 15;
+const GAME_VERSION = 16;
 
 // Поле сапёра: столбцы 2..13, строки 2..6.
 const MF = { c0: 2, r0: 2, cols: 12, rows: 5 };
@@ -72,6 +72,13 @@ function weighted(list) {
     if (r < 0) return item;
   }
   return list[list.length - 1][0];
+}
+
+// Расстояние от точки до отрезка.
+function segDist(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy;
+  const k = l2 ? Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / l2)) : 0;
+  return Math.hypot(px - (x1 + dx * k), py - (y1 + dy * k));
 }
 
 function shuffle(arr) {

@@ -84,6 +84,7 @@ class Enemy {
   }
   damage(n, g, src) {
     if (!this.alive) return false;
+    if (g.hotline && src !== 'plague') n = Math.max(n, this.hp); // маска Ричарда: с одного удара
     this.hp -= n;
     this.flash = 0.09;
     if (this.hp <= 0) {
@@ -124,6 +125,15 @@ class Enemy {
   }
   endDraw(ctx) {
     ctx.restore();
+    // заражён чумой: зелёное облачко и знак биоопасности
+    if (this.infected && !this.dead) {
+      const d = this.def;
+      ctx.save();
+      ctx.globalAlpha = 0.22 + Math.sin(this.age * 5) * 0.06;
+      ell(ctx, this.x, this.y - d.top / 2 + d.bot / 2, d.hw + 8, (d.top + d.bot) / 2 + 6, '#76ff03');
+      ctx.restore();
+      drawBiohazard(ctx, this.x + d.hw * 0.7, this.y - d.top - 4, 9, '#64dd17');
+    }
     if (this.dazed > 0 && !this.dead) {
       const d = this.def, a = this.age * 6;
       for (let i = 0; i < 3; i++) {

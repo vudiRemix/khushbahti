@@ -795,6 +795,7 @@ function drawVest(ctx, x, y, size) {
 }
 
 const ITEM_INFO = {
+  mask: { name: 'Маска Ричарда', desc: 'Hotline Miami: враги падают с одного удара' },
   steak: { name: 'Стейк', desc: '+8 к сытости' },
   gapple: { name: 'Золотое яблоко', desc: '+6 HP, +20 брони' },
   potion: { name: 'Зелье лечения', desc: '+10 HP' },
@@ -824,6 +825,7 @@ function drawItemIcon(ctx, key, x, y, size, t = 0) {
     case 'pellet': drawPellet(ctx, x, y, size, t); break;
     case 'vest': drawVest(ctx, x, y, size * 0.85); break;
     case 'sun': drawSun(ctx, x, y, size * 0.32, t); break;
+    case 'mask': drawRoosterMask(ctx, x, y, size / 70); break;
   }
 }
 
